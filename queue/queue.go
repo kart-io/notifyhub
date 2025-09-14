@@ -3,13 +3,10 @@
 package queue
 
 import (
-	"context"
-	"time"
-
-	"github.com/kart-io/notifyhub/notifiers"
 	"github.com/kart-io/notifyhub/queue/callbacks"
 	"github.com/kart-io/notifyhub/queue/core"
 	"github.com/kart-io/notifyhub/queue/retry"
+	"github.com/kart-io/notifyhub/queue/scheduler"
 	"github.com/kart-io/notifyhub/queue/worker"
 )
 
@@ -41,6 +38,12 @@ type (
 
 	// CallbackContext contains information about the callback execution
 	CallbackContext = callbacks.CallbackContext
+
+	// MessageScheduler handles delayed message scheduling
+	MessageScheduler = scheduler.MessageScheduler
+
+	// EnhancedQueue wraps a basic queue with scheduling capabilities
+	EnhancedQueue = scheduler.EnhancedQueue
 )
 
 // Re-export callback events for backward compatibility
@@ -77,4 +80,10 @@ var (
 	NewCallbackFunc       = callbacks.NewCallbackFunc
 	NewLoggingCallback    = callbacks.NewLoggingCallback
 	NewCallbackExecutor   = callbacks.NewCallbackExecutor
+)
+
+// Scheduler constructors
+var (
+	NewMessageScheduler = scheduler.NewMessageScheduler
+	NewEnhancedQueue    = scheduler.NewEnhancedQueue
 )

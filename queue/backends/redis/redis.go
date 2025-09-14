@@ -10,13 +10,15 @@ import (
 	"github.com/redis/go-redis/v9"
 )
 
-// RedisQueueConfig contains Redis queue configuration
-type RedisQueueConfig struct {
-	// Redis connection options
+// RedisConnectionConfig contains Redis connection configuration
+type RedisConnectionConfig struct {
 	Addr     string `json:"addr" yaml:"addr"`         // Redis server address
 	Password string `json:"password" yaml:"password"` // Redis password
 	DB       int    `json:"db" yaml:"db"`             // Redis database number
+}
 
+// RedisQueueConfig contains Redis queue configuration (separated from connection config)
+type RedisQueueConfig struct {
 	// Stream configuration
 	StreamName      string        `json:"stream_name" yaml:"stream_name"`           // Redis stream name
 	ConsumerGroup   string        `json:"consumer_group" yaml:"consumer_group"`     // Consumer group name
@@ -26,12 +28,24 @@ type RedisQueueConfig struct {
 	ProcessingLimit int           `json:"processing_limit" yaml:"processing_limit"` // Max messages to process at once
 }
 
+// RedisQueueOptions contains both connection and queue configuration
+type RedisQueueOptions struct {
+	*RedisConnectionConfig
+	*RedisQueueConfig
+}
+
+// DefaultRedisConnectionConfig returns default Redis connection configuration
+func DefaultRedisConnectionConfig() *RedisConnectionConfig {
+	return &RedisConnectionConfig{
+		Addr:     "localhost:6379",
+		Password: "",
+		DB:       0,
+	}
+}
+
 // DefaultRedisQueueConfig returns default Redis queue configuration
 func DefaultRedisQueueConfig() *RedisQueueConfig {
 	return &RedisQueueConfig{
-		Addr:            "localhost:6379",
-		Password:        "",
-		DB:              0,
 		StreamName:      "notifyhub:messages",
 		ConsumerGroup:   "notifyhub-workers",
 		ConsumerName:    "worker-1",
@@ -41,45 +55,106 @@ func DefaultRedisQueueConfig() *RedisQueueConfig {
 	}
 }
 
-// RedisQueue implements Queue interface using Redis Streams
-type RedisQueue struct {
-	client     *redis.Client
-	config     *RedisQueueConfig
-	ctx        context.Context
-	cancel     context.CancelFunc
-	closed     bool
+// DefaultRedisQueueOptions returns default Redis queue options (for backward compatibility)
+func DefaultRedisQueueOptions() *RedisQueueOptions {
+	return &RedisQueueOptions{
+		RedisConnectionConfig: DefaultRedisConnectionConfig(),
+		RedisQueueConfig:      DefaultRedisQueueConfig(),
+	}
 }
 
-// NewRedisQueue creates a new Redis queue
-func NewRedisQueue(config *RedisQueueConfig) (*RedisQueue, error) {
-	if config == nil {
-		config = DefaultRedisQueueConfig()
+// RedisQueue implements Queue interface using Redis Streams
+type RedisQueue struct {
+	client          *redis.Client
+	config          *RedisQueueConfig
+	ctx             context.Context
+	cancel          context.CancelFunc
+	closed          bool
+	externalClient  bool // Whether client is managed externally
+}
+
+// NewRedisQueue creates a new Redis queue with internal connection management
+// Deprecated: Use NewRedisQueueWithOptions or NewRedisQueueWithClient for more flexibility
+func NewRedisQueue(options *RedisQueueOptions) (*RedisQueue, error) {
+	if options == nil {
+		options = DefaultRedisQueueOptions()
 	}
 
 	client := redis.NewClient(&redis.Options{
-		Addr:     config.Addr,
-		Password: config.Password,
-		DB:       config.DB,
+		Addr:     options.Addr,
+		Password: options.Password,
+		DB:       options.DB,
 	})
 
 	// Test connection
 	ctx := context.Background()
 	if err := client.Ping(ctx).Err(); err != nil {
+		client.Close()
 		return nil, fmt.Errorf("redis connection failed: %v", err)
 	}
 
+	return newRedisQueueInternal(client, options.RedisQueueConfig, false)
+}
+
+// NewRedisQueueWithOptions creates a new Redis queue with full options
+func NewRedisQueueWithOptions(options *RedisQueueOptions) (*RedisQueue, error) {
+	if options == nil {
+		options = DefaultRedisQueueOptions()
+	}
+
+	client := redis.NewClient(&redis.Options{
+		Addr:     options.Addr,
+		Password: options.Password,
+		DB:       options.DB,
+	})
+
+	// Test connection
+	ctx := context.Background()
+	if err := client.Ping(ctx).Err(); err != nil {
+		client.Close()
+		return nil, fmt.Errorf("redis connection failed: %v", err)
+	}
+
+	return newRedisQueueInternal(client, options.RedisQueueConfig, false)
+}
+
+// NewRedisQueueWithClient creates a new Redis queue using an existing Redis client
+// The caller is responsible for managing the Redis client lifecycle
+func NewRedisQueueWithClient(client *redis.Client, config *RedisQueueConfig) (*RedisQueue, error) {
+	if client == nil {
+		return nil, fmt.Errorf("redis client cannot be nil")
+	}
+
+	if config == nil {
+		config = DefaultRedisQueueConfig()
+	}
+
+	// Test connection
+	ctx := context.Background()
+	if err := client.Ping(ctx).Err(); err != nil {
+		return nil, fmt.Errorf("redis connection test failed: %v", err)
+	}
+
+	return newRedisQueueInternal(client, config, true)
+}
+
+// newRedisQueueInternal creates a new Redis queue with specified client and config
+func newRedisQueueInternal(client *redis.Client, config *RedisQueueConfig, externalClient bool) (*RedisQueue, error) {
 	ctx, cancel := context.WithCancel(context.Background())
 	q := &RedisQueue{
-		client: client,
-		config: config,
-		ctx:    ctx,
-		cancel: cancel,
+		client:         client,
+		config:         config,
+		ctx:            ctx,
+		cancel:         cancel,
+		externalClient: externalClient,
 	}
 
 	// Initialize stream and consumer group
 	if err := q.initializeStream(); err != nil {
 		cancel()
-		client.Close()
+		if !externalClient {
+			client.Close()
+		}
 		return nil, fmt.Errorf("initialize stream failed: %v", err)
 	}
 
@@ -246,6 +321,7 @@ func (r *RedisQueue) claimIdleMessages() {
 }
 
 // Close closes the Redis queue
+// If using external client, the caller is responsible for closing the Redis client
 func (r *RedisQueue) Close() error {
 	if r.closed {
 		return nil
@@ -254,7 +330,12 @@ func (r *RedisQueue) Close() error {
 	r.closed = true
 	r.cancel()
 
-	return r.client.Close()
+	// Only close client if it's managed internally
+	if !r.externalClient {
+		return r.client.Close()
+	}
+
+	return nil
 }
 
 // Size returns the current stream length

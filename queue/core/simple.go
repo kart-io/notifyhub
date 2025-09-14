@@ -7,16 +7,14 @@ import (
 	"time"
 
 	"github.com/kart-io/notifyhub/internal"
-	"github.com/kart-io/notifyhub/queue/scheduler"
 )
 
 // SimpleQueue is a basic in-memory queue implementation
 type SimpleQueue struct {
-	messages  map[string]*Message
-	pending   chan *Message
-	scheduler *scheduler.MessageScheduler
-	mu        sync.RWMutex
-	closed    bool
+	messages map[string]*Message
+	pending  chan *Message
+	mu       sync.RWMutex
+	closed   bool
 }
 
 // NewSimple creates a new in-memory queue
@@ -28,9 +26,6 @@ func NewSimple(bufferSize int) *SimpleQueue {
 		messages: make(map[string]*Message),
 		pending:  make(chan *Message, bufferSize),
 	}
-
-	// Initialize the scheduler for delayed messages
-	q.scheduler = scheduler.NewMessageScheduler(q)
 
 	return q
 }
@@ -54,11 +49,8 @@ func (q *SimpleQueue) Enqueue(ctx context.Context, msg *Message) (string, error)
 		msg.CreatedAt = time.Now()
 	}
 
-	// Check if message has delay
-	if msg.Message != nil && msg.Message.Delay > 0 {
-		// Use scheduler for delayed messages
-		return msg.ID, q.scheduler.ScheduleMessage(msg)
-	}
+	// Note: Delayed messages are now handled at a higher level
+	// SimpleQueue only handles immediate enqueuing
 
 	// Immediate processing for non-delayed messages
 	q.messages[msg.ID] = msg
@@ -108,9 +100,6 @@ func (q *SimpleQueue) Close() error {
 	if !q.closed {
 		q.closed = true
 		close(q.pending)
-		if q.scheduler != nil {
-			q.scheduler.Stop()
-		}
 	}
 	return nil
 }

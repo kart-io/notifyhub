@@ -119,7 +119,9 @@ func NewCallbackExecutor() *CallbackExecutor {
 
 // ExecuteCallbacks executes all callbacks for a given event
 func (ce *CallbackExecutor) ExecuteCallbacks(ctx context.Context, event CallbackEvent, queueMsg *core.Message, results []*notifiers.SendResult, err error, duration time.Duration) {
-	if queueMsg.Callbacks == nil {
+	// Type assert callbacks to our CallbackOptions type
+	callbacks, ok := queueMsg.Callbacks.(*CallbackOptions)
+	if !ok || callbacks == nil {
 		return
 	}
 
@@ -135,26 +137,26 @@ func (ce *CallbackExecutor) ExecuteCallbacks(ctx context.Context, event Callback
 	}
 
 	// Get callbacks for this event
-	var callbacks []Callback
+	var callbackList []Callback
 	switch event {
 	case CallbackEventSent:
-		callbacks = queueMsg.Callbacks.OnSent
+		callbackList = callbacks.OnSent
 	case CallbackEventFailed:
-		callbacks = queueMsg.Callbacks.OnFailed
+		callbackList = callbacks.OnFailed
 	case CallbackEventRetry:
-		callbacks = queueMsg.Callbacks.OnRetry
+		callbackList = callbacks.OnRetry
 	case CallbackEventMaxRetries:
-		callbacks = queueMsg.Callbacks.OnMaxRetries
+		callbackList = callbacks.OnMaxRetries
 	}
 
 	// Execute function callbacks
-	for _, callback := range callbacks {
-		go ce.executeCallback(ctx, callback, callbackCtx, queueMsg.Callbacks.CallbackTimeout)
+	for _, callback := range callbackList {
+		go ce.executeCallback(ctx, callback, callbackCtx, callbacks.CallbackTimeout)
 	}
 
 	// Execute webhook callback if configured
-	if queueMsg.Callbacks.WebhookURL != "" {
-		go ce.executeWebhookCallback(ctx, queueMsg.Callbacks, callbackCtx)
+	if callbacks.WebhookURL != "" {
+		go ce.executeWebhookCallback(ctx, callbacks, callbackCtx)
 	}
 }
 

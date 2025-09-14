@@ -1,4 +1,4 @@
-package queue
+package queue_test
 
 import (
 	"context"
@@ -7,25 +7,26 @@ import (
 	"time"
 
 	"github.com/kart-io/notifyhub/notifiers"
+	"github.com/kart-io/notifyhub/queue"
 )
 
 func TestSimpleQueue(t *testing.T) {
 	// Test queue creation
-	queue := NewSimple(10)
-	if queue == nil {
+	q := queue.NewSimple(10)
+	if q == nil {
 		t.Fatal("Queue should not be nil")
 	}
 
 	// Test queue enqueue
 	ctx := context.Background()
-	message := &Message{
+	message := &queue.Message{
 		Message: &notifiers.Message{
 			Title: "Test Message",
 			Body:  "Test Body",
 		},
 	}
 
-	taskID, err := queue.Enqueue(ctx, message)
+	taskID, err := q.Enqueue(ctx, message)
 	if err != nil {
 		t.Fatalf("Failed to enqueue message: %v", err)
 	}
@@ -35,7 +36,7 @@ func TestSimpleQueue(t *testing.T) {
 	}
 
 	// Test queue dequeue
-	dequeuedMessage, err := queue.Dequeue(ctx)
+	dequeuedMessage, err := q.Dequeue(ctx)
 	if err != nil {
 		t.Fatalf("Failed to dequeue message: %v", err)
 	}
@@ -52,19 +53,19 @@ func TestSimpleQueue(t *testing.T) {
 	ctxTimeout, cancel := context.WithTimeout(ctx, 100*time.Millisecond)
 	defer cancel()
 
-	_, err = queue.Dequeue(ctxTimeout)
+	_, err = q.Dequeue(ctxTimeout)
 	if err == nil {
 		t.Error("Dequeue from empty queue should timeout")
 	}
 
 	// Test queue close
-	err = queue.Close()
+	err = q.Close()
 	if err != nil {
 		t.Errorf("Failed to close queue: %v", err)
 	}
 
 	// Test enqueue after close should fail
-	_, err = queue.Enqueue(ctx, message)
+	_, err = q.Enqueue(ctx, message)
 	if err == nil {
 		t.Error("Enqueue after close should fail")
 	}
@@ -72,7 +73,7 @@ func TestSimpleQueue(t *testing.T) {
 
 func TestRetryPolicy(t *testing.T) {
 	// Test default retry policy
-	policy := DefaultRetryPolicy()
+	policy := queue.DefaultRetryPolicy()
 	if policy == nil {
 		t.Fatal("Default retry policy should not be nil")
 	}
@@ -118,7 +119,7 @@ func TestRetryPolicy(t *testing.T) {
 	}
 
 	// Test custom retry policy
-	customPolicy := ExponentialBackoffPolicy(5, 500*time.Millisecond, 1.5)
+	customPolicy := queue.ExponentialBackoffPolicy(5, 500*time.Millisecond, 1.5)
 	if customPolicy.MaxRetries != 5 {
 		t.Error("Custom policy should have 5 max retries")
 	}
@@ -132,7 +133,7 @@ func TestRetryPolicy(t *testing.T) {
 	}
 
 	// Test no retry policy
-	noRetryPolicy := NoRetryPolicy()
+	noRetryPolicy := queue.NoRetryPolicy()
 	if noRetryPolicy.ShouldRetry(0) {
 		t.Error("No retry policy should not retry")
 	}
@@ -140,26 +141,26 @@ func TestRetryPolicy(t *testing.T) {
 
 func TestCallbackOptions(t *testing.T) {
 	// Test callback options creation
-	options := &CallbackOptions{
+	options := &queue.CallbackOptions{
 		WebhookURL:      "https://example.com/webhook",
 		WebhookSecret:   "webhook-secret",
 		CallbackTimeout: 30 * time.Second,
 	}
 
 	// Test adding callbacks
-	sentCallback := NewCallbackFunc("sent-logger", func(ctx context.Context, callbackCtx *CallbackContext) error {
-		if callbackCtx.Event != CallbackEventSent {
+	sentCallback := queue.NewCallbackFunc("sent-logger", func(ctx context.Context, callbackCtx *queue.CallbackContext) error {
+		if callbackCtx.Event != queue.CallbackEventSent {
 			t.Error("Callback event should be sent")
 		}
 		return nil
 	})
 
-	failedCallback := NewLoggingCallback("failed-logger", func(format string, v ...interface{}) {
+	failedCallback := queue.NewLoggingCallback("failed-logger", func(format string, v ...interface{}) {
 		// Simple logging function
 	})
 
-	options.AddCallback(CallbackEventSent, sentCallback)
-	options.AddCallback(CallbackEventFailed, failedCallback)
+	options.AddCallback(queue.CallbackEventSent, sentCallback)
+	options.AddCallback(queue.CallbackEventFailed, failedCallback)
 
 	// Test callback retrieval through direct field access
 	if len(options.OnSent) != 1 {
@@ -177,20 +178,20 @@ func TestCallbackOptions(t *testing.T) {
 
 func TestCallbackEvents(t *testing.T) {
 	// Test callback event constants
-	if CallbackEventSent != "sent" {
-		t.Error("CallbackEventSent should be 'sent'")
+	if queue.CallbackEventSent != "sent" {
+		t.Error("queue.CallbackEventSent should be 'sent'")
 	}
 
-	if CallbackEventFailed != "failed" {
-		t.Error("CallbackEventFailed should be 'failed'")
+	if queue.CallbackEventFailed != "failed" {
+		t.Error("queue.CallbackEventFailed should be 'failed'")
 	}
 
-	if CallbackEventRetry != "retry" {
-		t.Error("CallbackEventRetry should be 'retry'")
+	if queue.CallbackEventRetry != "retry" {
+		t.Error("queue.CallbackEventRetry should be 'retry'")
 	}
 
-	if CallbackEventMaxRetries != "max_retries" {
-		t.Error("CallbackEventMaxRetries should be 'max_retries'")
+	if queue.CallbackEventMaxRetries != "max_retries" {
+		t.Error("queue.CallbackEventMaxRetries should be 'max_retries'")
 	}
 }
 
@@ -210,9 +211,9 @@ func TestCallbackContext(t *testing.T) {
 		},
 	}
 
-	ctx := &CallbackContext{
+	ctx := &queue.CallbackContext{
 		MessageID:  "test-123",
-		Event:      CallbackEventSent,
+		Event:      queue.CallbackEventSent,
 		Message:    message,
 		Results:    results,
 		Error:      nil,
@@ -222,31 +223,31 @@ func TestCallbackContext(t *testing.T) {
 	}
 
 	if ctx.MessageID != "test-123" {
-		t.Error("CallbackContext MessageID should be test-123")
+		t.Error("queue.CallbackContext MessageID should be test-123")
 	}
 
-	if ctx.Event != CallbackEventSent {
-		t.Error("CallbackContext Event should be sent")
+	if ctx.Event != queue.CallbackEventSent {
+		t.Error("queue.CallbackContext Event should be sent")
 	}
 
 	if ctx.Message.Title != "Test Message" {
-		t.Error("CallbackContext Message title should match")
+		t.Error("queue.CallbackContext Message title should match")
 	}
 
 	if len(ctx.Results) != 1 {
-		t.Error("CallbackContext should have one result")
+		t.Error("queue.CallbackContext should have one result")
 	}
 
 	if ctx.Error != nil {
-		t.Error("CallbackContext Error should be nil")
+		t.Error("queue.CallbackContext Error should be nil")
 	}
 
 	if ctx.Attempts != 2 {
-		t.Error("CallbackContext Attempts should be 2")
+		t.Error("queue.CallbackContext Attempts should be 2")
 	}
 
 	if ctx.Duration != 100*time.Millisecond {
-		t.Error("CallbackContext Duration should be 100ms")
+		t.Error("queue.CallbackContext Duration should be 100ms")
 	}
 }
 
@@ -283,12 +284,12 @@ func (m *mockMessageSender) SendSync(ctx context.Context, message *notifiers.Mes
 
 func TestWorkerBasic(t *testing.T) {
 	// Create test queue and mock sender
-	queue := NewSimple(10)
+	q := queue.NewSimple(10)
 	sender := &mockMessageSender{}
-	policy := NoRetryPolicy() // No retry for simplicity
+	policy := queue.NoRetryPolicy() // No retry for simplicity
 
 	// Create worker
-	worker := NewWorker(queue, sender, policy, 1)
+	worker := queue.NewWorker(q, sender, policy, 1)
 	if worker == nil {
 		t.Fatal("Worker should not be nil")
 	}
@@ -302,14 +303,14 @@ func TestWorkerBasic(t *testing.T) {
 	}
 
 	// Enqueue a message
-	message := &Message{
+	message := &queue.Message{
 		Message: &notifiers.Message{
 			Title: "Worker Test",
 			Body:  "Worker Test Body",
 		},
 	}
 
-	_, err = queue.Enqueue(ctx, message)
+	_, err = q.Enqueue(ctx, message)
 	if err != nil {
 		t.Fatalf("Failed to enqueue message: %v", err)
 	}
@@ -326,13 +327,13 @@ func TestWorkerBasic(t *testing.T) {
 	}
 
 	// Close queue
-	queue.Close()
+	q.Close()
 }
 
 func TestCallbackFunc(t *testing.T) {
 	// Test callback function creation
 	called := false
-	callback := NewCallbackFunc("test-callback", func(ctx context.Context, callbackCtx *CallbackContext) error {
+	callback := queue.NewCallbackFunc("test-callback", func(ctx context.Context, callbackCtx *queue.CallbackContext) error {
 		called = true
 		return nil
 	})
@@ -343,8 +344,8 @@ func TestCallbackFunc(t *testing.T) {
 
 	// Test callback execution
 	ctx := context.Background()
-	callbackCtx := &CallbackContext{
-		Event: CallbackEventSent,
+	callbackCtx := &queue.CallbackContext{
+		Event: queue.CallbackEventSent,
 	}
 
 	err := callback.Execute(ctx, callbackCtx)
@@ -364,15 +365,15 @@ func TestLoggingCallback(t *testing.T) {
 		logged = format
 	}
 
-	callback := NewLoggingCallback("logging-callback", logFunc)
+	callback := queue.NewLoggingCallback("logging-callback", logFunc)
 	if callback.Name() != "logging-callback" {
 		t.Error("Logging callback name should be logging-callback")
 	}
 
 	// Test callback execution
 	ctx := context.Background()
-	callbackCtx := &CallbackContext{
-		Event:     CallbackEventSent,
+	callbackCtx := &queue.CallbackContext{
+		Event:     queue.CallbackEventSent,
 		MessageID: "test-123",
 	}
 
@@ -383,5 +384,97 @@ func TestLoggingCallback(t *testing.T) {
 
 	if logged == "" {
 		t.Error("Logging callback should have logged something")
+	}
+}
+
+func TestEnhancedQueue(t *testing.T) {
+	// Test enhanced queue creation
+	baseQueue := queue.NewSimple(10)
+	enhancedQueue := queue.NewEnhancedQueue(baseQueue)
+	if enhancedQueue == nil {
+		t.Fatal("Enhanced queue should not be nil")
+	}
+
+	ctx := context.Background()
+
+	// Test immediate message (no delay)
+	immediateMsg := &queue.Message{
+		Message: &notifiers.Message{
+			Title: "Immediate Message",
+			Body:  "No delay",
+			Delay: 0,
+		},
+	}
+
+	taskID, err := enhancedQueue.Enqueue(ctx, immediateMsg)
+	if err != nil {
+		t.Fatalf("Failed to enqueue immediate message: %v", err)
+	}
+
+	if taskID == "" {
+		t.Error("Task ID should not be empty")
+	}
+
+	// Test dequeue immediate message
+	dequeuedMsg, err := enhancedQueue.Dequeue(ctx)
+	if err != nil {
+		t.Fatalf("Failed to dequeue message: %v", err)
+	}
+
+	if dequeuedMsg.Message.Title != "Immediate Message" {
+		t.Error("Dequeued message should match")
+	}
+
+	// Test delayed message (should not be immediately available)
+	delayedMsg := &queue.Message{
+		Message: &notifiers.Message{
+			Title: "Delayed Message",
+			Body:  "With delay",
+			Delay: 100 * time.Millisecond,
+		},
+	}
+
+	_, err = enhancedQueue.Enqueue(ctx, delayedMsg)
+	if err != nil {
+		t.Fatalf("Failed to enqueue delayed message: %v", err)
+	}
+
+	// Immediate dequeue should timeout (message is scheduled)
+	ctxTimeout, cancel := context.WithTimeout(ctx, 50*time.Millisecond)
+	defer cancel()
+
+	_, err = enhancedQueue.Dequeue(ctxTimeout)
+	if err == nil {
+		t.Error("Dequeue should timeout for delayed message")
+	}
+
+	// Wait for delay to pass, then check if message becomes available
+	time.Sleep(150 * time.Millisecond)
+
+	dequeuedDelayedMsg, err := enhancedQueue.Dequeue(ctx)
+	if err != nil {
+		t.Fatalf("Failed to dequeue delayed message after delay: %v", err)
+	}
+
+	if dequeuedDelayedMsg.Message.Title != "Delayed Message" {
+		t.Error("Delayed message should be available after delay")
+	}
+
+	// Test queue health
+	err = enhancedQueue.Health(ctx)
+	if err != nil {
+		t.Errorf("Enhanced queue health check should pass: %v", err)
+	}
+
+	// Test queue size
+	size := enhancedQueue.Size()
+	if size < 0 {
+		t.Error("Queue size should not be negative")
+	}
+
+	// Close enhanced queue
+	err = enhancedQueue.Close()
+	if err != nil {
+		t.Errorf("Failed to close enhanced queue: %v", err)
 	}
 }

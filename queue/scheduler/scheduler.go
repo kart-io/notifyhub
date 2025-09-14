@@ -79,7 +79,8 @@ func NewMessageScheduler(queue core.Queue) *MessageScheduler {
 func (s *MessageScheduler) ScheduleMessage(msg *core.Message) error {
 	if msg.Message.Delay <= 0 {
 		// No delay, enqueue immediately
-		return s.queue.Enqueue(s.ctx, msg)
+		_, err := s.queue.Enqueue(s.ctx, msg)
+		return err
 	}
 
 	scheduleAt := time.Now().Add(msg.Message.Delay)
@@ -132,8 +133,8 @@ func (s *MessageScheduler) processScheduledMessages() {
 		delayedMsg := heap.Pop(&s.heap).(*DelayedMessage)
 
 		// Enqueue without blocking the scheduler
-		go func(msg *Message) {
-			if err := s.queue.Enqueue(s.ctx, msg); err != nil {
+		go func(msg *core.Message) {
+			if _, err := s.queue.Enqueue(s.ctx, msg); err != nil {
 				// TODO: Log error or handle failure
 				// Could implement a retry mechanism here
 			}

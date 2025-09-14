@@ -5,6 +5,7 @@ This directory contains different queue backend implementations.
 ## Available Backends
 
 ### Redis Backend (`redis/`)
+
 - Redis Streams based queue implementation
 - Persistent message storage
 - Consumer group support
