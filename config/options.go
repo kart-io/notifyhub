@@ -16,12 +16,21 @@ import (
 
 // Config holds NotifyHub configuration
 type Config struct {
-	feishu    *FeishuConfig
-	email     *EmailConfig
-	queue     *QueueConfig
-	routing   *RoutingConfig
-	telemetry *TelemetryConfig
-	logger    logger.Interface
+	feishu       *FeishuConfig
+	email        *EmailConfig
+	queue        *QueueConfig
+	routing      *RoutingConfig
+	telemetry    *TelemetryConfig
+	logger       logger.Interface
+	mockNotifier *MockNotifierConfig
+}
+
+// MockNotifierConfig holds mock notifier configuration
+type MockNotifierConfig struct {
+	Name             string
+	ShouldFail       bool
+	Delay            time.Duration
+	SupportedTargets []string
 }
 
 // Option defines a configuration option
@@ -139,6 +148,40 @@ func WithEmailFromEnv() Option {
 				UseTLS:   getEnvBoolOrDefault("NOTIFYHUB_SMTP_USE_TLS", true),
 				Timeout:  getEnvDurationOrDefault("NOTIFYHUB_SMTP_TIMEOUT", 30*time.Second),
 			}
+		}
+	})
+}
+
+// ================================
+// Mock Notifier Configuration Options (for testing)
+// ================================
+
+// WithMockNotifier configures a mock notifier for testing
+func WithMockNotifier(name string) Option {
+	return optionFunc(func(c *Config) {
+		c.mockNotifier = &MockNotifierConfig{
+			Name:             name,
+			ShouldFail:       false,
+			Delay:            10 * time.Millisecond,
+			SupportedTargets: []string{"email", "user", "group", "channel"},
+		}
+	})
+}
+
+// WithMockNotifierFailure configures mock notifier to fail
+func WithMockNotifierFailure() Option {
+	return optionFunc(func(c *Config) {
+		if c.mockNotifier != nil {
+			c.mockNotifier.ShouldFail = true
+		}
+	})
+}
+
+// WithMockNotifierDelay configures mock notifier delay
+func WithMockNotifierDelay(delay time.Duration) Option {
+	return optionFunc(func(c *Config) {
+		if c.mockNotifier != nil {
+			c.mockNotifier.Delay = delay
 		}
 	})
 }
@@ -338,14 +381,14 @@ func WithLogger(logger logger.Interface) Option {
 // WithDefaultLogger configures the default logger with specified level
 func WithDefaultLogger(level logger.LogLevel) Option {
 	return optionFunc(func(c *Config) {
-		c.logger = logger.Default().LogMode(level)
+		c.logger = logger.Default.LogMode(level)
 	})
 }
 
 // WithSilentLogger disables logging
 func WithSilentLogger() Option {
 	return optionFunc(func(c *Config) {
-		c.logger = logger.Default().LogMode(logger.Silent)
+		c.logger = logger.Default.LogMode(logger.Silent)
 	})
 }
 
@@ -367,11 +410,12 @@ func WithDefaults() Option {
 	})
 }
 
-// WithTestDefaults applies test-friendly default configuration
+// WithTestDefaults applies test-friendly default configuration including a mock notifier
 func WithTestDefaults() Option {
 	return optionFunc(func(c *Config) {
 		WithQueue("memory", 100, 1).apply(c)
 		WithQueueRetryPolicy(queue.NoRetryPolicy()).apply(c)
+		WithMockNotifier("test-mock").apply(c)
 		if c.logger == nil {
 			WithDefaultLogger(logger.Debug).apply(c)
 		}
@@ -396,7 +440,7 @@ func New(opts ...Option) *Config {
 
 	// Apply default logger if not set
 	if c.logger == nil {
-		c.logger = logger.Default().LogMode(logger.Warn)
+		c.logger = logger.Default.LogMode(logger.Warn)
 	}
 
 	return c
@@ -432,6 +476,11 @@ func (c *Config) Telemetry() *TelemetryConfig {
 // Logger returns Logger interface
 func (c *Config) Logger() logger.Interface {
 	return c.logger
+}
+
+// MockNotifier returns MockNotifier configuration
+func (c *Config) MockNotifier() *MockNotifierConfig {
+	return c.mockNotifier
 }
 
 // ================================

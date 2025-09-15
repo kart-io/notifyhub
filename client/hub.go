@@ -32,6 +32,7 @@ type Hub struct {
 	started bool
 	stopCh  chan struct{}
 	workers []chan struct{}
+	debug   bool // Enable debug mode for detailed logging
 }
 
 // New creates a new NotifyHub instance with configuration options
@@ -108,6 +109,25 @@ func New(opts ...config.Option) (*Hub, error) {
 		)
 		hub.logger.Info(context.Background(), "Email notifier initialized with SMTP: %s:%d, from: %s",
 			emailConfig.Host, emailConfig.Port, emailConfig.From)
+	}
+
+	// Initialize Mock notifier (for testing)
+	if mockConfig := cfg.MockNotifier(); mockConfig != nil {
+		mockNotifier := notifiers.NewMockNotifier(mockConfig.Name)
+		mockNotifier.WithDelay(mockConfig.Delay)
+		if mockConfig.ShouldFail {
+			mockNotifier.WithFailure()
+		}
+		if len(mockConfig.SupportedTargets) > 0 {
+			targetTypes := make([]notifiers.TargetType, len(mockConfig.SupportedTargets))
+			for i, target := range mockConfig.SupportedTargets {
+				targetTypes[i] = notifiers.TargetType(target)
+			}
+			mockNotifier.WithSupportedTargets(targetTypes...)
+		}
+		hub.notifiers[mockConfig.Name] = mockNotifier
+		hub.logger.Info(context.Background(), "Mock notifier initialized: name=%s, shouldFail=%t, delay=%v",
+			mockConfig.Name, mockConfig.ShouldFail, mockConfig.Delay)
 	}
 
 	if len(hub.notifiers) == 0 {
@@ -198,20 +218,28 @@ func (h *Hub) Stop() error {
 
 // Send sends a message synchronously or asynchronously
 func (h *Hub) Send(ctx context.Context, message *notifiers.Message, options *Options) ([]*notifiers.SendResult, error) {
+	h.debugLog(ctx, "Send called: message='%s', targets=%d, async=%v",
+		message.Title, len(message.Targets), options != nil && options.Async)
+
 	if options != nil && options.Async {
+		h.debugLog(ctx, "Routing to async send for message: %s", message.ID)
 		_, err := h.SendAsync(ctx, message, options)
 		if err != nil {
+			h.debugLog(ctx, "Async send failed: %v", err)
 			return nil, err
 		}
+		h.debugLog(ctx, "Async send successful for message: %s", message.ID)
 		return []*notifiers.SendResult{{Platform: "queue", Success: true, SentAt: time.Now()}}, nil
 	}
 
+	h.debugLog(ctx, "Routing to sync send for message: %s", message.ID)
 	return h.SendSync(ctx, message, options)
 }
 
 // SendSync sends a message synchronously (implements queue.MessageSender)
 func (h *Hub) SendSync(ctx context.Context, message *notifiers.Message, options interface{}) ([]*notifiers.SendResult, error) {
 	start := time.Now()
+	h.debugLog(ctx, "SendSync starting: message='%s' (ID: %s)", message.Title, message.ID)
 
 	// Create telemetry span
 	var span trace.Span
@@ -433,8 +461,6 @@ func (h *Hub) SendBatch(ctx context.Context, messages []*notifiers.Message, opti
 
 // SendAsync sends a message asynchronously
 func (h *Hub) SendAsync(ctx context.Context, message *notifiers.Message, options *Options) (string, error) {
-	start := time.Now()
-
 	// Create telemetry span
 	var span trace.Span
 	if h.telemetry != nil {
@@ -522,6 +548,11 @@ func (h *Hub) GetHealth(ctx context.Context) map[string]interface{} {
 	return health
 }
 
+// GetLogger returns the logger instance for testing and debugging
+func (h *Hub) GetLogger() logger.Interface {
+	return h.logger
+}
+
 // Convenience send functions
 func (h *Hub) SendText(ctx context.Context, title, body string, targets ...notifiers.Target) error {
 	message := NewMessage().Title(title).Body(body)
@@ -564,6 +595,141 @@ func maskWebhookURL(url string) string {
 	}
 	// Show first 20 chars and last 10 chars
 	return url[:20] + "***" + url[len(url)-10:]
+}
+
+// NewForTesting creates a NotifyHub instance configured for testing
+func NewForTesting() (*Hub, error) {
+	return New(config.WithTestDefaults())
+}
+
+// NewForTestingAndStart creates and starts a NotifyHub instance for testing
+func NewForTestingAndStart(ctx context.Context) (*Hub, error) {
+	return NewAndStart(ctx, config.WithTestDefaults())
+}
+
+// NewAndStart creates a NotifyHub instance and starts it immediately
+func NewAndStart(ctx context.Context, opts ...config.Option) (*Hub, error) {
+	hub, err := New(opts...)
+	if err != nil {
+		return nil, fmt.Errorf("create hub: %v", err)
+	}
+
+	if err := hub.Start(ctx); err != nil {
+		return nil, fmt.Errorf("start hub: %v", err)
+	}
+
+	return hub, nil
+}
+
+// NewWithDefaults creates a NotifyHub instance with sensible defaults
+func NewWithDefaults() (*Hub, error) {
+	return New(config.WithDefaults())
+}
+
+// NewWithDefaultsAndStart creates and starts a NotifyHub instance with defaults
+func NewWithDefaultsAndStart(ctx context.Context) (*Hub, error) {
+	return NewAndStart(ctx, config.WithDefaults())
+}
+
+// NewWithDebug creates a NotifyHub instance with debug mode enabled
+// Debug mode automatically logs all operations with detailed information
+func NewWithDebug(opts ...config.Option) (*Hub, error) {
+	// Default to test configuration with debug logging if no options provided
+	debugOpts := []config.Option{
+		config.WithLogger(logger.Default.LogMode(logger.Debug)),
+	}
+
+	// If no options provided, use test defaults
+	if len(opts) == 0 {
+		debugOpts = append(debugOpts, config.WithTestDefaults())
+	} else {
+		debugOpts = append(debugOpts, opts...)
+	}
+
+	hub, err := New(debugOpts...)
+	if err != nil {
+		return nil, err
+	}
+
+	hub.debug = true
+	hub.logger.Info(context.Background(), "🐛 Debug mode enabled - all operations will be logged")
+
+	return hub, nil
+}
+
+// NewWithDebugAndStart creates and starts a NotifyHub instance with debug mode
+func NewWithDebugAndStart(ctx context.Context, opts ...config.Option) (*Hub, error) {
+	hub, err := NewWithDebug(opts...)
+	if err != nil {
+		return nil, fmt.Errorf("create debug hub: %v", err)
+	}
+
+	if err := hub.Start(ctx); err != nil {
+		return nil, fmt.Errorf("start debug hub: %v", err)
+	}
+
+	return hub, nil
+}
+
+// ==========================================
+// Debug and Inspection Methods
+// ==========================================
+
+// IsDebugEnabled returns whether debug mode is enabled for this hub
+func (h *Hub) IsDebugEnabled() bool {
+	h.mu.RLock()
+	defer h.mu.RUnlock()
+	return h.debug
+}
+
+// EnableDebug enables debug mode for this hub instance
+func (h *Hub) EnableDebug() {
+	h.mu.Lock()
+	defer h.mu.Unlock()
+	h.debug = true
+	h.logger.Info(context.Background(), "🐛 Debug mode enabled for Hub")
+}
+
+// DisableDebug disables debug mode for this hub instance
+func (h *Hub) DisableDebug() {
+	h.mu.Lock()
+	defer h.mu.Unlock()
+	h.debug = false
+	h.logger.Info(context.Background(), "🐛 Debug mode disabled for Hub")
+}
+
+// debugLog logs debug information if debug mode is enabled
+func (h *Hub) debugLog(ctx context.Context, format string, args ...interface{}) {
+	if h.debug {
+		h.logger.Debug(ctx, "🐛 [DEBUG] "+format, args...)
+	}
+}
+
+// DebugMessage creates a message builder with debug mode enabled
+func (h *Hub) DebugMessage() *MessageBuilder {
+	builder := NewMessage()
+	if h.debug {
+		builder.Debug()
+	}
+	return builder
+}
+
+// MustNew creates a NotifyHub instance and panics on error (for demo/testing)
+func MustNew(opts ...config.Option) *Hub {
+	hub, err := New(opts...)
+	if err != nil {
+		panic(fmt.Sprintf("failed to create NotifyHub: %v", err))
+	}
+	return hub
+}
+
+// MustNewAndStart creates and starts a NotifyHub instance and panics on error
+func MustNewAndStart(ctx context.Context, opts ...config.Option) *Hub {
+	hub, err := NewAndStart(ctx, opts...)
+	if err != nil {
+		panic(fmt.Sprintf("failed to create and start NotifyHub: %v", err))
+	}
+	return hub
 }
 
 // getNotifierNames returns a slice of notifier names

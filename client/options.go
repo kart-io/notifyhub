@@ -14,8 +14,14 @@ type Options struct {
 	Retry bool `json:"retry,omitempty"`
 	// MaxRetries overrides default max retries
 	MaxRetries int `json:"max_retries,omitempty"`
+	// MaxRetry is an alias for MaxRetries for HTTP compatibility
+	MaxRetry int `json:"max_retry,omitempty"`
 	// Timeout for sending operation
 	Timeout time.Duration `json:"timeout,omitempty"`
+	// DelayMs for message delay in milliseconds
+	DelayMs int `json:"delay_ms,omitempty"`
+	// BatchSize for batch operations
+	BatchSize int `json:"batch_size,omitempty"`
 	// Callbacks for message lifecycle events
 	Callbacks *queue.CallbackOptions `json:"callbacks,omitempty"`
 }

@@ -36,6 +36,7 @@ import (
 	"github.com/kart-io/notifyhub/logger/adapters"
 	"github.com/kart-io/notifyhub/notifiers"
 	"github.com/kart-io/notifyhub/queue"
+	"github.com/kart-io/notifyhub/queue/callbacks"
 )
 
 // ================================
@@ -289,7 +290,7 @@ func WithSilentLogger() ConfigOption {
 
 // NewDefaultLogger creates a new default logger
 func NewDefaultLogger() Logger {
-	return logger.Default()
+	return logger.Default
 }
 
 // NewStdLogAdapter creates a standard log adapter
@@ -333,13 +334,13 @@ func NewCustomAdapter(customLogger interface{}, level LogLevel) Logger {
 // ================================
 
 // NewCallbackFunc creates a new callback function
-func NewCallbackFunc(name string, fn func(ctx context.Context, callbackCtx *CallbackContext) error) *queue.CallbackFunc {
-	return queue.NewCallbackFunc(name, fn)
+func NewCallbackFunc(name string, fn func(ctx context.Context, callbackCtx *CallbackContext) error) *callbacks.CallbackFunc {
+	return callbacks.NewCallbackFunc(name, fn)
 }
 
 // NewLoggingCallback creates a logging callback
-func NewLoggingCallback(name string, logger func(format string, v ...interface{})) *queue.LoggingCallback {
-	return queue.NewLoggingCallback(name, logger)
+func NewLoggingCallback(name string, logger func(format string, v ...interface{})) *callbacks.LoggingCallback {
+	return callbacks.NewLoggingCallback(name, logger)
 }
 
 // ================================

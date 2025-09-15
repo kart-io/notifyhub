@@ -2,47 +2,29 @@ package logger
 
 import (
 	"context"
-	"errors"
 	"fmt"
 	"log"
-	"os"
 	"time"
 )
 
-// Colors for console output
-const (
-	Reset       = "\033[0m"
-	Red         = "\033[31m"
-	Green       = "\033[32m"
-	Yellow      = "\033[33m"
-	Blue        = "\033[34m"
-	Magenta     = "\033[35m"
-	Cyan        = "\033[36m"
-	White       = "\033[37m"
-	BlueBold    = "\033[34;1m"
-	MagentaBold = "\033[35;1m"
-	RedBold     = "\033[31;1m"
-	YellowBold  = "\033[33;1m"
-)
-
-// Default logger implementation
-type logger struct {
+// logger implements the Interface (like GORM's default logger)
+type defaultLogger struct {
 	Writer
 	Config
 	infoStr, warnStr, errStr, debugStr string
-	traceStr, traceErrStr, traceWarnStr string
+	traceStr, traceWarnStr, traceErrStr string
 }
 
-// NewLogger creates a new logger with default configuration
-func NewLogger(writer Writer, config Config) Interface {
+// New creates a new logger instance (like GORM's New)
+func New(writer Writer, config Config) Interface {
 	var (
 		infoStr      = "%s\n[info] "
 		warnStr      = "%s\n[warn] "
 		errStr       = "%s\n[error] "
 		debugStr     = "%s\n[debug] "
-		traceStr     = "%s\n[%.3fms] [rows:%v] %s"
-		traceWarnStr = "%s %s\n[%.3fms] [rows:%v] %s"
-		traceErrStr  = "%s %s\n[%.3fms] [rows:%v] %s"
+		traceStr     = "%s\n[%.3fms] [targets:%v] %s"
+		traceWarnStr = "%s %s\n[%.3fms] [targets:%v] %s"
+		traceErrStr  = "%s %s\n[%.3fms] [targets:%v] %s"
 	)
 
 	if config.Colorful {
@@ -50,12 +32,12 @@ func NewLogger(writer Writer, config Config) Interface {
 		warnStr = BlueBold + "%s\n" + Reset + Magenta + "[warn] " + Reset
 		errStr = Magenta + "%s\n" + Reset + Red + "[error] " + Reset
 		debugStr = White + "%s\n" + Reset + Blue + "[debug] " + Reset
-		traceStr = Green + "%s\n" + Reset + Yellow + "[%.3fms] " + BlueBold + "[rows:%v]" + Reset + " %s"
-		traceWarnStr = Green + "%s " + Yellow + "%s\n" + Reset + RedBold + "[%.3fms] " + Yellow + "[rows:%v]" + Magenta + " %s" + Reset
-		traceErrStr = RedBold + "%s " + MagentaBold + "%s\n" + Reset + Yellow + "[%.3fms] " + BlueBold + "[rows:%v]" + Reset + " %s"
+		traceStr = Green + "%s\n" + Reset + Yellow + "[%.3fms] " + BlueBold + "[targets:%v]" + Reset + " %s"
+		traceWarnStr = Green + "%s " + Yellow + "%s\n" + Reset + RedBold + "[%.3fms] " + Yellow + "[targets:%v]" + Magenta + " %s" + Reset
+		traceErrStr = RedBold + "%s " + MagentaBold + "%s\n" + Reset + Yellow + "[%.3fms] " + BlueBold + "[targets:%v]" + Reset + " %s"
 	}
 
-	return &logger{
+	return &defaultLogger{
 		Writer:       writer,
 		Config:       config,
 		infoStr:      infoStr,
@@ -68,97 +50,97 @@ func NewLogger(writer Writer, config Config) Interface {
 	}
 }
 
-// New creates a new logger with default writer and config
-func New(writer Writer, config Config) Interface {
-	return NewLogger(writer, config)
+// LogMode creates a new logger with specified log level (like GORM's LogMode)
+func (l *defaultLogger) LogMode(level LogLevel) Interface {
+	newLogger := *l
+	newLogger.LogLevel = level
+	return &newLogger
 }
 
-// Default creates a logger with default configuration
-func Default() Interface {
-	return New(log.New(os.Stdout, "\r\n", log.LstdFlags), Config{
-		SlowThreshold: 200 * time.Millisecond,
-		LogLevel:      Warn,
-		Colorful:      true,
-	})
-}
-
-// LogMode sets log level
-func (l *logger) LogMode(level LogLevel) Interface {
-	newlogger := *l
-	newlogger.LogLevel = level
-	return &newlogger
-}
-
-// Info logs info level messages
-func (l *logger) Info(ctx context.Context, msg string, data ...interface{}) {
+func (l *defaultLogger) Info(ctx context.Context, msg string, data ...interface{}) {
 	if l.LogLevel >= Info {
 		l.Printf(l.infoStr+msg, append([]interface{}{fileWithLineNum()}, data...)...)
 	}
 }
 
-// Warn logs warning level messages
-func (l *logger) Warn(ctx context.Context, msg string, data ...interface{}) {
+func (l *defaultLogger) Warn(ctx context.Context, msg string, data ...interface{}) {
 	if l.LogLevel >= Warn {
 		l.Printf(l.warnStr+msg, append([]interface{}{fileWithLineNum()}, data...)...)
 	}
 }
 
-// Error logs error level messages
-func (l *logger) Error(ctx context.Context, msg string, data ...interface{}) {
+func (l *defaultLogger) Error(ctx context.Context, msg string, data ...interface{}) {
 	if l.LogLevel >= Error {
 		l.Printf(l.errStr+msg, append([]interface{}{fileWithLineNum()}, data...)...)
 	}
 }
 
-// Debug logs debug level messages
-func (l *logger) Debug(ctx context.Context, msg string, data ...interface{}) {
+func (l *defaultLogger) Debug(ctx context.Context, msg string, data ...interface{}) {
 	if l.LogLevel >= Debug {
 		l.Printf(l.debugStr+msg, append([]interface{}{fileWithLineNum()}, data...)...)
 	}
 }
 
-// Trace logs operation trace with duration
-func (l *logger) Trace(ctx context.Context, begin time.Time, fc func() (string, int64), err error) {
+// Trace logs message sending operations with duration (like GORM's SQL trace)
+func (l *defaultLogger) Trace(ctx context.Context, begin time.Time, fc func() (operation string, targets int64), err error) {
 	if l.LogLevel <= Silent {
 		return
 	}
 
 	elapsed := time.Since(begin)
 	switch {
-	case err != nil && l.LogLevel >= Error && (!errors.Is(err, ErrRecordNotFound) || !l.IgnoreRecordNotFoundError):
-		sql, rows := fc()
-		if rows == -1 {
-			l.Printf(l.traceErrStr, fileWithLineNum(), err, float64(elapsed.Nanoseconds())/1e6, "-", sql)
+	case err != nil && l.LogLevel >= Error:
+		operation, targets := fc()
+		if targets == -1 {
+			l.Printf(l.traceErrStr, fileWithLineNum(), err, float64(elapsed.Nanoseconds())/1e6, "-", operation)
 		} else {
-			l.Printf(l.traceErrStr, fileWithLineNum(), err, float64(elapsed.Nanoseconds())/1e6, rows, sql)
+			l.Printf(l.traceErrStr, fileWithLineNum(), err, float64(elapsed.Nanoseconds())/1e6, targets, operation)
 		}
 	case elapsed > l.SlowThreshold && l.SlowThreshold != 0 && l.LogLevel >= Warn:
-		sql, rows := fc()
+		operation, targets := fc()
 		slowLog := fmt.Sprintf("SLOW OPERATION >= %v", l.SlowThreshold)
-		if rows == -1 {
-			l.Printf(l.traceWarnStr, fileWithLineNum(), slowLog, float64(elapsed.Nanoseconds())/1e6, "-", sql)
+		if targets == -1 {
+			l.Printf(l.traceWarnStr, fileWithLineNum(), slowLog, float64(elapsed.Nanoseconds())/1e6, "-", operation)
 		} else {
-			l.Printf(l.traceWarnStr, fileWithLineNum(), slowLog, float64(elapsed.Nanoseconds())/1e6, rows, sql)
+			l.Printf(l.traceWarnStr, fileWithLineNum(), slowLog, float64(elapsed.Nanoseconds())/1e6, targets, operation)
 		}
-	case l.LogLevel == Info:
-		sql, rows := fc()
-		if rows == -1 {
-			l.Printf(l.traceStr, fileWithLineNum(), float64(elapsed.Nanoseconds())/1e6, "-", sql)
+	case l.LogLevel >= Info:
+		operation, targets := fc()
+		if targets == -1 {
+			l.Printf(l.traceStr, fileWithLineNum(), float64(elapsed.Nanoseconds())/1e6, "-", operation)
 		} else {
-			l.Printf(l.traceStr, fileWithLineNum(), float64(elapsed.Nanoseconds())/1e6, rows, sql)
+			l.Printf(l.traceStr, fileWithLineNum(), float64(elapsed.Nanoseconds())/1e6, targets, operation)
 		}
 	}
 }
 
-// Common error types
-var (
-	ErrRecordNotFound = errors.New("record not found")
-)
-
-// fileWithLineNum returns caller file and line number
+// fileWithLineNum returns the file name and line number of the caller
 func fileWithLineNum() string {
-	// This is simplified - in real implementation would use runtime.Caller
-	// to get actual file and line number like GORM does
 	return "notifyhub"
 }
 
+// NewStdLogger creates a logger that outputs to standard logger (convenience function)
+func NewStdLogger(level LogLevel) Interface {
+	return New(stdWriter{}, Config{
+		SlowThreshold: 200 * time.Millisecond,
+		LogLevel:      level,
+		Colorful:      true,
+	})
+}
+
+// stdWriter wraps Go's standard log package
+type stdWriter struct{}
+
+func (stdWriter) Printf(msg string, data ...interface{}) {
+	log.Printf(msg, data...)
+}
+
+// UpdateDefault updates the default logger implementation
+func init() {
+	// Override the Default logger to use the new implementation
+	Default = New(consoleWriter{}, Config{
+		SlowThreshold: 200 * time.Millisecond,
+		LogLevel:      Warn,
+		Colorful:      true,
+	})
+}

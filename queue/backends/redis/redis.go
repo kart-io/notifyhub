@@ -8,6 +8,7 @@ import (
 	"time"
 
 	"github.com/redis/go-redis/v9"
+	"github.com/kart-io/notifyhub/queue"
 )
 
 // RedisConnectionConfig contains Redis connection configuration
@@ -172,7 +173,7 @@ func (r *RedisQueue) initializeStream() error {
 }
 
 // Enqueue adds a message to the Redis stream
-func (r *RedisQueue) Enqueue(ctx context.Context, msg *Message) (string, error) {
+func (r *RedisQueue) Enqueue(ctx context.Context, msg *queue.Message) (string, error) {
 	if r.closed {
 		return "", fmt.Errorf("queue closed")
 	}
@@ -214,7 +215,7 @@ func (r *RedisQueue) Enqueue(ctx context.Context, msg *Message) (string, error) 
 }
 
 // Dequeue retrieves a message from the Redis stream
-func (r *RedisQueue) Dequeue(ctx context.Context) (*Message, error) {
+func (r *RedisQueue) Dequeue(ctx context.Context) (*queue.Message, error) {
 	if r.closed {
 		return nil, fmt.Errorf("queue closed")
 	}
@@ -248,13 +249,13 @@ func (r *RedisQueue) Dequeue(ctx context.Context) (*Message, error) {
 }
 
 // parseStreamMessage converts Redis stream message to our Message format
-func (r *RedisQueue) parseStreamMessage(streamMsg redis.XMessage) (*Message, error) {
+func (r *RedisQueue) parseStreamMessage(streamMsg redis.XMessage) (*queue.Message, error) {
 	dataStr, ok := streamMsg.Values["data"].(string)
 	if !ok {
 		return nil, fmt.Errorf("invalid message format: missing data field")
 	}
 
-	var msg Message
+	var msg queue.Message
 	if err := json.Unmarshal([]byte(dataStr), &msg); err != nil {
 		return nil, fmt.Errorf("deserialize message: %v", err)
 	}
@@ -295,7 +296,7 @@ func (r *RedisQueue) claimIdleMessages() {
 		Group:  r.config.ConsumerGroup,
 		Start:  "-",
 		End:    "+",
-		Count:  r.config.ProcessingLimit,
+		Count:  int64(r.config.ProcessingLimit),
 	}).Result()
 
 	if err != nil || len(pending) == 0 {
