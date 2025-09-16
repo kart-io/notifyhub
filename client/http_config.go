@@ -5,7 +5,6 @@ import (
 	"fmt"
 	"net/http"
 	"os"
-	"strconv"
 	"strings"
 	"time"
 
@@ -715,10 +714,13 @@ func (b *HTTPServiceConfigBuilder) BuildServer(ctx context.Context) (*http.Serve
 		return nil, nil, err
 	}
 
-	// Create NotifyHub instance
-	hub, err := NewAndStart(ctx, cfg.NotifyHub)
+	// Create NotifyHub instance from existing config
+	hub, err := NewFromConfig(cfg.NotifyHub)
 	if err != nil {
-		return nil, nil, fmt.Errorf("failed to create NotifyHub: %v", err)
+		return nil, nil, fmt.Errorf("failed to create NotifyHub: %w", err)
+	}
+	if err := hub.Start(ctx); err != nil {
+		return nil, nil, fmt.Errorf("failed to start NotifyHub: %v", err)
 	}
 
 	// Create HTTP server using the configuration

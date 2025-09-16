@@ -5,13 +5,10 @@ import (
 	"encoding/json"
 	"fmt"
 	"net/http"
-	"reflect"
 	"runtime"
 	"strings"
 	"sync"
 	"time"
-
-	"github.com/kart-io/notifyhub/notifiers"
 )
 
 // ================================
@@ -173,8 +170,8 @@ func WithDetailedErrors(enabled bool) MiddlewareOption {
 	}
 }
 
-// WithMetrics enables/disables metrics collection
-func WithMetrics(enabled bool) MiddlewareOption {
+// WithMiddlewareMetrics enables/disables metrics collection
+func WithMiddlewareMetrics(enabled bool) MiddlewareOption {
 	return func(cfg *MiddlewareConfig) {
 		cfg.EnableMetrics = enabled
 	}
@@ -748,7 +745,7 @@ func QuickMiddleware(hub *Hub) *MiddlewareEngine {
 		Configure(
 			WithAutoHandling(true),
 			WithErrorRecovery(true),
-			WithMetrics(true),
+			WithMiddlewareMetrics(true),
 		)
 }
 
@@ -759,7 +756,7 @@ func ProductionMiddleware(hub *Hub) *MiddlewareEngine {
 			WithAutoHandling(true),
 			WithErrorRecovery(true),
 			WithDetailedErrors(false), // Don't expose internals in production
-			WithMetrics(true),
+			WithMiddlewareMetrics(true),
 			WithSecurity(false, true), // Enable rate limiting but not API key by default
 			WithTimeout(30*time.Second),
 		)
@@ -772,7 +769,7 @@ func DevelopmentMiddleware(hub *Hub) *MiddlewareEngine {
 			WithAutoHandling(true),
 			WithErrorRecovery(true),
 			WithDetailedErrors(true), // Include debug info in development
-			WithMetrics(true),
+			WithMiddlewareMetrics(true),
 			WithTimeout(60*time.Second), // Longer timeout for debugging
 		)
 }
@@ -784,7 +781,7 @@ func TestMiddleware(hub *Hub) *MiddlewareEngine {
 			WithAutoHandling(true),
 			WithErrorRecovery(false), // Let tests see panics
 			WithDetailedErrors(true),
-			WithMetrics(false),         // Don't collect metrics in tests
+			WithMiddlewareMetrics(false),         // Don't collect metrics in tests
 			WithTimeout(5*time.Second), // Fast timeouts for tests
 		)
 }

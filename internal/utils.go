@@ -2,10 +2,22 @@ package internal
 
 import (
 	"fmt"
+	"sync"
 	"time"
 )
 
-// GenerateID generates a unique message ID
+var (
+	idCounter int64
+	idMutex   sync.Mutex
+)
+
+// GenerateID generates a unique message ID with better concurrency safety
 func GenerateID() string {
-	return fmt.Sprintf("%d-%d", time.Now().UnixNano(), time.Now().UnixNano()%1000000)
+	idMutex.Lock()
+	defer idMutex.Unlock()
+
+	now := time.Now().UnixNano()
+	idCounter++
+
+	return fmt.Sprintf("%d-%d", now, idCounter)
 }

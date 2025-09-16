@@ -5,12 +5,14 @@ import (
 	"log"
 	"time"
 
-	"github.com/kart-io/notifyhub"
+	"github.com/kart-io/notifyhub/client"
+	"github.com/kart-io/notifyhub/config"
+	"github.com/kart-io/notifyhub/notifiers"
 )
 
 func main() {
 	// 创建NotifyHub实例
-	hub, err := notifyhub.NewWithDefaults()
+	hub, err := client.New(config.WithTestDefaults())
 	if err != nil {
 		log.Fatalf("Failed to create NotifyHub: %v", err)
 	}
@@ -26,7 +28,7 @@ func main() {
 		"server":      "prod-web-01",
 		"environment": "production",
 		"error":       "Memory usage > 90%",
-	}, notifyhub.Target{Type: notifyhub.TargetTypeEmail, Value: "admin@company.com"})
+	}, notifiers.Target{Type: notifiers.TargetTypeEmail, Value: "admin@company.com"})
 
 	if err != nil {
 		log.Printf("Template send error: %v", err)
@@ -39,7 +41,7 @@ func main() {
 		"deployment": "v2.1.0",
 		"features":   []string{"新增用户管理", "性能优化", "安全更新"},
 		"rollback":   "如有问题请联系运维团队",
-	}, notifyhub.Target{Type: notifyhub.TargetTypeGroup, Value: "dev-team", Platform: "feishu"})
+	}, notifiers.Target{Type: notifiers.TargetTypeGroup, Value: "dev-team", Platform: "feishu"})
 
 	if err != nil {
 		log.Printf("Template send error: %v", err)
@@ -55,7 +57,7 @@ func main() {
 			"收入":   "¥125,600",
 		},
 		"summary": "本月业绩良好，用户增长稳定",
-	}, notifyhub.Target{Type: notifyhub.TargetTypeEmail, Value: "manager@company.com"})
+	}, notifiers.Target{Type: notifiers.TargetTypeEmail, Value: "manager@company.com"})
 
 	if err != nil {
 		log.Printf("Template send error: %v", err)
@@ -64,7 +66,7 @@ func main() {
 	}
 
 	// 使用内联模板语法
-	message := notifyhub.NewMessage().
+	message := client.NewMessage().
 		Title("欢迎 {{.username}}！").
 		Body("您的账户 {{.account}} 已成功激活。当前等级：{{.level | upper}}").
 		Variable("username", "张三").

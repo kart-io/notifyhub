@@ -1,0 +1,89 @@
+package main
+
+import (
+	"context"
+	"log"
+	"time"
+
+	"github.com/kart-io/notifyhub/client"
+	"github.com/kart-io/notifyhub/config"
+	"github.com/kart-io/notifyhub/notifiers"
+)
+
+func main() {
+	// 创建NotifyHub实例
+	hub, err := client.NewWithDefaults()
+	if err != nil {
+		log.Fatalf("Failed to create NotifyHub: %v", err)
+	}
+
+	ctx := context.Background()
+	if err := hub.Start(ctx); err != nil {
+		log.Fatalf("Failed to start NotifyHub: %v", err)
+	}
+	defer hub.Stop()
+
+	// 使用内置的 alert 模板
+	err = hub.SendWithTemplate(ctx, "alert", map[string]interface{}{
+		"server":      "prod-web-01",
+		"environment": "production",
+		"error":       "Memory usage > 90%",
+	}, notifiers.Target{Type: notifiers.TargetTypeEmail, Value: "admin@company.com"})
+
+	if err != nil {
+		log.Printf("Template send error: %v", err)
+	} else {
+		log.Println("Alert template sent successfully")
+	}
+
+	// 使用内置的 notice 模板
+	err = hub.SendWithTemplate(ctx, "notice", map[string]interface{}{
+		"deployment": "v2.1.0",
+		"features":   []string{"新增用户管理", "性能优化", "安全更新"},
+		"rollback":   "如有问题请联系运维团队",
+	}, notifiers.Target{Type: notifiers.TargetTypeGroup, Value: "dev-team", Platform: "feishu"})
+
+	if err != nil {
+		log.Printf("Template send error: %v", err)
+	} else {
+		log.Println("Notice template sent successfully")
+	}
+
+	// 使用内置的 report 模板
+	err = hub.SendWithTemplate(ctx, "report", map[string]interface{}{
+		"metrics": map[string]interface{}{
+			"用户数量": "1,250",
+			"订单数量": "3,420",
+			"收入":   "¥125,600",
+		},
+		"summary": "本月业绩良好，用户增长稳定",
+	}, notifiers.Target{Type: notifiers.TargetTypeEmail, Value: "manager@company.com"})
+
+	if err != nil {
+		log.Printf("Template send error: %v", err)
+	} else {
+		log.Println("Report template sent successfully")
+	}
+
+	// 使用内联模板语法
+	message := client.NewMessage().
+		Title("欢迎 {{.username}}！").
+		Body("您的账户 {{.account}} 已成功激活。当前等级：{{.level | upper}}").
+		Variable("username", "张三").
+		Variable("account", "zhangsan@company.com").
+		Variable("level", "premium").
+		Email("zhangsan@company.com").
+		Build()
+
+	_, err = hub.Send(ctx, message, nil)
+	if err != nil {
+		log.Printf("Inline template send error: %v", err)
+	} else {
+		log.Println("Inline template sent successfully")
+	}
+
+	// 内置模板列表
+	log.Printf("Available templates: %v", []string{"alert", "notice", "report"})
+
+	time.Sleep(2 * time.Second)
+}

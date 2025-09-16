@@ -3,6 +3,7 @@ package client
 import (
 	"context"
 	"fmt"
+	"strings"
 	"sync"
 	"time"
 
@@ -27,6 +28,8 @@ type Hub struct {
 	metrics   *monitoring.Metrics
 	logger    logger.Interface
 	telemetry *observability.TelemetryProvider
+	middlewareChain *SendMiddlewareChain
+	templateManager *TemplateManager
 
 	mu      sync.RWMutex
 	started bool
@@ -137,6 +140,96 @@ func New(opts ...config.Option) (*Hub, error) {
 
 	hub.logger.Info(context.Background(), "NotifyHub initialized successfully with %d notifiers: %v",
 		len(hub.notifiers), getNotifierNames(hub.notifiers))
+
+	return hub, nil
+}
+
+// NewFromConfig creates a new NotifyHub instance from an existing config
+func NewFromConfig(cfg *config.Config) (*Hub, error) {
+	if cfg == nil {
+		return nil, fmt.Errorf("config cannot be nil")
+	}
+
+	// Default queue configuration if not provided
+	queueConfig := cfg.Queue()
+	if queueConfig == nil {
+		queueConfig = &config.QueueConfig{
+			Type:        "memory",
+			BufferSize:  1000,
+			Workers:     2,
+			RetryPolicy: queue.DefaultRetryPolicy(),
+		}
+	}
+
+	hub := &Hub{
+		config:    cfg,
+		notifiers: make(map[string]notifiers.Notifier),
+		queue:     queue.NewSimple(queueConfig.BufferSize),
+		templates: template.NewEngine(),
+		metrics:   monitoring.NewMetrics(),
+		logger:    cfg.Logger(),
+		stopCh:    make(chan struct{}),
+	}
+
+	// Initialize telemetry
+	if telemetryConfig := cfg.Telemetry(); telemetryConfig != nil {
+		telemetryProvider, err := observability.NewTelemetryProvider(telemetryConfig)
+		if err != nil {
+			hub.logger.Error(context.Background(), "Failed to initialize telemetry: %v", err)
+		} else {
+			hub.telemetry = telemetryProvider
+		}
+	} else {
+		hub.telemetry, _ = observability.NewTelemetryProvider(nil)
+	}
+
+	// Initialize routing engine
+	if routingConfig := cfg.Routing(); routingConfig != nil {
+		hub.routing = config.NewRoutingEngine(routingConfig.Rules)
+	} else {
+		hub.routing = config.NewRoutingEngine([]config.RoutingRule{})
+	}
+
+	// Initialize notifiers
+	if feishuConfig := cfg.Feishu(); feishuConfig != nil {
+		hub.notifiers["feishu"] = notifiers.NewFeishuNotifier(
+			feishuConfig.WebhookURL,
+			feishuConfig.Secret,
+			feishuConfig.Timeout,
+		)
+	}
+
+	if emailConfig := cfg.Email(); emailConfig != nil && emailConfig.Host != "" && emailConfig.From != "" {
+		hub.notifiers["email"] = notifiers.NewEmailNotifier(
+			emailConfig.Host,
+			emailConfig.Port,
+			emailConfig.Username,
+			emailConfig.Password,
+			emailConfig.From,
+			emailConfig.UseTLS,
+			emailConfig.Timeout,
+		)
+	}
+
+	if mockConfig := cfg.MockNotifier(); mockConfig != nil {
+		mockNotifier := notifiers.NewMockNotifier(mockConfig.Name)
+		mockNotifier.WithDelay(mockConfig.Delay)
+		if mockConfig.ShouldFail {
+			mockNotifier.WithFailure()
+		}
+		if len(mockConfig.SupportedTargets) > 0 {
+			targetTypes := make([]notifiers.TargetType, len(mockConfig.SupportedTargets))
+			for i, target := range mockConfig.SupportedTargets {
+				targetTypes[i] = notifiers.TargetType(target)
+			}
+			mockNotifier.WithSupportedTargets(targetTypes...)
+		}
+		hub.notifiers[mockConfig.Name] = mockNotifier
+	}
+
+	if len(hub.notifiers) == 0 {
+		return nil, fmt.Errorf("no notifiers configured")
+	}
 
 	return hub, nil
 }
@@ -589,6 +682,90 @@ func (h *Hub) SendTemplate(ctx context.Context, templateName string, variables m
 	return h.SendWithTemplate(ctx, templateName, variables, targets...)
 }
 
+// ================================
+// Quick Send Methods - Simplified API for Common Use Cases
+// ================================
+
+// QuickSend provides a simplified way to send notifications using target strings
+// Format: "type:value" or "type:value@platform"
+// Examples: "email:user@example.com", "group:dev-team@feishu", "user:john@feishu"
+func (h *Hub) QuickSend(ctx context.Context, title, body string, targets ...string) error {
+	parsedTargets := make([]notifiers.Target, 0, len(targets))
+
+	for _, target := range targets {
+		parsed, err := parseTargetString(target)
+		if err != nil {
+			return fmt.Errorf("invalid target format '%s': %w", target, err)
+		}
+		parsedTargets = append(parsedTargets, parsed)
+	}
+
+	return h.SendText(ctx, title, body, parsedTargets...)
+}
+
+// Email sends a message to one or more email addresses
+func (h *Hub) Email(ctx context.Context, title, body string, emails ...string) error {
+	targets := make([]notifiers.Target, len(emails))
+	for i, email := range emails {
+		targets[i] = notifiers.Target{
+			Type:  notifiers.TargetTypeEmail,
+			Value: email,
+		}
+	}
+	return h.SendText(ctx, title, body, targets...)
+}
+
+// FeishuGroup sends a message to one or more Feishu groups
+func (h *Hub) FeishuGroup(ctx context.Context, title, body string, groups ...string) error {
+	targets := make([]notifiers.Target, len(groups))
+	for i, group := range groups {
+		targets[i] = notifiers.Target{
+			Type:     notifiers.TargetTypeGroup,
+			Value:    group,
+			Platform: "feishu",
+		}
+	}
+	return h.SendText(ctx, title, body, targets...)
+}
+
+// FeishuUser sends a message to one or more Feishu users
+func (h *Hub) FeishuUser(ctx context.Context, title, body string, users ...string) error {
+	targets := make([]notifiers.Target, len(users))
+	for i, user := range users {
+		targets[i] = notifiers.Target{
+			Type:     notifiers.TargetTypeUser,
+			Value:    user,
+			Platform: "feishu",
+		}
+	}
+	return h.SendText(ctx, title, body, targets...)
+}
+
+// AlertEmail sends an alert message to email addresses with higher priority
+func (h *Hub) AlertEmail(ctx context.Context, title, body string, emails ...string) error {
+	targets := make([]notifiers.Target, len(emails))
+	for i, email := range emails {
+		targets[i] = notifiers.Target{
+			Type:  notifiers.TargetTypeEmail,
+			Value: email,
+		}
+	}
+	return h.SendAlert(ctx, title, body, targets...)
+}
+
+// AlertFeishu sends an alert message to Feishu groups with higher priority
+func (h *Hub) AlertFeishu(ctx context.Context, title, body string, groups ...string) error {
+	targets := make([]notifiers.Target, len(groups))
+	for i, group := range groups {
+		targets[i] = notifiers.Target{
+			Type:     notifiers.TargetTypeGroup,
+			Value:    group,
+			Platform: "feishu",
+		}
+	}
+	return h.SendAlert(ctx, title, body, targets...)
+}
+
 // Template provides a more fluent API for template-based messages
 func (h *Hub) Template(templateName string) *TemplateBuilder {
 	return &TemplateBuilder{
@@ -1037,7 +1214,7 @@ func (h *Hub) SendWithAnalysis(ctx context.Context, message *notifiers.Message, 
 
 // SendAndAnalyze is a convenience method that sends and logs analysis
 func (h *Hub) SendAndAnalyze(ctx context.Context, message *notifiers.Message, options *Options) error {
-	results, analyzer, err := h.SendWithAnalysis(ctx, message, options)
+	_, analyzer, err := h.SendWithAnalysis(ctx, message, options)
 	if err != nil {
 		return err
 	}
@@ -1063,4 +1240,75 @@ func (h *Hub) SendBatchWithAnalysis(ctx context.Context, messages []*notifiers.M
 	}
 	analyzer := AnalyzeResults(results)
 	return results, analyzer, nil
+}
+
+// ================================
+// Helper Functions for Quick Send API
+// ================================
+
+// parseTargetString parses a target string in the format "type:value" or "type:value@platform"
+// Examples:
+//   - "email:user@example.com"
+//   - "group:dev-team@feishu"
+//   - "user:john@feishu"
+//   - "group:ops-team" (defaults to feishu for groups)
+//   - "user:jane" (defaults to feishu for users)
+func parseTargetString(target string) (notifiers.Target, error) {
+	if target == "" {
+		return notifiers.Target{}, fmt.Errorf("target cannot be empty")
+	}
+
+	// Split by ':' to separate type and value
+	parts := strings.SplitN(target, ":", 2)
+	if len(parts) != 2 {
+		return notifiers.Target{}, fmt.Errorf("target must be in format 'type:value' or 'type:value@platform'")
+	}
+
+	targetType := strings.TrimSpace(parts[0])
+	valueAndPlatform := strings.TrimSpace(parts[1])
+
+	// Split value@platform if present
+	var value, platform string
+	if strings.Contains(valueAndPlatform, "@") && targetType != "email" {
+		valuePlatformParts := strings.SplitN(valueAndPlatform, "@", 2)
+		value = strings.TrimSpace(valuePlatformParts[0])
+		platform = strings.TrimSpace(valuePlatformParts[1])
+	} else {
+		value = valueAndPlatform
+	}
+
+	// Validate and set defaults
+	switch targetType {
+	case "email":
+		if !strings.Contains(value, "@") {
+			return notifiers.Target{}, fmt.Errorf("email value must contain '@'")
+		}
+		return notifiers.Target{
+			Type:  notifiers.TargetTypeEmail,
+			Value: value,
+		}, nil
+
+	case "group":
+		if platform == "" {
+			platform = "feishu" // Default to feishu for groups
+		}
+		return notifiers.Target{
+			Type:     notifiers.TargetTypeGroup,
+			Value:    value,
+			Platform: platform,
+		}, nil
+
+	case "user":
+		if platform == "" {
+			platform = "feishu" // Default to feishu for users
+		}
+		return notifiers.Target{
+			Type:     notifiers.TargetTypeUser,
+			Value:    value,
+			Platform: platform,
+		}, nil
+
+	default:
+		return notifiers.Target{}, fmt.Errorf("unsupported target type '%s'. Supported types: email, group, user", targetType)
+	}
 }

@@ -47,9 +47,9 @@ func main() {
 	// After: Smart platform builders
 	fmt.Println("\nAfter (smart platform builders):")
 	smartMessage := client.NewAlert("Smart Alert", "Smart platform detection").
-		ToSlack("#general", "@john", "alice").    // Auto-detects channels and users
-		ToFeishu("#team", "@manager", "support"). // Smart Feishu targeting
-		ToDiscord("#notifications", "@bot").      // Discord support
+		FeishuGroup("general").    // Feishu group
+		FeishuUser("john").        // Feishu user
+		Email("alice@example.com"). // Email
 		Build()
 	fmt.Printf("  Smart construction: %d targets created\n", len(smartMessage.Targets))
 

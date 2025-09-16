@@ -834,7 +834,7 @@ func (b *MessageBuilder) SendAsyncTo(hub *Hub, ctx ...interface{}) (string, erro
 }
 
 // SendWithAnalysisTo combines building and sending with analysis in one call
-func (b *MessageBuilder) SendWithAnalysisTo(hub *Hub, ctx ...interface{}) ([]*notifiers.Result, *ResultAnalyzer, error) {
+func (b *MessageBuilder) SendWithAnalysisTo(hub *Hub, ctx ...interface{}) ([]*notifiers.SendResult, *ResultAnalyzer, error) {
 	// Extract context if provided
 	var sendCtx interface{}
 	if len(ctx) > 0 {
@@ -898,63 +898,7 @@ func (b *MessageBuilder) AsCriticalSend() *MessageBuilder {
 // Platform-Specific Convenience Builders
 // ================================
 
-// ToSlack adds Slack-specific targets using smart detection
-func (b *MessageBuilder) ToSlack(targets ...string) *MessageBuilder {
-	for _, target := range targets {
-		if strings.HasPrefix(target, "#") {
-			// Channel
-			b.Target(notifiers.Target{
-				Type:     notifiers.TargetTypeChannel,
-				Value:    target,
-				Platform: "slack",
-			})
-		} else if strings.HasPrefix(target, "@") {
-			// User
-			b.Target(notifiers.Target{
-				Type:     notifiers.TargetTypeUser,
-				Value:    strings.TrimPrefix(target, "@"),
-				Platform: "slack",
-			})
-		} else {
-			// Assume it's a user ID
-			b.Target(notifiers.Target{
-				Type:     notifiers.TargetTypeUser,
-				Value:    target,
-				Platform: "slack",
-			})
-		}
-	}
-	return b
-}
 
-// ToFeishu adds Feishu-specific targets using smart detection
-func (b *MessageBuilder) ToFeishu(targets ...string) *MessageBuilder {
-	for _, target := range targets {
-		if strings.HasPrefix(target, "#") {
-			// Channel/Group
-			b.Target(notifiers.Target{
-				Type:     notifiers.TargetTypeGroup,
-				Value:    strings.TrimPrefix(target, "#"),
-				Platform: "feishu",
-			})
-		} else if strings.HasPrefix(target, "@") {
-			// User
-			b.Target(notifiers.Target{
-				Type:     notifiers.TargetTypeUser,
-				Value:    strings.TrimPrefix(target, "@"),
-				Platform: "feishu",
-			})
-		} else {
-			// Assume it's a group
-			b.Target(notifiers.Target{
-				Type:     notifiers.TargetTypeGroup,
-				Value:    target,
-				Platform: "feishu",
-			})
-		}
-	}
-	return b
-}
 
 // ToDiscord adds Discord-specific targets
 func (b *MessageBuilder) ToDiscord(targets ...string) *MessageBuilder {
@@ -1085,25 +1029,6 @@ func (b *MessageBuilder) SlackDM(userID string) *MessageBuilder {
 	})
 }
 
-// FeishuGroup adds a Feishu group target
-func (b *MessageBuilder) FeishuGroup(groupID string) *MessageBuilder {
-	groupID = strings.TrimPrefix(groupID, "#")
-	return b.Target(notifiers.Target{
-		Type:     notifiers.TargetTypeGroup,
-		Value:    groupID,
-		Platform: "feishu",
-	})
-}
-
-// FeishuUser adds a Feishu user target
-func (b *MessageBuilder) FeishuUser(userID string) *MessageBuilder {
-	userID = strings.TrimPrefix(userID, "@")
-	return b.Target(notifiers.Target{
-		Type:     notifiers.TargetTypeUser,
-		Value:    userID,
-		Platform: "feishu",
-	})
-}
 
 // FeishuBot adds a Feishu bot target (using user type with bot metadata)
 func (b *MessageBuilder) FeishuBot(botID string) *MessageBuilder {
@@ -1317,7 +1242,9 @@ func (b *MessageBuilder) ToSecurity() *MessageBuilder {
 // ToSlackIf conditionally adds Slack targets
 func (b *MessageBuilder) ToSlackIf(condition bool, targets ...string) *MessageBuilder {
 	if condition {
-		return b.ToSlack(targets...)
+		for _, target := range targets {
+			b.ToSlack(target)
+		}
 	}
 	return b
 }
@@ -1325,7 +1252,9 @@ func (b *MessageBuilder) ToSlackIf(condition bool, targets ...string) *MessageBu
 // ToFeishuIf conditionally adds Feishu targets
 func (b *MessageBuilder) ToFeishuIf(condition bool, targets ...string) *MessageBuilder {
 	if condition {
-		return b.ToFeishu(targets...)
+		for _, target := range targets {
+			b.ToFeishu(target)
+		}
 	}
 	return b
 }

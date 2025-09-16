@@ -62,8 +62,8 @@ func (ra *ResultAnalyzer) Summary() *ResultSummary {
 			summary.Successful++
 		} else {
 			summary.Failed++
-			if result.Error != nil {
-				summary.Errors[result.Platform] = append(summary.Errors[result.Platform], result.Error.Error())
+			if result.Error != "" {
+				summary.Errors[result.Platform] = append(summary.Errors[result.Platform], result.Error)
 			}
 		}
 
@@ -158,8 +158,8 @@ func (ra *ResultAnalyzer) SuccessfulPlatforms() []string {
 func (ra *ResultAnalyzer) ErrorsByPlatform() map[string][]string {
 	errors := make(map[string][]string)
 	for _, result := range ra.results {
-		if !result.Success && result.Error != nil {
-			errors[result.Platform] = append(errors[result.Platform], result.Error.Error())
+		if !result.Success && result.Error != "" {
+			errors[result.Platform] = append(errors[result.Platform], result.Error)
 		}
 	}
 	return errors
@@ -169,8 +169,8 @@ func (ra *ResultAnalyzer) ErrorsByPlatform() map[string][]string {
 func (ra *ResultAnalyzer) AllErrors() []string {
 	var errors []string
 	for _, result := range ra.results {
-		if !result.Success && result.Error != nil {
-			errors = append(errors, fmt.Sprintf("[%s] %s", result.Platform, result.Error.Error()))
+		if !result.Success && result.Error != "" {
+			errors = append(errors, fmt.Sprintf("[%s] %s", result.Platform, result.Error))
 		}
 	}
 	return errors

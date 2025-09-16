@@ -6,13 +6,14 @@ import (
 	"log"
 	"time"
 
-	"github.com/kart-io/notifyhub"
+	"github.com/kart-io/notifyhub/client"
+	"github.com/kart-io/notifyhub/config"
+	"github.com/kart-io/notifyhub/notifiers"
 )
 
 func main() {
-	// 创建配置（从环境变量加载）
-	// 需要设置：NOTIFYHUB_FEISHU_WEBHOOK_URL 和/或 NOTIFYHUB_SMTP_HOST 等
-	hub, err := notifyhub.NewWithDefaults()
+	// 创建配置（使用测试默认配置便于演示）
+	hub, err := client.New(config.WithTestDefaults())
 	if err != nil {
 		log.Printf("Failed to create NotifyHub: %v", err)
 		return
@@ -28,14 +29,14 @@ func main() {
 
 	// 发送简单文本消息
 	err = hub.SendText(ctx, "Hello", "This is a test message",
-		notifyhub.Target{Type: notifyhub.TargetTypeEmail, Value: "user@example.com"})
+		notifiers.Target{Type: notifiers.TargetTypeEmail, Value: "user@example.com"})
 	if err != nil {
 		log.Printf("Send failed: %v", err)
 	}
 
 	// 发送警报
 	err = hub.SendAlert(ctx, "System Alert", "CPU usage is high",
-		notifyhub.Target{Type: notifyhub.TargetTypeGroup, Value: "ops-team", Platform: "feishu"})
+		notifiers.Target{Type: notifiers.TargetTypeGroup, Value: "ops-team", Platform: "test-mock"})
 	if err != nil {
 		log.Printf("Alert failed: %v", err)
 	}
@@ -44,20 +45,20 @@ func main() {
 	err = hub.SendWithTemplate(ctx, "alert", map[string]interface{}{
 		"server":      "web-01",
 		"environment": "production",
-	}, notifyhub.Target{Type: notifyhub.TargetTypeGroup, Value: "default", Platform: "feishu"})
+	}, notifiers.Target{Type: notifiers.TargetTypeGroup, Value: "default", Platform: "test-mock"})
 	if err != nil {
 		log.Printf("Template send failed: %v", err)
 	}
 }
 
 func ExampleMessageBuilder() {
-	hub, _ := notifyhub.NewWithDefaults()
+	hub, _ := client.New(config.WithTestDefaults())
 	ctx := context.Background()
 	hub.Start(ctx)
 	defer hub.Stop()
 
 	// 使用构建器模式创建复杂消息
-	message := notifyhub.NewAlert("Production Issue", "Database connection lost").
+	message := client.NewAlert("Production Issue", "Database connection lost").
 		Variable("server", "db-01").
 		Variable("error_code", 1042).
 		Metadata("environment", "production").
@@ -67,7 +68,12 @@ func ExampleMessageBuilder() {
 		Build()
 
 	// 同步发送
-	results, err := hub.Send(ctx, message, notifyhub.NewRetryOptions(3).WithTimeout(30*time.Second))
+	options := &client.Options{
+		Retry:      true,
+		MaxRetries: 3,
+		Timeout:    30 * time.Second,
+	}
+	results, err := hub.Send(ctx, message, options)
 
 	if err != nil {
 		log.Printf("Send failed: %v", err)
@@ -80,25 +86,25 @@ func ExampleMessageBuilder() {
 }
 
 func ExampleNotifyHub_async() {
-	hub, _ := notifyhub.NewWithDefaults()
+	hub, _ := client.New(config.WithTestDefaults())
 	ctx := context.Background()
 	hub.Start(ctx)
 	defer hub.Stop()
 
 	// 异步发送报告
-	message := notifyhub.NewReport("Daily Report", "All systems running normally").
+	message := client.NewReport("Daily Report", "All systems running normally").
 		Variable("uptime", "99.9%").
 		Variable("requests", 1500000).
 		Email("reports@company.com").
 		Build()
 
-	// 异步发送（通过队列）
-	results, err := hub.Send(ctx, message, notifyhub.NewAsyncOptions())
+	// 异步发送
+	messageID, err := hub.SendAsync(ctx, message, nil)
 
 	if err != nil {
 		log.Printf("Async send failed: %v", err)
 	} else {
-		fmt.Printf("Message queued successfully: %v\n", results[0].Success)
+		fmt.Printf("Message queued successfully with ID: %s\n", messageID)
 	}
 
 	// 等待处理
@@ -110,7 +116,7 @@ func ExampleNotifyHub_async() {
 }
 
 func ExampleNotifyHub_health() {
-	hub, _ := notifyhub.NewWithDefaults()
+	hub, _ := client.New(config.WithTestDefaults())
 	ctx := context.Background()
 	hub.Start(ctx)
 	defer hub.Stop()

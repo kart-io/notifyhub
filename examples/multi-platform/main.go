@@ -5,19 +5,20 @@ import (
 	"log"
 	"time"
 
-	"github.com/kart-io/notifyhub"
+	"github.com/kart-io/notifyhub/client"
+	"github.com/kart-io/notifyhub/config"
 )
 
 func main() {
 	// 同时配置飞书和邮件
-	hub, err := notifyhub.New(
+	hub, err := client.New(
 		// 飞书配置
-		notifyhub.WithFeishu(
+		config.WithFeishu(
 			"https://open.feishu.cn/open-apis/bot/v2/hook/your-webhook-url",
 			"your-secret", // 可选
 		),
 		// 邮件配置
-		notifyhub.WithEmail(
+		config.WithEmail(
 			"smtp.gmail.com",    // SMTP服务器
 			587,                 // 端口
 			"your@gmail.com",    // 用户名
@@ -25,14 +26,14 @@ func main() {
 			"your@gmail.com",    // 发送方
 		),
 		// 队列配置
-		notifyhub.WithQueue("memory", 1000, 2),
+		config.WithQueue("memory", 1000, 2),
 		// 路由规则：高优先级消息同时发送到飞书和邮件
-		notifyhub.WithRouting(
-			notifyhub.NewRoutingRule("high_priority_all").
+		config.WithRouting(
+			config.NewRoutingRule("high_priority_all").
 				WithPriority(4, 5).
 				RouteTo("feishu", "email"). // 同时路由到两个平台
 				Build(),
-			notifyhub.NewRoutingRule("normal_feishu_only").
+			config.NewRoutingRule("normal_feishu_only").
 				WithPriority(1, 2, 3).
 				RouteTo("feishu"). // 普通消息只发飞书
 				Build(),
@@ -54,7 +55,7 @@ func main() {
 	// ========================================
 	log.Println("=== 示例1: 高优先级告警 - 自动发送到飞书和邮件 ===")
 
-	alertMessage := notifyhub.NewAlert("系统严重告警", "数据库服务器宕机").
+	alertMessage := client.NewAlert("系统严重告警", "数据库服务器宕机").
 		Variable("server", "prod-db-01").
 		Variable("environment", "production").
 		Variable("error", "connection refused").
@@ -80,7 +81,7 @@ func main() {
 	// ========================================
 	log.Println("\n=== 示例2: 手动指定目标 - 同时发送到指定的飞书群和邮箱 ===")
 
-	manualMessage := notifyhub.NewNotice("项目更新通知", "新版本 v2.1.0 已发布").
+	manualMessage := client.NewNotice("项目更新通知", "新版本 v2.1.0 已发布").
 		Variable("version", "v2.1.0").
 		Variable("features", []string{"新增用户管理", "优化性能", "修复bug"}).
 		Variable("release_date", time.Now().Format("2006-01-02")).
@@ -111,7 +112,7 @@ func main() {
 	// ========================================
 	log.Println("\n=== 示例3: 使用模板 - 报告同时发送到多个平台 ===")
 
-	reportMessage := notifyhub.NewReport("每日系统报告", "").
+	reportMessage := client.NewReport("每日系统报告", "").
 		Template("report"). // 使用内置报告模板
 		Variable("metrics", map[string]interface{}{
 			"cpu_usage":    "45%",
@@ -145,14 +146,14 @@ func main() {
 	// ========================================
 	log.Println("\n=== 示例4: 异步批量发送 ===")
 
-	batchMessage := notifyhub.NewNotice("批量通知", "这是一条异步批量通知").
+	batchMessage := client.NewNotice("批量通知", "这是一条异步批量通知").
 		Variable("batch_id", "batch_001").
 		FeishuGroup("all-staff").
 		Email("all@company.com").
 		Build()
 
 	// 异步发送
-	taskID, err := hub.SendAsync(ctx, batchMessage, notifyhub.NewAsyncOptions())
+	taskID, err := hub.SendAsync(ctx, batchMessage, &client.Options{Async: true})
 	if err != nil {
 		log.Printf("异步发送失败: %v", err)
 	} else {

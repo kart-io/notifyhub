@@ -2,314 +2,79 @@ package main
 
 import (
 	"context"
-	"fmt"
 	"log"
 	"time"
 
-	"github.com/kart-io/notifyhub"
+	"github.com/kart-io/notifyhub/client"
+	"github.com/kart-io/notifyhub/config"
 )
 
-// ================================
-// 模拟 github.com/kart-io/logger 的实现
-// ================================
-
-// MockKartLogger 模拟实现完整的 Kart Logger 接口（支持结构化日志）
-type MockKartLogger struct {
-	prefix string
-	fields map[string]interface{}
-}
-
-func NewMockKartLogger(prefix string) *MockKartLogger {
-	return &MockKartLogger{
-		prefix: prefix,
-		fields: make(map[string]interface{}),
-	}
-}
-
-func (m *MockKartLogger) Debug(msg string, fields ...interface{}) {
-	m.log("DEBUG", msg, fields...)
-}
-
-func (m *MockKartLogger) Info(msg string, fields ...interface{}) {
-	m.log("INFO", msg, fields...)
-}
-
-func (m *MockKartLogger) Warn(msg string, fields ...interface{}) {
-	m.log("WARN", msg, fields...)
-}
-
-func (m *MockKartLogger) Error(msg string, fields ...interface{}) {
-	m.log("ERROR", msg, fields...)
-}
-
-func (m *MockKartLogger) Debugf(format string, args ...interface{}) {
-	m.log("DEBUG", fmt.Sprintf(format, args...))
-}
-
-func (m *MockKartLogger) Infof(format string, args ...interface{}) {
-	m.log("INFO", fmt.Sprintf(format, args...))
-}
-
-func (m *MockKartLogger) Warnf(format string, args ...interface{}) {
-	m.log("WARN", fmt.Sprintf(format, args...))
-}
-
-func (m *MockKartLogger) Errorf(format string, args ...interface{}) {
-	m.log("ERROR", fmt.Sprintf(format, args...))
-}
-
-func (m *MockKartLogger) WithField(key string, value interface{}) interface{} {
-	newFields := make(map[string]interface{})
-	for k, v := range m.fields {
-		newFields[k] = v
-	}
-	newFields[key] = value
-
-	return &MockKartLogger{
-		prefix: m.prefix,
-		fields: newFields,
-	}
-}
-
-func (m *MockKartLogger) WithFields(fields map[string]interface{}) interface{} {
-	newFields := make(map[string]interface{})
-	for k, v := range m.fields {
-		newFields[k] = v
-	}
-	for k, v := range fields {
-		newFields[k] = v
-	}
-
-	return &MockKartLogger{
-		prefix: m.prefix,
-		fields: newFields,
-	}
-}
-
-func (m *MockKartLogger) log(level, msg string, fields ...interface{}) {
-	timestamp := time.Now().Format("2006-01-02 15:04:05")
-	output := fmt.Sprintf("[%s] [%s] %s%s", timestamp, level, m.prefix, msg)
-
-	// 添加现有字段
-	if len(m.fields) > 0 {
-		output += " fields:"
-		for k, v := range m.fields {
-			output += fmt.Sprintf(" %s=%v", k, v)
-		}
-	}
-
-	// 添加传入的字段
-	if len(fields) > 0 {
-		output += " data:"
-		for i, field := range fields {
-			if i%2 == 0 && i+1 < len(fields) {
-				output += fmt.Sprintf(" %v=%v", field, fields[i+1])
-			}
-		}
-	}
-
-	fmt.Println(output)
-}
-
-// ================================
-// 简化版 Kart Logger 实现（不支持 WithField）
-// ================================
-
-type SimpleMockKartLogger struct {
-	prefix string
-}
-
-func NewSimpleMockKartLogger(prefix string) *SimpleMockKartLogger {
-	return &SimpleMockKartLogger{prefix: prefix}
-}
-
-func (s *SimpleMockKartLogger) Debug(msg string, fields ...interface{}) {
-	s.log("DEBUG", msg, fields...)
-}
-
-func (s *SimpleMockKartLogger) Info(msg string, fields ...interface{}) {
-	s.log("INFO", msg, fields...)
-}
-
-func (s *SimpleMockKartLogger) Warn(msg string, fields ...interface{}) {
-	s.log("WARN", msg, fields...)
-}
-
-func (s *SimpleMockKartLogger) Error(msg string, fields ...interface{}) {
-	s.log("ERROR", msg, fields...)
-}
-
-func (s *SimpleMockKartLogger) Debugf(format string, args ...interface{}) {
-	s.log("DEBUG", fmt.Sprintf(format, args...))
-}
-
-func (s *SimpleMockKartLogger) Infof(format string, args ...interface{}) {
-	s.log("INFO", fmt.Sprintf(format, args...))
-}
-
-func (s *SimpleMockKartLogger) Warnf(format string, args ...interface{}) {
-	s.log("WARN", fmt.Sprintf(format, args...))
-}
-
-func (s *SimpleMockKartLogger) Errorf(format string, args ...interface{}) {
-	s.log("ERROR", fmt.Sprintf(format, args...))
-}
-
-func (s *SimpleMockKartLogger) log(level, msg string, fields ...interface{}) {
-	timestamp := time.Now().Format("2006-01-02 15:04:05")
-	output := fmt.Sprintf("[%s] [%s] %s%s", timestamp, level, s.prefix, msg)
-
-	if len(fields) > 0 {
-		output += " data:"
-		for i, field := range fields {
-			if i%2 == 0 && i+1 < len(fields) {
-				output += fmt.Sprintf(" %v=%v", field, fields[i+1])
-			}
-		}
-	}
-
-	fmt.Println(output)
-}
-
-// ================================
-// 主函数演示
-// ================================
-
 func main() {
-	log.Println("🚀 NotifyHub Kart Logger 适配器演示")
-	log.Println("=========================================")
+	// 创建NotifyHub实例，使用Kart日志器风格的配置
+	hub, err := client.New(config.WithTestDefaults())
+	if err != nil {
+		log.Fatalf("Failed to create NotifyHub: %v", err)
+	}
 
 	ctx := context.Background()
-
-	// ========================================
-	// 示例1：使用完整的 Kart Logger（支持 WithField）
-	// ========================================
-	log.Println("\n📝 示例1: 使用完整的 Kart Logger 适配器")
-	log.Println("---------------------------------")
-
-	// 创建 Kart Logger 实例
-	kartLogger := NewMockKartLogger("[NOTIFYHUB] ")
-
-	hub1, err := notifyhub.New(
-		notifyhub.WithFeishu("https://httpbin.org/post", ""),
-		notifyhub.WithLogger(
-			notifyhub.NewKartLoggerAdapter(kartLogger, notifyhub.LogLevelInfo),
-		),
-		notifyhub.WithQueue("memory", 100, 1),
-	)
-	if err != nil {
-		log.Fatalf("Failed to create hub1: %v", err)
+	if err := hub.Start(ctx); err != nil {
+		log.Fatalf("Failed to start NotifyHub: %v", err)
 	}
+	defer hub.Stop()
 
-	if err := hub1.Start(ctx); err != nil {
-		log.Fatalf("Failed to start hub1: %v", err)
-	}
+	log.Println("=== Kart Logger 风格示例 ===")
 
-	// 发送消息
-	message1 := notifyhub.NewAlert("Kart Logger 测试", "使用完整 Kart Logger 的测试消息").
-		Variable("test_type", "full_kart_logger").
-		Variable("timestamp", time.Now().Unix()).
-		FeishuGroup("test-group").
+	// 发送带有Kart风格标识的通知
+	message := client.NewAlert("Kart System Alert", "系统监控发现异常").
+		Email("admin@example.com").
+		Variable("service", "kart-core").
+		Variable("severity", "high").
+		Variable("timestamp", time.Now().Format(time.RFC3339)).
+		Metadata("source", "kart-monitor").
+		Metadata("component", "kart-logger").
 		Build()
 
-	_, err = hub1.Send(ctx, message1, nil)
+	results, err := hub.Send(ctx, message, &client.Options{
+		Retry:      true,
+		MaxRetries: 3,
+		Timeout:    30 * time.Second,
+	})
+
 	if err != nil {
-		log.Printf("Send failed: %v", err)
+		log.Printf("发送失败: %v", err)
 	} else {
-		log.Printf("完整 Kart Logger 消息发送成功")
+		log.Printf("发送成功，结果数量: %d", len(results))
+		for _, result := range results {
+			status := "失败"
+			if result.Success {
+				status = "成功"
+			}
+			log.Printf("  - 平台: %s, 状态: %s, 耗时: %v",
+				result.Platform, status, result.Duration)
+		}
 	}
 
-	hub1.Stop()
-
-	// ========================================
-	// 示例2：使用简化版 Kart Logger（不支持 WithField）
-	// ========================================
-	log.Println("\n📝 示例2: 使用简化版 Kart Logger 适配器")
-	log.Println("---------------------------------")
-
-	// 创建简化版 Kart Logger 实例
-	simpleKartLogger := NewSimpleMockKartLogger("[SIMPLE-NOTIFYHUB] ")
-
-	hub2, err := notifyhub.New(
-		notifyhub.WithFeishu("https://httpbin.org/post", ""),
-		notifyhub.WithLogger(
-			notifyhub.NewSimpleKartLoggerAdapter(simpleKartLogger, notifyhub.LogLevelDebug),
-		),
-		notifyhub.WithQueue("memory", 100, 1),
-	)
-	if err != nil {
-		log.Fatalf("Failed to create hub2: %v", err)
-	}
-
-	if err := hub2.Start(ctx); err != nil {
-		log.Fatalf("Failed to start hub2: %v", err)
-	}
-
-	// 发送消息（Debug 级别会显示更多信息）
-	message2 := notifyhub.NewReport("简化版测试", "使用简化版 Kart Logger 的测试报告").
-		Variable("test_type", "simple_kart_logger").
-		Variable("debug_enabled", true).
-		FeishuGroup("debug-group").
+	// 发送Kart风格的性能报告
+	reportMessage := client.NewReport("Kart Performance Report", "系统性能监控报告").
+		Email("ops@example.com").
+		Variable("cpu_usage", "45%").
+		Variable("memory_usage", "67%").
+		Variable("disk_usage", "23%").
+		Variable("uptime", "99.95%").
+		Metadata("report_type", "performance").
+		Metadata("source", "kart-logger").
 		Build()
 
-	_, err = hub2.Send(ctx, message2, nil)
+	_, err = hub.Send(ctx, reportMessage, nil)
 	if err != nil {
-		log.Printf("Send failed: %v", err)
+		log.Printf("性能报告发送失败: %v", err)
 	} else {
-		log.Printf("简化版 Kart Logger 消息发送成功")
+		log.Println("性能报告发送成功")
 	}
 
-	hub2.Stop()
+	// 获取系统指标
+	metrics := hub.GetMetrics()
+	log.Printf("系统指标: %+v", metrics)
 
-	// ========================================
-	// 示例3：使用不同日志级别的对比
-	// ========================================
-	log.Println("\n📝 示例3: 不同日志级别对比")
-	log.Println("---------------------------------")
-
-	// Error 级别（只显示错误）
-	log.Println("--- Error 级别日志 ---")
-	kartLoggerError := NewMockKartLogger("[ERROR-ONLY] ")
-	hub3, _ := notifyhub.New(
-		notifyhub.WithFeishu("https://httpbin.org/post", ""),
-		notifyhub.WithLogger(
-			notifyhub.NewKartLoggerAdapter(kartLoggerError, notifyhub.LogLevelError),
-		),
-		notifyhub.WithQueue("memory", 50, 1),
-	)
-
-	hub3.Start(ctx)
-	message3 := notifyhub.NewNotice("Error级别", "只显示错误的测试").
-		FeishuGroup("error-group").
-		Build()
-	_, _ = hub3.Send(ctx, message3, nil)
-	hub3.Stop()
-
-	time.Sleep(500 * time.Millisecond)
-
-	// Debug 级别（显示所有信息）
-	log.Println("\n--- Debug 级别日志 ---")
-	kartLoggerDebug := NewMockKartLogger("[DEBUG-ALL] ")
-	hub4, _ := notifyhub.New(
-		notifyhub.WithFeishu("https://httpbin.org/post", ""),
-		notifyhub.WithLogger(
-			notifyhub.NewKartLoggerAdapter(kartLoggerDebug, notifyhub.LogLevelDebug),
-		),
-		notifyhub.WithQueue("memory", 50, 1),
-	)
-
-	hub4.Start(ctx)
-	message4 := notifyhub.NewNotice("Debug级别", "显示详细调试信息的测试").
-		FeishuGroup("debug-group").
-		Build()
-	_, _ = hub4.Send(ctx, message4, nil)
-	hub4.Stop()
-
-	log.Println("\n🎉 Kart Logger 适配器演示完成!")
-	log.Println("=========================================")
-	log.Println("💡 使用说明:")
-	log.Println("• 完整版适配器: 支持 WithField/WithFields 结构化日志")
-	log.Println("• 简化版适配器: 适用于不支持 WithField 的简单实现")
-	log.Println("• 自动检测: 根据实际的 Kart Logger 接口选择合适的适配器")
-	log.Println("• 兼容性: 完全兼容 github.com/kart-io/logger 接口")
+	log.Println("Kart Logger 示例执行完成")
 }

@@ -2,7 +2,6 @@ package main
 
 import (
 	"context"
-	"encoding/json"
 	"log"
 	"net/http"
 	"os"
@@ -14,6 +13,7 @@ import (
 	"github.com/gin-gonic/gin"
 	"github.com/kart-io/notifyhub/client"
 	"github.com/kart-io/notifyhub/config"
+	"github.com/kart-io/notifyhub/notifiers"
 )
 
 // NotificationService 封装了 NotifyHub 的核心功能
@@ -178,8 +178,8 @@ func (ns *NotificationService) createMessageBuilder(req NotificationRequest) *cl
 }
 
 // handleAsyncSend 处理异步发送 - 展示异步最佳实践
-func (ns *NotificationService) handleAsyncSend(c *gin.Context, message *client.Message, req NotificationRequest) {
-	opts := client.NewAsyncOptions()
+func (ns *NotificationService) handleAsyncSend(c *gin.Context, message *notifiers.Message, req NotificationRequest) {
+	opts := &client.Options{Async: true}
 	if req.Timeout > 0 {
 		opts = opts.WithTimeout(time.Duration(req.Timeout) * time.Second)
 	}
@@ -202,7 +202,7 @@ func (ns *NotificationService) handleAsyncSend(c *gin.Context, message *client.M
 }
 
 // handleSyncSend 处理同步发送 - 展示同步最佳实践
-func (ns *NotificationService) handleSyncSend(c *gin.Context, message *client.Message, req NotificationRequest) {
+func (ns *NotificationService) handleSyncSend(c *gin.Context, message *notifiers.Message, req NotificationRequest) {
 	// 优化：动态配置重试选项
 	retryOpts := client.NewRetryOptions(3) // 默认重试3次
 	if req.RetryCount > 0 {
@@ -227,8 +227,7 @@ func (ns *NotificationService) handleSyncSend(c *gin.Context, message *client.Me
 			Success:  result.Success,
 			Duration: result.Duration,
 		}
-		if result.Error != nil {
-			platformResults[i].Error = result.Error.Error()
+		if !result.Success {
 			allSuccess = false
 		}
 	}
@@ -256,20 +255,25 @@ func (ns *NotificationService) healthCheck(c *gin.Context) {
 	metrics := ns.hub.GetMetrics()
 
 	status := "ok"
-	if !health.Healthy {
+	if healthStatus, ok := health["healthy"].(bool); ok && !healthStatus {
 		status = "error"
+	}
+
+	uptime := ""
+	if uptimeValue, ok := health["uptime"]; ok {
+		uptime = uptimeValue.(string)
 	}
 
 	response := HealthResponse{
 		Status:    status,
-		Uptime:    health.Uptime.String(),
+		Uptime:    uptime,
 		Metrics:   metrics,
-		Platforms: health.Platforms,
+		Platforms: make(map[string]bool), // simplified
 		Version:   "1.2.0", // 可从构建时注入
 	}
 
 	httpStatus := http.StatusOK
-	if !health.Healthy {
+	if status == "error" {
 		httpStatus = http.StatusServiceUnavailable
 	}
 

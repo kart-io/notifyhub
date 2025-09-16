@@ -5,7 +5,9 @@ import (
 	"log"
 	"time"
 
-	"github.com/kart-io/notifyhub"
+	"github.com/kart-io/notifyhub/client"
+	"github.com/kart-io/notifyhub/config"
+	"github.com/kart-io/notifyhub/queue"
 )
 
 func main() {
@@ -16,7 +18,7 @@ func main() {
 	// ================================
 	log.Println("=== 示例1: 默认配置 (从环境变量) ===")
 
-	hub1, err := notifyhub.New(notifyhub.WithDefaults())
+	hub1, err := client.New(config.WithDefaults())
 	if err != nil {
 		log.Printf("创建Hub失败: %v", err)
 	} else {
@@ -29,14 +31,14 @@ func main() {
 	// ================================
 	log.Println("\n=== 示例2: 手动配置 ===")
 
-	hub2, err := notifyhub.New(
+	hub2, err := client.New(
 		// Feishu配置
-		notifyhub.WithFeishu(
+		config.WithFeishu(
 			"https://open.feishu.cn/open-apis/bot/v2/hook/your-webhook-url",
 			"your-secret", // 可选
 		),
 		// 邮件配置
-		notifyhub.WithEmail(
+		config.WithEmail(
 			"smtp.gmail.com", // SMTP服务器
 			587,              // 端口
 			"your@gmail.com", // 用户名
@@ -44,20 +46,20 @@ func main() {
 			"your@gmail.com", // 发送方
 		),
 		// 队列配置
-		notifyhub.WithQueue(
+		config.WithQueue(
 			"memory", // 队列类型
 			2000,     // 缓冲区大小
 			4,        // 工作器数量
 		),
 		// 路由规则
-		notifyhub.WithRouting(
+		config.WithRouting(
 			// 高优先级消息发送到所有平台
-			notifyhub.NewRoutingRule("high_priority").
+			config.NewRoutingRule("high_priority").
 				WithPriority(4, 5).
 				RouteTo("feishu", "email").
 				Build(),
 			// 告警消息只发送到飞书
-			notifyhub.NewRoutingRule("alerts_only_feishu").
+			config.NewRoutingRule("alerts_only_feishu").
 				WithMetadata("type", "alert").
 				RouteTo("feishu").
 				Build(),
@@ -87,14 +89,14 @@ func main() {
 	// ================================
 	log.Println("\n=== 示例3: 混合配置 ===")
 
-	hub3, err := notifyhub.New(
+	hub3, err := client.New(
 		// 从环境变量加载Feishu和Email配置
-		notifyhub.WithFeishuFromEnv(),
-		notifyhub.WithEmailFromEnv(),
+		config.WithFeishuFromEnv(),
+		config.WithEmailFromEnv(),
 		// 手动设置队列配置
-		notifyhub.WithQueue("memory", 500, 2),
+		config.WithQueue("memory", 500, 2),
 		// 使用默认路由规则
-		notifyhub.WithDefaultRouting(),
+		config.WithDefaultRouting(),
 	)
 
 	if err != nil {
@@ -109,10 +111,10 @@ func main() {
 	// ================================
 	log.Println("\n=== 示例4: 测试环境配置 ===")
 
-	hub4, err := notifyhub.New(
-		notifyhub.WithTestDefaults(), // 测试友好的默认配置
+	hub4, err := client.New(
+		config.WithTestDefaults(), // 测试友好的默认配置
 		// 可以添加测试用的通知配置
-		notifyhub.WithFeishu("https://httpbin.org/post", ""), // 用于测试的端点
+		config.WithFeishu("https://httpbin.org/post", ""), // 用于测试的端点
 	)
 
 	if err != nil {
@@ -127,7 +129,7 @@ func main() {
 			log.Println("✅ 测试Hub服务启动成功")
 
 			// 测试消息
-			testMessage := notifyhub.NewNotice("测试消息", "这是一条测试消息").
+			testMessage := client.NewNotice("测试消息", "这是一条测试消息").
 				Variable("environment", "test").
 				Build()
 
@@ -148,21 +150,21 @@ func main() {
 	log.Println("\n=== 示例5: 动态配置 ===")
 
 	// 创建自定义重试策略
-	aggressiveRetry := notifyhub.ExponentialBackoffPolicy(5, 10*time.Second, 1.5)
+	aggressiveRetry := queue.ExponentialBackoffPolicy(5, 10*time.Second, 1.5)
 
-	hub5, err := notifyhub.New(
-		notifyhub.WithFeishu("https://httpbin.org/post", ""),
-		notifyhub.WithQueue("memory", 1000, 3),
-		notifyhub.WithQueueRetryPolicy(aggressiveRetry),
+	hub5, err := client.New(
+		config.WithFeishu("https://httpbin.org/post", ""),
+		config.WithQueue("memory", 1000, 3),
+		config.WithQueueRetryPolicy(aggressiveRetry),
 		// 创建复杂的路由规则
-		notifyhub.WithRouting(
-			notifyhub.NewRoutingRule("emergency_all").
+		config.WithRouting(
+			config.NewRoutingRule("emergency_all").
 				Enabled(true).
 				WithPriority(5).
 				WithMessageType("emergency", "critical").
 				RouteTo("feishu", "email").
 				Build(),
-			notifyhub.NewRoutingRule("normal_feishu_only").
+			config.NewRoutingRule("normal_feishu_only").
 				WithPriority(1, 2, 3).
 				RouteTo("feishu").
 				Build(),
@@ -180,9 +182,9 @@ func main() {
 }
 
 // testMessage 测试消息发送
-func testMessage(ctx context.Context, hub *notifyhub.Hub) {
+func testMessage(ctx context.Context, hub *client.Hub) {
 	// 创建测试消息
-	message := notifyhub.NewAlert("配置测试", "这是一条用于测试配置的消息").
+	message := client.NewAlert("配置测试", "这是一条用于测试配置的消息").
 		Variable("timestamp", time.Now().Format(time.RFC3339)).
 		Variable("config_test", true).
 		Build()
