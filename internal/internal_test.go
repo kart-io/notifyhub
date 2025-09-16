@@ -243,26 +243,15 @@ func TestEnsureRateLimiter(t *testing.T) {
 	assert.Error(t, err)
 	assert.Equal(t, "test error", err.Error())
 
-	// Consume remaining tokens to test rate limiting
-	// First, consume the remaining token
-	consumed := bucket.TryConsume()
-	if !consumed {
-		// If we can't consume, maybe the bucket was already empty from previous operations
-		// Let's wait a bit and try again to be safe
-		time.Sleep(10 * time.Millisecond)
-	}
-
-	// Should timeout due to rate limiting
+	// Test with exhausted bucket - create new bucket with 0 tokens
+	emptyBucket := NewTokenBucket(0, 1, time.Hour) // Very slow refill
 	executed = false
-	err = EnsureRateLimiter(bucket, ctx, 50*time.Millisecond, func() error {
+	err = EnsureRateLimiter(emptyBucket, ctx, 50*time.Millisecond, func() error {
 		executed = true
 		return nil
 	})
-	// The timeout could happen due to rate limiting
-	if err != nil {
-		assert.Equal(t, context.DeadlineExceeded, err)
-		assert.False(t, executed)
-	}
+	assert.Equal(t, context.DeadlineExceeded, err)
+	assert.False(t, executed)
 }
 
 
