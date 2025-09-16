@@ -19,14 +19,14 @@ import (
 
 // Hub is the main client for sending notifications
 type Hub struct {
-	config     *config.Config
-	notifiers  map[string]notifiers.Notifier
-	queue      queue.Queue
-	templates  *template.Engine
-	routing    *config.RoutingEngine
-	metrics    *monitoring.Metrics
-	logger     logger.Interface
-	telemetry  *observability.TelemetryProvider
+	config    *config.Config
+	notifiers map[string]notifiers.Notifier
+	queue     queue.Queue
+	templates *template.Engine
+	routing   *config.RoutingEngine
+	metrics   *monitoring.Metrics
+	logger    logger.Interface
+	telemetry *observability.TelemetryProvider
 
 	mu      sync.RWMutex
 	started bool
@@ -584,6 +584,21 @@ func (h *Hub) SendWithTemplate(ctx context.Context, templateName string, variabl
 	return err
 }
 
+// SendTemplate is a simplified alias for SendWithTemplate
+func (h *Hub) SendTemplate(ctx context.Context, templateName string, variables map[string]interface{}, targets ...notifiers.Target) error {
+	return h.SendWithTemplate(ctx, templateName, variables, targets...)
+}
+
+// Template provides a more fluent API for template-based messages
+func (h *Hub) Template(templateName string) *TemplateBuilder {
+	return &TemplateBuilder{
+		hub:          h,
+		templateName: templateName,
+		variables:    make(map[string]interface{}),
+		targets:      make([]notifiers.Target, 0),
+	}
+}
+
 // ================================
 // Helper functions for logging
 // ================================
@@ -739,4 +754,313 @@ func getNotifierNames(notifiers map[string]notifiers.Notifier) []string {
 		names = append(names, name)
 	}
 	return names
+}
+
+// ================================
+// Fluent Template Builder
+// ================================
+
+// TemplateBuilder provides a fluent API for building template-based messages
+type TemplateBuilder struct {
+	hub          *Hub
+	templateName string
+	variables    map[string]interface{}
+	targets      []notifiers.Target
+}
+
+// Variables sets multiple template variables
+func (tb *TemplateBuilder) Variables(variables map[string]interface{}) *TemplateBuilder {
+	for k, v := range variables {
+		tb.variables[k] = v
+	}
+	return tb
+}
+
+// Variable sets a single template variable
+func (tb *TemplateBuilder) Variable(key string, value interface{}) *TemplateBuilder {
+	tb.variables[key] = value
+	return tb
+}
+
+// To adds targets to the message
+func (tb *TemplateBuilder) To(targets ...notifiers.Target) *TemplateBuilder {
+	tb.targets = append(tb.targets, targets...)
+	return tb
+}
+
+// SendTo sends the template message to specified targets
+func (tb *TemplateBuilder) SendTo(ctx context.Context, targets ...notifiers.Target) error {
+	allTargets := append(tb.targets, targets...)
+	return tb.hub.SendTemplate(ctx, tb.templateName, tb.variables, allTargets...)
+}
+
+// ================================
+// Batch Operation APIs
+// ================================
+
+// BatchBuilder provides a fluent API for building batch operations
+type BatchBuilder struct {
+	hub      *Hub
+	messages []*notifiers.Message
+	options  *Options // Integrated send options for the entire batch
+}
+
+// NewBatch creates a new batch builder
+func (h *Hub) NewBatch() *BatchBuilder {
+	return &BatchBuilder{
+		hub:      h,
+		messages: make([]*notifiers.Message, 0),
+	}
+}
+
+// Alert adds an alert message to the batch
+func (bb *BatchBuilder) Alert(title, body string) *BatchMessageBuilder {
+	return &BatchMessageBuilder{
+		batch:   bb,
+		builder: NewAlert(title, body),
+	}
+}
+
+// Notice adds a notice message to the batch
+func (bb *BatchBuilder) Notice(title, body string) *BatchMessageBuilder {
+	return &BatchMessageBuilder{
+		batch:   bb,
+		builder: NewNotice(title, body),
+	}
+}
+
+// Text adds a text message to the batch
+func (bb *BatchBuilder) Text(title, body string) *BatchMessageBuilder {
+	return &BatchMessageBuilder{
+		batch:   bb,
+		builder: NewMessage().Title(title).Body(body),
+	}
+}
+
+// Message adds a custom message to the batch
+func (bb *BatchBuilder) Message(builder *MessageBuilder) *BatchBuilder {
+	bb.messages = append(bb.messages, builder.Build())
+	return bb
+}
+
+// SendAll sends all messages in the batch
+func (bb *BatchBuilder) SendAll(ctx context.Context, options ...*Options) ([]*notifiers.SendResult, error) {
+	var opts *Options
+	if len(options) > 0 {
+		opts = options[0]
+	} else if bb.options != nil {
+		opts = bb.options
+	}
+	return bb.hub.SendBatch(ctx, bb.messages, opts)
+}
+
+// Count returns the number of messages in the batch
+func (bb *BatchBuilder) Count() int {
+	return len(bb.messages)
+}
+
+// ================================
+// BatchBuilder Send Options Integration
+// ================================
+
+// WithOptions sets send options for the entire batch
+func (bb *BatchBuilder) WithOptions(options *Options) *BatchBuilder {
+	bb.options = options
+	return bb
+}
+
+// Async enables asynchronous sending for the batch
+func (bb *BatchBuilder) Async(async bool) *BatchBuilder {
+	if bb.options == nil {
+		bb.options = NewOptions()
+	}
+	bb.options.Async = async
+	return bb
+}
+
+// AsyncSend enables asynchronous sending (convenience method)
+func (bb *BatchBuilder) AsyncSend() *BatchBuilder {
+	return bb.Async(true)
+}
+
+// SyncSend enables synchronous sending (convenience method)
+func (bb *BatchBuilder) SyncSend() *BatchBuilder {
+	return bb.Async(false)
+}
+
+// WithRetry enables retry on failure for the batch
+func (bb *BatchBuilder) WithRetry(retry bool) *BatchBuilder {
+	if bb.options == nil {
+		bb.options = NewOptions()
+	}
+	bb.options.Retry = retry
+	return bb
+}
+
+// EnableRetry enables retry on failure (convenience method)
+func (bb *BatchBuilder) EnableRetry() *BatchBuilder {
+	return bb.WithRetry(true)
+}
+
+// WithMaxRetries sets maximum retry attempts for the batch
+func (bb *BatchBuilder) WithMaxRetries(maxRetries int) *BatchBuilder {
+	if bb.options == nil {
+		bb.options = NewOptions()
+	}
+	bb.options.MaxRetries = maxRetries
+	return bb
+}
+
+// WithTimeout sets operation timeout for the batch
+func (bb *BatchBuilder) WithTimeout(timeout time.Duration) *BatchBuilder {
+	if bb.options == nil {
+		bb.options = NewOptions()
+	}
+	bb.options.Timeout = timeout
+	return bb
+}
+
+// WithBatchSize sets batch size for processing
+func (bb *BatchBuilder) WithBatchSize(batchSize int) *BatchBuilder {
+	if bb.options == nil {
+		bb.options = NewOptions()
+	}
+	bb.options.BatchSize = batchSize
+	return bb
+}
+
+// AsQuickBatch applies quick send options (sync, no retry, 5s timeout)
+func (bb *BatchBuilder) AsQuickBatch() *BatchBuilder {
+	return bb.SyncSend().
+		WithRetry(false).
+		WithTimeout(5 * time.Second)
+}
+
+// AsReliableBatch applies reliable send options (sync, retry enabled, 30s timeout)
+func (bb *BatchBuilder) AsReliableBatch() *BatchBuilder {
+	return bb.SyncSend().
+		EnableRetry().
+		WithMaxRetries(3).
+		WithTimeout(30 * time.Second)
+}
+
+// AsBackgroundBatch applies background send options (async, retry enabled)
+func (bb *BatchBuilder) AsBackgroundBatch() *BatchBuilder {
+	return bb.AsyncSend().
+		EnableRetry().
+		WithMaxRetries(5)
+}
+
+// SendAllWithAnalysis sends all messages and returns analysis
+func (bb *BatchBuilder) SendAllWithAnalysis(ctx context.Context, options ...*Options) ([]*notifiers.SendResult, *ResultAnalyzer, error) {
+	results, err := bb.SendAll(ctx, options...)
+	if err != nil {
+		return results, nil, err
+	}
+	analyzer := AnalyzeResults(results)
+	return results, analyzer, nil
+}
+
+// BatchMessageBuilder allows configuring individual messages in a batch
+type BatchMessageBuilder struct {
+	batch   *BatchBuilder
+	builder *MessageBuilder
+}
+
+// To adds targets to the message and returns to batch builder
+func (bmb *BatchMessageBuilder) To(targets ...notifiers.Target) *BatchBuilder {
+	for _, target := range targets {
+		bmb.builder.Target(target)
+	}
+	bmb.batch.messages = append(bmb.batch.messages, bmb.builder.Build())
+	return bmb.batch
+}
+
+// Email adds email targets and returns to batch builder
+func (bmb *BatchMessageBuilder) Email(emails ...string) *BatchBuilder {
+	for _, email := range emails {
+		bmb.builder.Email(email)
+	}
+	bmb.batch.messages = append(bmb.batch.messages, bmb.builder.Build())
+	return bmb.batch
+}
+
+// Configure allows custom configuration of the message
+func (bmb *BatchMessageBuilder) Configure(fn func(*MessageBuilder) *MessageBuilder) *BatchBuilder {
+	bmb.builder = fn(bmb.builder)
+	bmb.batch.messages = append(bmb.batch.messages, bmb.builder.Build())
+	return bmb.batch
+}
+
+// Convenience batch methods
+
+// SendAlertBatch sends multiple alerts with the same targets
+func (h *Hub) SendAlertBatch(ctx context.Context, alerts map[string]string, targets ...notifiers.Target) ([]*notifiers.SendResult, error) {
+	batch := h.NewBatch()
+	for title, body := range alerts {
+		batch.Alert(title, body).To(targets...)
+	}
+	return batch.SendAll(ctx)
+}
+
+// SendTextBatch sends multiple text messages with the same targets
+func (h *Hub) SendTextBatch(ctx context.Context, messages map[string]string, targets ...notifiers.Target) ([]*notifiers.SendResult, error) {
+	batch := h.NewBatch()
+	for title, body := range messages {
+		batch.Text(title, body).To(targets...)
+	}
+	return batch.SendAll(ctx)
+}
+
+// SendBatchToEmails sends the same message to multiple email recipients
+func (h *Hub) SendBatchToEmails(ctx context.Context, title, body string, emails ...string) error {
+	targets := make([]notifiers.Target, len(emails))
+	for i, email := range emails {
+		targets[i] = notifiers.Target{Type: notifiers.TargetTypeEmail, Value: email}
+	}
+	return h.SendText(ctx, title, body, targets...)
+}
+
+// ================================
+// Enhanced Send Methods with Result Analysis
+// ================================
+
+// SendWithAnalysis sends a message and returns both results and analysis
+func (h *Hub) SendWithAnalysis(ctx context.Context, message *notifiers.Message, options *Options) ([]*notifiers.SendResult, *ResultAnalyzer, error) {
+	results, err := h.Send(ctx, message, options)
+	if err != nil {
+		return results, nil, err
+	}
+	analyzer := AnalyzeResults(results)
+	return results, analyzer, nil
+}
+
+// SendAndAnalyze is a convenience method that sends and logs analysis
+func (h *Hub) SendAndAnalyze(ctx context.Context, message *notifiers.Message, options *Options) error {
+	results, analyzer, err := h.SendWithAnalysis(ctx, message, options)
+	if err != nil {
+		return err
+	}
+
+	// Log analysis if debug mode is enabled
+	if h.debug {
+		h.logger.Info(ctx, "📊 Send Analysis:\n%s", analyzer.String())
+	}
+
+	// Return error if any sends failed
+	if analyzer.HasFailures() {
+		return fmt.Errorf("some sends failed: %v", analyzer.AllErrors())
+	}
+
+	return nil
+}
+
+// SendBatchWithAnalysis sends batch messages and returns results with analysis
+func (h *Hub) SendBatchWithAnalysis(ctx context.Context, messages []*notifiers.Message, options *Options) ([]*notifiers.SendResult, *ResultAnalyzer, error) {
+	results, err := h.SendBatch(ctx, messages, options)
+	if err != nil {
+		return results, nil, err
+	}
+	analyzer := AnalyzeResults(results)
+	return results, analyzer, nil
 }

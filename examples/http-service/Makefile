@@ -1,178 +1,124 @@
 # NotifyHub HTTP Service Makefile
 
-.PHONY: help build run test unit-test e2e-test performance-test clean deps lint fmt vet docker-build docker-run
+.PHONY: help run build test clean docker-build docker-run dev deps
 
-# Default target
-help: ## Show this help message
-	@echo "Available commands:"
-	@grep -E '^[a-zA-Z_-]+:.*?## .*$$' $(MAKEFILE_LIST) | awk 'BEGIN {FS = ":.*?## "}; {printf "\033[36m%-20s\033[0m %s\n", $$1, $$2}'
+# 默认目标
+help: ## 显示帮助信息
+	@echo "NotifyHub HTTP Service - 可用命令:"
+	@echo ""
+	@grep -E '^[a-zA-Z_-]+:.*?## .*$$' $(MAKEFILE_LIST) | sort | awk 'BEGIN {FS = ":.*?## "}; {printf "  \033[36m%-15s\033[0m %s\n", $$1, $$2}'
 
-# Build the application
-build: ## Build the HTTP service binary
-	@echo "Building HTTP service..."
-	go build -o bin/http-service ./cmd/server.go
+# 开发相关
+dev: deps ## 开发模式运行（自动重启）
+	@echo "🔧 开发模式启动..."
+	@if command -v air >/dev/null 2>&1; then \
+		air; \
+	else \
+		echo "📦 安装 air 工具..."; \
+		go install github.com/cosmtrek/air@latest; \
+		air; \
+	fi
 
-# Run the application
-run: ## Run the HTTP service
-	@echo "Starting HTTP service..."
-	go run ./cmd/server.go
+run: ## 直接运行服务
+	@echo "🚀 启动 NotifyHub HTTP Service..."
+	@go run main.go
 
-# Install dependencies
-deps: ## Install dependencies
-	@echo "Installing dependencies..."
-	go mod download
-	go mod tidy
+deps: ## 安装依赖
+	@echo "📦 安装依赖..."
+	@go mod tidy
+	@go mod download
 
-# Run all tests
-test: unit-test e2e-test ## Run all tests (unit + e2e)
+# 构建相关
+build: ## 构建二进制文件
+	@echo "🔨 构建应用..."
+	@CGO_ENABLED=0 GOOS=linux go build -a -installsuffix cgo -o bin/notifyhub-http-service main.go
+	@echo "✅ 构建完成: bin/notifyhub-http-service"
 
-# Run unit tests
-unit-test: ## Run unit tests
-	@echo "Running unit tests..."
-	go test -v -race -timeout 30s ./test/unit/...
+build-local: ## 构建本地版本
+	@echo "🔨 构建本地版本..."
+	@go build -o bin/notifyhub-http-service main.go
+	@echo "✅ 构建完成: bin/notifyhub-http-service"
 
-# Run unit tests with coverage
-unit-test-coverage: ## Run unit tests with coverage
-	@echo "Running unit tests with coverage..."
-	go test -v -race -coverprofile=coverage.out -covermode=atomic ./test/unit/...
-	go tool cover -html=coverage.out -o coverage.html
-	@echo "Coverage report generated: coverage.html"
+# 测试相关
+test: ## 运行测试
+	@echo "🧪 运行测试..."
+	@go test -v ./...
 
-# Run E2E tests (requires running server)
-e2e-test: ## Run E2E tests
-	@echo "Running E2E tests..."
-	@echo "Make sure the server is running on port 8081 for E2E tests"
-	go test -v -timeout 60s ./test/e2e/...
+test-coverage: ## 运行测试并生成覆盖率报告
+	@echo "📊 生成测试覆盖率报告..."
+	@go test -coverprofile=coverage.out ./...
+	@go tool cover -html=coverage.out -o coverage.html
+	@echo "✅ 覆盖率报告: coverage.html"
 
-# Run performance tests
-performance-test: ## Run performance tests
-	@echo "Running performance tests..."
-	@echo "Make sure the server is running on port 8080 for performance tests"
-	go test -v -timeout 300s ./test/performance/...
+# Docker 相关
+docker-build: ## 构建 Docker 镜像
+	@echo "🐳 构建 Docker 镜像..."
+	@docker build -t notifyhub-http-service:latest .
+	@echo "✅ Docker 镜像构建完成"
 
-# Run load tests with different configurations
-load-test: ## Run comprehensive load tests
-	@echo "Running load tests..."
-	go test -v -timeout 600s -run TestLoad ./test/performance/...
+docker-run: ## 运行 Docker 容器
+	@echo "🐳 运行 Docker 容器..."
+	@docker run -p 8080:8080 --env-file .env notifyhub-http-service:latest
 
-# Run stress tests
-stress-test: ## Run stress tests
-	@echo "Running stress tests..."
-	go test -v -timeout 900s -run TestStress ./test/performance/...
+# 服务管理
+start: build-local ## 构建并启动服务
+	@echo "🚀 启动服务..."
+	@./bin/notifyhub-http-service
 
-# Run benchmarks
-benchmark: ## Run benchmarks
-	@echo "Running benchmarks..."
-	go test -bench=. -benchmem ./test/unit/...
-	go test -bench=. -benchmem ./test/performance/...
+stop: ## 停止服务（如果在后台运行）
+	@echo "🛑 停止服务..."
+	@pkill -f notifyhub-http-service || true
 
-# Lint the code
-lint: ## Run golangci-lint
-	@echo "Running linter..."
-	golangci-lint run ./...
+restart: stop start ## 重启服务
 
-# Format the code
-fmt: ## Format Go code
-	@echo "Formatting code..."
-	go fmt ./...
+# 工具命令
+fmt: ## 格式化代码
+	@echo "🎨 格式化代码..."
+	@go fmt ./...
 
-# Vet the code
-vet: ## Run go vet
-	@echo "Running go vet..."
-	go vet ./...
+lint: ## 运行代码检查
+	@echo "🔍 运行代码检查..."
+	@if command -v golangci-lint >/dev/null 2>&1; then \
+		golangci-lint run; \
+	else \
+		echo "📦 请安装 golangci-lint: go install github.com/golangci/golangci-lint/cmd/golangci-lint@latest"; \
+	fi
 
-# Clean build artifacts
-clean: ## Clean build artifacts
-	@echo "Cleaning..."
-	rm -rf bin/
-	rm -f coverage.out coverage.html
+# 清理
+clean: ## 清理构建文件
+	@echo "🧹 清理构建文件..."
+	@rm -rf bin/
+	@rm -f coverage.out coverage.html
+	@echo "✅ 清理完成"
 
-# Run development server with live reload (requires air)
-dev: ## Run development server with live reload
-	@echo "Starting development server with live reload..."
-	air -c .air.toml
-
-# Build Docker image
-docker-build: ## Build Docker image
-	@echo "Building Docker image..."
-	docker build -t notifyhub-http-service:latest .
-
-# Run Docker container
-docker-run: ## Run Docker container
-	@echo "Running Docker container..."
-	docker run -p 8080:8080 --env-file .env notifyhub-http-service:latest
-
-# Run with Docker Compose
-docker-compose-up: ## Start services with Docker Compose
-	@echo "Starting services with Docker Compose..."
-	docker-compose up -d
-
-# Stop Docker Compose
-docker-compose-down: ## Stop Docker Compose services
-	@echo "Stopping Docker Compose services..."
-	docker-compose down
-
-# Generate API documentation
-docs: ## Generate API documentation
-	@echo "Generating API documentation..."
-	@echo "API Documentation:" > API.md
-	@echo "==================" >> API.md
-	@echo "" >> API.md
-	@echo "Base URL: http://localhost:8080" >> API.md
-	@echo "" >> API.md
-	@echo "Endpoints:" >> API.md
-	@echo "- GET  /health                        - Health check" >> API.md
-	@echo "- GET  /metrics                       - Service metrics" >> API.md
-	@echo "- POST /api/v1/notifications          - Send notification" >> API.md
-	@echo "- POST /api/v1/notifications/bulk     - Send bulk notifications" >> API.md
-	@echo "- GET  /api/v1/notifications/text     - Send text notification" >> API.md
-	@echo "- GET  /api/v1/docs                   - API documentation" >> API.md
-	@echo "" >> API.md
-	@echo "Authentication: Bearer token in Authorization header" >> API.md
-
-# Check code quality
-quality: fmt vet lint test ## Run all quality checks (format, vet, lint, test)
-
-# Setup development environment
-setup: deps ## Setup development environment
-	@echo "Setting up development environment..."
-	@if [ ! -f .env ]; then cp .env.example .env; echo "Created .env file from .env.example"; fi
-	@echo "Setup complete!"
-	@echo "1. Edit .env file with your configuration"
-	@echo "2. Run 'make run' to start the service"
-
-# Install development tools
-install-tools: ## Install development tools
-	@echo "Installing development tools..."
-	go install github.com/cosmtrek/air@latest
-	go install github.com/golangci/golangci-lint/cmd/golangci-lint@latest
-
-# Show service status
-status: ## Show service status
-	@echo "Checking service status..."
-	@curl -s http://localhost:8080/health | jq . || echo "Service not running or jq not installed"
-
-# Show service metrics
-metrics: ## Show service metrics
-	@echo "Fetching service metrics..."
-	@curl -s http://localhost:8080/metrics | jq . || echo "Service not running or jq not installed"
-
-# Example requests
-example-notification: ## Send example notification
-	@echo "Sending example notification..."
-	@curl -X POST http://localhost:8080/api/v1/notifications \
+# 示例和测试
+example-curl: ## 运行 curl 示例测试
+	@echo "📡 测试 API 接口..."
+	@echo "健康检查:"
+	@curl -s http://localhost:8080/api/v1/health | jq '.' || curl -s http://localhost:8080/api/v1/health
+	@echo ""
+	@echo "发送测试通知:"
+	@curl -s -X POST http://localhost:8080/api/v1/notifications \
 		-H "Content-Type: application/json" \
-		-H "Authorization: Bearer $(API_KEY)" \
-		-d '{"title":"Test","body":"Hello World","targets":[{"type":"email","value":"test@example.com"}]}' | jq .
+		-d '{"type":"notice","title":"测试","message":"Hello NotifyHub!","targets":[{"type":"email","value":"test@example.com"}]}' \
+		| jq '.' || echo "需要安装 jq 来格式化 JSON 输出"
 
-example-bulk: ## Send example bulk notifications
-	@echo "Sending example bulk notifications..."
-	@curl -X POST http://localhost:8080/api/v1/notifications/bulk \
-		-H "Content-Type: application/json" \
-		-H "Authorization: Bearer $(API_KEY)" \
-		-d '{"notifications":[{"title":"Test 1","body":"Message 1","targets":[{"type":"email","value":"test1@example.com"}]},{"title":"Test 2","body":"Message 2","targets":[{"type":"email","value":"test2@example.com"}]}]}' | jq .
+setup: ## 初始化项目环境
+	@echo "🔧 初始化项目环境..."
+	@cp .env.example .env || true
+	@echo "✅ 请编辑 .env 文件配置您的通知渠道"
+	@echo "📖 然后运行: make run"
 
-example-text: ## Send example text notification
-	@echo "Sending example text notification..."
-	@curl "http://localhost:8080/api/v1/notifications/text?title=Quick%20Test&body=Hello&target=text@example.com" \
-		-H "Authorization: Bearer $(API_KEY)" | jq .
+# 生产部署
+deploy-prep: test build ## 准备生产部署
+	@echo "🚀 准备生产部署..."
+	@echo "✅ 测试通过，二进制文件已构建"
+
+# 版本信息
+version: ## 显示版本信息
+	@echo "NotifyHub HTTP Service v1.2.0"
+	@echo "Go version: $(shell go version)"
+	@echo "Git commit: $(shell git rev-parse --short HEAD 2>/dev/null || echo 'unknown')"
+
+# 默认目标
+.DEFAULT_GOAL := help

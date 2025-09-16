@@ -19,8 +19,8 @@ func main() {
 			"", // secret (optional)
 		),
 		notifyhub.WithEmail(
-			"smtp.gmail.com", // host
-			587,              // port
+			"smtp.gmail.com",       // host
+			587,                    // port
 			"your-email@gmail.com", // username
 			"your-app-password",    // password
 			"your-email@gmail.com", // from

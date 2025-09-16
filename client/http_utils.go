@@ -1,13 +1,16 @@
 package client
 
 import (
+	"compress/gzip"
 	"context"
 	"encoding/json"
 	"fmt"
+	"io"
 	"math/rand"
 	"net/http"
 	"strconv"
 	"strings"
+	"sync"
 	"time"
 
 	"github.com/kart-io/notifyhub/notifiers"
@@ -690,16 +693,566 @@ func SetupNotifyHubRoutes(mux *http.ServeMux, hub *Hub, basePath string) {
 	})
 }
 
-// QuickHTTPServer creates a complete HTTP server with NotifyHub routes
-func QuickHTTPServer(hub *Hub, addr string, basePath string) *http.Server {
-	mux := http.NewServeMux()
-	SetupNotifyHubRoutes(mux, hub, basePath)
+// ================================
+// HTTP Server Configuration Types
+// ================================
 
-	return &http.Server{
-		Addr:         addr,
-		Handler:      mux,
-		ReadTimeout:  30 * time.Second,
-		WriteTimeout: 30 * time.Second,
-		IdleTimeout:  120 * time.Second,
+// HTTPServerOptions defines configuration options for QuickHTTPServer
+type HTTPServerOptions struct {
+	// Basic server configuration
+	Addr         string
+	BasePath     string
+	ReadTimeout  time.Duration
+	WriteTimeout time.Duration
+	IdleTimeout  time.Duration
+
+	// Middleware injection points
+	GlobalMiddleware []func(http.Handler) http.Handler // Applied to entire server
+	RouteMiddleware  []func(http.Handler) http.Handler // Applied only to NotifyHub routes
+	CustomHandlers   map[string]http.Handler           // Custom route handlers
+
+	// CORS and security settings
+	EnableCORS     bool
+	AllowedOrigins []string
+	AllowedMethods []string
+	AllowedHeaders []string
+
+	// Additional server settings
+	MaxHeaderBytes   int
+	EnableKeepAlives bool
+
+	// Custom mux (if provided, will use instead of creating new one)
+	Mux *http.ServeMux
+}
+
+// HTTPServerOption represents a functional option for configuring HTTP server
+type HTTPServerOption func(*HTTPServerOptions)
+
+// WithAddress sets the server address
+func WithAddress(addr string) HTTPServerOption {
+	return func(opts *HTTPServerOptions) {
+		opts.Addr = addr
+	}
+}
+
+// WithBasePath sets the base path for NotifyHub routes
+func WithBasePath(basePath string) HTTPServerOption {
+	return func(opts *HTTPServerOptions) {
+		opts.BasePath = basePath
+	}
+}
+
+// WithTimeouts sets server timeout configurations
+func WithTimeouts(read, write, idle time.Duration) HTTPServerOption {
+	return func(opts *HTTPServerOptions) {
+		if read > 0 {
+			opts.ReadTimeout = read
+		}
+		if write > 0 {
+			opts.WriteTimeout = write
+		}
+		if idle > 0 {
+			opts.IdleTimeout = idle
+		}
+	}
+}
+
+// WithGlobalMiddleware adds middleware to be applied to all routes
+func WithGlobalMiddleware(middleware ...func(http.Handler) http.Handler) HTTPServerOption {
+	return func(opts *HTTPServerOptions) {
+		opts.GlobalMiddleware = append(opts.GlobalMiddleware, middleware...)
+	}
+}
+
+// WithRouteMiddleware adds middleware to be applied only to NotifyHub routes
+func WithRouteMiddleware(middleware ...func(http.Handler) http.Handler) HTTPServerOption {
+	return func(opts *HTTPServerOptions) {
+		opts.RouteMiddleware = append(opts.RouteMiddleware, middleware...)
+	}
+}
+
+// WithCustomHandler adds a custom handler for a specific route
+func WithCustomHandler(pattern string, handler http.Handler) HTTPServerOption {
+	return func(opts *HTTPServerOptions) {
+		if opts.CustomHandlers == nil {
+			opts.CustomHandlers = make(map[string]http.Handler)
+		}
+		opts.CustomHandlers[pattern] = handler
+	}
+}
+
+// WithCORS enables CORS with specified configuration
+func WithCORS(origins, methods, headers []string) HTTPServerOption {
+	return func(opts *HTTPServerOptions) {
+		opts.EnableCORS = true
+		opts.AllowedOrigins = origins
+		opts.AllowedMethods = methods
+		opts.AllowedHeaders = headers
+	}
+}
+
+// WithDefaultCORS enables CORS with permissive defaults
+func WithDefaultCORS() HTTPServerOption {
+	return WithCORS(
+		[]string{"*"},
+		[]string{"GET", "POST", "PUT", "DELETE", "OPTIONS", "HEAD"},
+		[]string{"Content-Type", "Authorization", "X-Requested-With"},
+	)
+}
+
+// WithCustomMux provides a custom ServeMux to use instead of creating a new one
+func WithCustomMux(mux *http.ServeMux) HTTPServerOption {
+	return func(opts *HTTPServerOptions) {
+		opts.Mux = mux
+	}
+}
+
+// WithServerConfig sets additional server configuration
+func WithServerConfig(maxHeaderBytes int, enableKeepAlives bool) HTTPServerOption {
+	return func(opts *HTTPServerOptions) {
+		opts.MaxHeaderBytes = maxHeaderBytes
+		opts.EnableKeepAlives = enableKeepAlives
+	}
+}
+
+// ================================
+// Enhanced HTTP Server Builder
+// ================================
+
+// applyMiddleware applies a chain of middleware to a handler
+func applyMiddleware(handler http.Handler, middleware []func(http.Handler) http.Handler) http.Handler {
+	// Apply middleware in reverse order so the first middleware wraps the outermost layer
+	for i := len(middleware) - 1; i >= 0; i-- {
+		handler = middleware[i](handler)
+	}
+	return handler
+}
+
+// corsMiddleware creates a CORS middleware
+func corsMiddleware(origins, methods, headers []string) func(http.Handler) http.Handler {
+	return func(next http.Handler) http.Handler {
+		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			// Set CORS headers
+			if len(origins) > 0 {
+				if origins[0] == "*" {
+					w.Header().Set("Access-Control-Allow-Origin", "*")
+				} else {
+					origin := r.Header.Get("Origin")
+					for _, allowedOrigin := range origins {
+						if origin == allowedOrigin {
+							w.Header().Set("Access-Control-Allow-Origin", origin)
+							break
+						}
+					}
+				}
+			}
+
+			if len(methods) > 0 {
+				w.Header().Set("Access-Control-Allow-Methods", strings.Join(methods, ", "))
+			}
+
+			if len(headers) > 0 {
+				w.Header().Set("Access-Control-Allow-Headers", strings.Join(headers, ", "))
+			}
+
+			w.Header().Set("Access-Control-Allow-Credentials", "true")
+
+			// Handle preflight requests
+			if r.Method == "OPTIONS" {
+				w.WriteHeader(http.StatusNoContent)
+				return
+			}
+
+			next.ServeHTTP(w, r)
+		})
+	}
+}
+
+// QuickHTTPServer creates a complete HTTP server with NotifyHub routes
+// Deprecated: Use QuickHTTPServerWithOptions for more flexibility
+func QuickHTTPServer(hub *Hub, addr string, basePath string) *http.Server {
+	return QuickHTTPServerWithOptions(hub,
+		WithAddress(addr),
+		WithBasePath(basePath),
+	)
+}
+
+// QuickHTTPServerWithOptions creates a complete HTTP server with enhanced configuration options
+func QuickHTTPServerWithOptions(hub *Hub, options ...HTTPServerOption) *http.Server {
+	// Default options
+	opts := &HTTPServerOptions{
+		Addr:             ":8080",
+		BasePath:         "/notify",
+		ReadTimeout:      30 * time.Second,
+		WriteTimeout:     30 * time.Second,
+		IdleTimeout:      120 * time.Second,
+		MaxHeaderBytes:   1 << 20, // 1 MB
+		EnableKeepAlives: true,
+	}
+
+	// Apply options
+	for _, opt := range options {
+		opt(opts)
+	}
+
+	// Create or use provided mux
+	var mux *http.ServeMux
+	if opts.Mux != nil {
+		mux = opts.Mux
+	} else {
+		mux = http.NewServeMux()
+	}
+
+	// Setup NotifyHub routes with route-specific middleware
+	if len(opts.RouteMiddleware) > 0 {
+		// Wrap NotifyHub routes with route middleware
+		setupRoutesWithMiddleware(mux, hub, opts.BasePath, opts.RouteMiddleware)
+	} else {
+		// Setup routes normally
+		SetupNotifyHubRoutes(mux, hub, opts.BasePath)
+	}
+
+	// Add custom handlers
+	for pattern, handler := range opts.CustomHandlers {
+		mux.Handle(pattern, handler)
+	}
+
+	// Create base handler from mux
+	var handler http.Handler = mux
+
+	// Apply CORS middleware if enabled
+	if opts.EnableCORS {
+		handler = corsMiddleware(opts.AllowedOrigins, opts.AllowedMethods, opts.AllowedHeaders)(handler)
+	}
+
+	// Apply global middleware
+	if len(opts.GlobalMiddleware) > 0 {
+		handler = applyMiddleware(handler, opts.GlobalMiddleware)
+	}
+
+	// Create server
+	server := &http.Server{
+		Addr:           opts.Addr,
+		Handler:        handler,
+		ReadTimeout:    opts.ReadTimeout,
+		WriteTimeout:   opts.WriteTimeout,
+		IdleTimeout:    opts.IdleTimeout,
+		MaxHeaderBytes: opts.MaxHeaderBytes,
+	}
+
+	// Configure keep-alives
+	if !opts.EnableKeepAlives {
+		server.SetKeepAlivesEnabled(false)
+	}
+
+	return server
+}
+
+// setupRoutesWithMiddleware sets up NotifyHub routes with middleware applied
+func setupRoutesWithMiddleware(mux *http.ServeMux, hub *Hub, basePath string, middleware []func(http.Handler) http.Handler) {
+	if basePath == "" {
+		basePath = "/notify"
+	}
+
+	// Ensure basePath doesn't end with /
+	if strings.HasSuffix(basePath, "/") {
+		basePath = strings.TrimSuffix(basePath, "/")
+	}
+
+	// Create handlers and apply middleware
+	routes := map[string]http.HandlerFunc{
+		basePath + "/send":     QuickSendHandler(hub),
+		basePath + "/batch":    QuickBatchHandler(hub),
+		basePath + "/text":     QuickTextHandler(hub),
+		basePath + "/alert":    QuickAlertHandler(hub),
+		basePath + "/template": QuickTemplateHandler(hub),
+		basePath + "/health": func(w http.ResponseWriter, r *http.Request) {
+			health := hub.GetHealth(r.Context())
+			WriteJSONResponse(w, http.StatusOK, &HTTPResponse{
+				Success: true,
+				Data:    health,
+			})
+		},
+		basePath + "/metrics": func(w http.ResponseWriter, r *http.Request) {
+			metrics := hub.GetMetrics()
+			WriteJSONResponse(w, http.StatusOK, &HTTPResponse{
+				Success: true,
+				Data:    metrics,
+			})
+		},
+	}
+
+	// Apply middleware to each route and register
+	for pattern, handler := range routes {
+		wrappedHandler := applyMiddleware(handler, middleware)
+		mux.Handle(pattern, wrappedHandler)
+	}
+}
+
+// ================================
+// Common Middleware Builders
+// ================================
+
+// LoggingMiddleware creates a middleware that logs HTTP requests
+func LoggingMiddleware() func(http.Handler) http.Handler {
+	return func(next http.Handler) http.Handler {
+		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			start := time.Now()
+
+			// Create a response writer that captures status code
+			wrapped := &responseWriter{ResponseWriter: w, statusCode: http.StatusOK}
+
+			next.ServeHTTP(wrapped, r)
+
+			duration := time.Since(start)
+			fmt.Printf("[%s] %s %s %d %v\n",
+				start.Format("2006-01-02 15:04:05"),
+				r.Method,
+				r.URL.Path,
+				wrapped.statusCode,
+				duration)
+		})
+	}
+}
+
+// responseWriter wraps http.ResponseWriter to capture status code
+type responseWriter struct {
+	http.ResponseWriter
+	statusCode int
+}
+
+func (rw *responseWriter) WriteHeader(code int) {
+	rw.statusCode = code
+	rw.ResponseWriter.WriteHeader(code)
+}
+
+// AuthenticationMiddleware creates a middleware that validates API keys
+func AuthenticationMiddleware(validAPIKeys map[string]bool) func(http.Handler) http.Handler {
+	return func(next http.Handler) http.Handler {
+		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			// Check for API key in header or query parameter
+			apiKey := r.Header.Get("X-API-Key")
+			if apiKey == "" {
+				apiKey = r.URL.Query().Get("api_key")
+			}
+
+			if apiKey == "" {
+				response := CreateErrorResponse("API key required", "Missing X-API-Key header or api_key parameter")
+				WriteJSONResponse(w, http.StatusUnauthorized, response)
+				return
+			}
+
+			if !validAPIKeys[apiKey] {
+				response := CreateErrorResponse("Invalid API key", "The provided API key is not valid")
+				WriteJSONResponse(w, http.StatusUnauthorized, response)
+				return
+			}
+
+			next.ServeHTTP(w, r)
+		})
+	}
+}
+
+// RateLimitMiddleware creates a basic rate limiting middleware
+func RateLimitMiddleware(requestsPerMinute int) func(http.Handler) http.Handler {
+	type client struct {
+		count int
+		reset time.Time
+	}
+
+	clients := make(map[string]*client)
+	mu := sync.RWMutex{}
+
+	return func(next http.Handler) http.Handler {
+		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			// Use IP address as client identifier
+			clientIP := r.RemoteAddr
+			if forwarded := r.Header.Get("X-Forwarded-For"); forwarded != "" {
+				clientIP = strings.Split(forwarded, ",")[0]
+			}
+
+			mu.Lock()
+			defer mu.Unlock()
+
+			now := time.Now()
+
+			// Get or create client record
+			c, exists := clients[clientIP]
+			if !exists || now.After(c.reset) {
+				c = &client{
+					count: 0,
+					reset: now.Add(time.Minute),
+				}
+				clients[clientIP] = c
+			}
+
+			// Check rate limit
+			if c.count >= requestsPerMinute {
+				response := CreateErrorResponse("Rate limit exceeded",
+					fmt.Sprintf("Maximum %d requests per minute allowed", requestsPerMinute))
+				WriteJSONResponse(w, http.StatusTooManyRequests, response)
+				return
+			}
+
+			c.count++
+			next.ServeHTTP(w, r)
+		})
+	}
+}
+
+// RecoveryMiddleware creates a middleware that recovers from panics
+func RecoveryMiddleware() func(http.Handler) http.Handler {
+	return func(next http.Handler) http.Handler {
+		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			defer func() {
+				if err := recover(); err != nil {
+					fmt.Printf("Panic recovered: %v\n", err)
+					response := CreateErrorResponse("Internal server error", "An unexpected error occurred")
+					WriteJSONResponse(w, http.StatusInternalServerError, response)
+				}
+			}()
+
+			next.ServeHTTP(w, r)
+		})
+	}
+}
+
+// MetricsMiddleware creates a middleware that collects basic metrics
+func MetricsMiddleware() func(http.Handler) http.Handler {
+	var (
+		requestCount    int64
+		responseTimeSum int64
+		errorCount      int64
+		mu              sync.RWMutex
+	)
+
+	// Expose metrics endpoint
+	http.HandleFunc("/internal/metrics", func(w http.ResponseWriter, r *http.Request) {
+		mu.RLock()
+		defer mu.RUnlock()
+
+		avgResponseTime := float64(0)
+		if requestCount > 0 {
+			avgResponseTime = float64(responseTimeSum) / float64(requestCount) / float64(time.Millisecond)
+		}
+
+		metrics := map[string]interface{}{
+			"request_count":        requestCount,
+			"error_count":          errorCount,
+			"avg_response_time_ms": avgResponseTime,
+			"error_rate":           float64(errorCount) / float64(requestCount),
+		}
+
+		WriteJSONResponse(w, http.StatusOK, &HTTPResponse{
+			Success: true,
+			Data:    metrics,
+		})
+	})
+
+	return func(next http.Handler) http.Handler {
+		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			start := time.Now()
+			wrapped := &responseWriter{ResponseWriter: w, statusCode: http.StatusOK}
+
+			next.ServeHTTP(wrapped, r)
+
+			duration := time.Since(start)
+
+			mu.Lock()
+			requestCount++
+			responseTimeSum += int64(duration)
+			if wrapped.statusCode >= 400 {
+				errorCount++
+			}
+			mu.Unlock()
+		})
+	}
+}
+
+// CompressionMiddleware creates a middleware that compresses responses
+func CompressionMiddleware() func(http.Handler) http.Handler {
+	return func(next http.Handler) http.Handler {
+		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			// Check if client accepts gzip encoding
+			if !strings.Contains(r.Header.Get("Accept-Encoding"), "gzip") {
+				next.ServeHTTP(w, r)
+				return
+			}
+
+			// Set compression headers
+			w.Header().Set("Content-Encoding", "gzip")
+			w.Header().Set("Vary", "Accept-Encoding")
+
+			// Create gzip writer
+			gzipWriter := gzip.NewWriter(w)
+			defer gzipWriter.Close()
+
+			// Wrap response writer
+			gzipResponseWriter := &gzipResponseWriter{
+				ResponseWriter: w,
+				Writer:         gzipWriter,
+			}
+
+			next.ServeHTTP(gzipResponseWriter, r)
+		})
+	}
+}
+
+// gzipResponseWriter wraps http.ResponseWriter with gzip compression
+type gzipResponseWriter struct {
+	http.ResponseWriter
+	Writer io.Writer
+}
+
+func (grw *gzipResponseWriter) Write(data []byte) (int, error) {
+	return grw.Writer.Write(data)
+}
+
+// ================================
+// Convenience Functions for Common Setups
+// ================================
+
+// WithLogging adds logging middleware
+func WithLogging() HTTPServerOption {
+	return WithGlobalMiddleware(LoggingMiddleware())
+}
+
+// WithAuth adds authentication middleware with API keys
+func WithAuth(apiKeys ...string) HTTPServerOption {
+	validKeys := make(map[string]bool)
+	for _, key := range apiKeys {
+		validKeys[key] = true
+	}
+	return WithRouteMiddleware(AuthenticationMiddleware(validKeys))
+}
+
+// WithRateLimit adds rate limiting middleware
+func WithRateLimit(requestsPerMinute int) HTTPServerOption {
+	return WithGlobalMiddleware(RateLimitMiddleware(requestsPerMinute))
+}
+
+// WithRecovery adds panic recovery middleware
+func WithRecovery() HTTPServerOption {
+	return WithGlobalMiddleware(RecoveryMiddleware())
+}
+
+// WithMetrics adds metrics collection middleware
+func WithMetrics() HTTPServerOption {
+	return WithGlobalMiddleware(MetricsMiddleware())
+}
+
+// WithCompression adds gzip compression middleware
+func WithCompression() HTTPServerOption {
+	return WithGlobalMiddleware(CompressionMiddleware())
+}
+
+// WithProductionDefaults applies common production middleware
+func WithProductionDefaults() HTTPServerOption {
+	return func(opts *HTTPServerOptions) {
+		WithRecovery()(opts)
+		WithLogging()(opts)
+		WithMetrics()(opts)
+		WithCompression()(opts)
+		WithDefaultCORS()(opts)
 	}
 }

@@ -1,55 +1,54 @@
-# Build stage
-FROM golang:1.23-alpine AS builder
+# 多阶段构建 Dockerfile - 生产级最佳实践
 
-# Install build dependencies
+# 构建阶段
+FROM golang:1.21-alpine AS builder
+
+# 设置工作目录
+WORKDIR /app
+
+# 安装构建依赖
 RUN apk add --no-cache git ca-certificates tzdata
 
-# Set working directory
-WORKDIR /app
-
-# Copy go mod and sum files
+# 复制 go mod 文件
 COPY go.mod go.sum ./
 
-# Download dependencies
+# 下载依赖
 RUN go mod download
 
-# Copy source code
+# 复制源代码
 COPY . .
 
-# Build the application
-RUN CGO_ENABLED=0 GOOS=linux go build -a -installsuffix cgo -o http-service ./cmd/server.go
+# 构建应用 - 生成静态链接的二进制文件
+RUN CGO_ENABLED=0 GOOS=linux GOARCH=amd64 \
+    go build -a -installsuffix cgo -ldflags='-w -s -extldflags "-static"' \
+    -o notifyhub-http-service main.go
 
-# Final stage
-FROM alpine:latest
+# 运行阶段
+FROM scratch
 
-# Install runtime dependencies
-RUN apk --no-cache add ca-certificates tzdata
+# 从构建阶段复制必要文件
+COPY --from=builder /etc/ssl/certs/ca-certificates.crt /etc/ssl/certs/
+COPY --from=builder /usr/share/zoneinfo /usr/share/zoneinfo
+COPY --from=builder /app/notifyhub-http-service /notifyhub-http-service
 
-# Create non-root user
-RUN addgroup -g 1001 -S appgroup && \
-    adduser -u 1001 -S appuser -G appgroup
+# 设置时区
+ENV TZ=Asia/Shanghai
 
-# Set working directory
-WORKDIR /app
-
-# Copy binary from builder stage
-COPY --from=builder /app/http-service .
-
-# Copy configuration files
-COPY --from=builder /app/config ./config
-
-# Change ownership to appuser
-RUN chown -R appuser:appgroup /app
-
-# Switch to non-root user
-USER appuser
-
-# Expose port
+# 暴露端口
 EXPOSE 8080
 
-# Health check
-HEALTHCHECK --interval=30s --timeout=5s --start-period=5s --retries=3 \
-  CMD wget --no-verbose --tries=1 --spider http://localhost:8080/health || exit 1
+# 健康检查
+HEALTHCHECK --interval=30s --timeout=3s --start-period=5s --retries=3 \
+    CMD ["/notifyhub-http-service", "--health-check"] || exit 1
 
-# Run the application
-CMD ["./http-service"]
+# 运行应用
+ENTRYPOINT ["/notifyhub-http-service"]
+
+# 元数据标签
+LABEL maintainer="NotifyHub Team" \
+      version="1.2.0" \
+      description="NotifyHub HTTP Service - Optimized notification service" \
+      org.opencontainers.image.title="NotifyHub HTTP Service" \
+      org.opencontainers.image.description="Production-ready HTTP service for NotifyHub" \
+      org.opencontainers.image.version="1.2.0" \
+      org.opencontainers.image.source="https://github.com/kart-io/notifyhub"

@@ -1,0 +1,300 @@
+name: Tests
+
+on:
+  push:
+    branches: [ main, develop ]
+  pull_request:
+    branches: [ main ]
+  schedule:
+    # Run tests daily at 2 AM UTC
+    - cron: '0 2 * * *'
+
+jobs:
+  unit-tests:
+    name: Unit Tests
+    runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        go-version: [1.21, 1.22]
+
+    steps:
+    - name: Set up Go
+      uses: actions/setup-go@v4
+      with:
+        go-version: ${{ matrix.go-version }}
+
+    - name: Check out code
+      uses: actions/checkout@v4
+
+    - name: Cache Go modules
+      uses: actions/cache@v3
+      with:
+        path: |
+          ~/.cache/go-build
+          ~/go/pkg/mod
+        key: ${{ runner.os }}-go-${{ matrix.go-version }}-${{ hashFiles('**/go.sum') }}
+
+    - name: Download dependencies
+      run: go mod download
+
+    - name: Run unit tests
+      run: |
+        chmod +x test_runner.sh
+        ./test_runner.sh --unit --no-reports
+
+    - name: Generate coverage report
+      if: matrix.go-version == '1.22'
+      run: |
+        go test -v -race -coverprofile=coverage.out -covermode=atomic ./...
+        go tool cover -html=coverage.out -o coverage.html
+
+    - name: Upload coverage reports
+      if: matrix.go-version == '1.22'
+      uses: codecov/codecov-action@v3
+      with:
+        file: ./coverage.out
+        flags: unittests
+        name: codecov-umbrella
+        fail_ci_if_error: false
+
+    - name: Upload coverage artifact
+      if: matrix.go-version == '1.22'
+      uses: actions/upload-artifact@v3
+      with:
+        name: coverage-report
+        path: coverage.html
+
+  integration-tests:
+    name: Integration Tests
+    runs-on: ubuntu-latest
+    needs: unit-tests
+
+    steps:
+    - name: Set up Go
+      uses: actions/setup-go@v4
+      with:
+        go-version: 1.22
+
+    - name: Check out code
+      uses: actions/checkout@v4
+
+    - name: Cache Go modules
+      uses: actions/cache@v3
+      with:
+        path: |
+          ~/.cache/go-build
+          ~/go/pkg/mod
+        key: ${{ runner.os }}-go-integration-${{ hashFiles('**/go.sum') }}
+
+    - name: Run integration tests
+      run: |
+        chmod +x test_runner.sh
+        ./test_runner.sh --integration
+
+  e2e-tests:
+    name: E2E Tests
+    runs-on: ubuntu-latest
+    needs: integration-tests
+    if: github.event_name == 'push' || github.event_name == 'schedule'
+
+    steps:
+    - name: Set up Go
+      uses: actions/setup-go@v4
+      with:
+        go-version: 1.22
+
+    - name: Check out code
+      uses: actions/checkout@v4
+
+    - name: Cache Go modules
+      uses: actions/cache@v3
+      with:
+        path: |
+          ~/.cache/go-build
+          ~/go/pkg/mod
+        key: ${{ runner.os }}-go-e2e-${{ hashFiles('**/go.sum') }}
+
+    - name: Run E2E tests
+      run: |
+        chmod +x test_runner.sh
+        ./test_runner.sh --e2e
+
+  examples-tests:
+    name: Examples Tests
+    runs-on: ubuntu-latest
+    needs: unit-tests
+
+    services:
+      kafka:
+        image: confluentinc/cp-kafka:latest
+        env:
+          KAFKA_ZOOKEEPER_CONNECT: zookeeper:2181
+          KAFKA_ADVERTISED_LISTENERS: PLAINTEXT://localhost:9092
+          KAFKA_OFFSETS_TOPIC_REPLICATION_FACTOR: 1
+          KAFKA_AUTO_CREATE_TOPICS_ENABLE: true
+        ports:
+          - 9092:9092
+        options: --health-cmd "kafka-topics --bootstrap-server localhost:9092 --list" --health-interval 30s --health-timeout 10s --health-retries 3
+
+      zookeeper:
+        image: confluentinc/cp-zookeeper:latest
+        env:
+          ZOOKEEPER_CLIENT_PORT: 2181
+          ZOOKEEPER_TICK_TIME: 2000
+        ports:
+          - 2181:2181
+
+    steps:
+    - name: Set up Go
+      uses: actions/setup-go@v4
+      with:
+        go-version: 1.22
+
+    - name: Check out code
+      uses: actions/checkout@v4
+
+    - name: Cache Go modules
+      uses: actions/cache@v3
+      with:
+        path: |
+          ~/.cache/go-build
+          ~/go/pkg/mod
+        key: ${{ runner.os }}-go-examples-${{ hashFiles('**/go.sum') }}
+
+    - name: Wait for Kafka
+      run: |
+        echo "Waiting for Kafka to be ready..."
+        for i in {1..30}; do
+          if docker run --rm --network host confluentinc/cp-kafka:latest kafka-topics --bootstrap-server localhost:9092 --list; then
+            echo "Kafka is ready"
+            break
+          fi
+          echo "Waiting for Kafka... ($i/30)"
+          sleep 10
+        done
+
+    - name: Test Kafka pipeline examples
+      run: |
+        cd examples
+        chmod +x test_runner.sh
+        ./test_runner.sh --unit-only
+
+  validation-tests:
+    name: Validation Tests
+    runs-on: ubuntu-latest
+    needs: unit-tests
+
+    steps:
+    - name: Set up Go
+      uses: actions/setup-go@v4
+      with:
+        go-version: 1.22
+
+    - name: Check out code
+      uses: actions/checkout@v4
+
+    - name: Cache Go modules
+      uses: actions/cache@v3
+      with:
+        path: |
+          ~/.cache/go-build
+          ~/go/pkg/mod
+        key: ${{ runner.os }}-go-validation-${{ hashFiles('**/go.sum') }}
+
+    - name: Run validation tests
+      run: |
+        chmod +x test_runner.sh
+        ./test_runner.sh --validation
+
+  performance-tests:
+    name: Performance Tests
+    runs-on: ubuntu-latest
+    needs: integration-tests
+    if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+
+    steps:
+    - name: Set up Go
+      uses: actions/setup-go@v4
+      with:
+        go-version: 1.22
+
+    - name: Check out code
+      uses: actions/checkout@v4
+
+    - name: Cache Go modules
+      uses: actions/cache@v3
+      with:
+        path: |
+          ~/.cache/go-build
+          ~/go/pkg/mod
+        key: ${{ runner.os }}-go-perf-${{ hashFiles('**/go.sum') }}
+
+    - name: Run performance benchmarks
+      run: |
+        chmod +x test_runner.sh
+        ./test_runner.sh --performance
+
+    - name: Upload performance results
+      uses: actions/upload-artifact@v3
+      with:
+        name: performance-results
+        path: |
+          *.prof
+          benchmark-*.txt
+
+  load-tests:
+    name: Load Tests
+    runs-on: ubuntu-latest
+    needs: performance-tests
+    if: github.event_name == 'schedule' || (github.event_name == 'push' && github.ref == 'refs/heads/main')
+
+    steps:
+    - name: Set up Go
+      uses: actions/setup-go@v4
+      with:
+        go-version: 1.22
+
+    - name: Check out code
+      uses: actions/checkout@v4
+
+    - name: Cache Go modules
+      uses: actions/cache@v3
+      with:
+        path: |
+          ~/.cache/go-build
+          ~/go/pkg/mod
+        key: ${{ runner.os }}-go-load-${{ hashFiles('**/go.sum') }}
+
+    - name: Run load tests
+      run: |
+        chmod +x test_runner.sh
+        ./test_runner.sh --load
+
+  test-summary:
+    name: Test Summary
+    runs-on: ubuntu-latest
+    needs: [unit-tests, integration-tests, e2e-tests, examples-tests, validation-tests]
+    if: always()
+
+    steps:
+    - name: Check test results
+      run: |
+        echo "Test Results Summary:"
+        echo "===================="
+        
+        # Check if all required jobs passed
+        if [[ "${{ needs.unit-tests.result }}" == "success" && \
+              "${{ needs.integration-tests.result }}" == "success" && \
+              "${{ needs.examples-tests.result }}" == "success" && \
+              "${{ needs.validation-tests.result }}" == "success" ]]; then
+          echo "✅ All critical tests passed!"
+          exit 0
+        else
+          echo "❌ Some tests failed:"
+          echo "  Unit Tests: ${{ needs.unit-tests.result }}"
+          echo "  Integration Tests: ${{ needs.integration-tests.result }}"
+          echo "  Examples Tests: ${{ needs.examples-tests.result }}"
+          echo "  Validation Tests: ${{ needs.validation-tests.result }}"
+          echo "  E2E Tests: ${{ needs.e2e-tests.result }}"
+          exit 1
+        fi

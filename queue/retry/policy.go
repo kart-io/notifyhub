@@ -64,7 +64,7 @@ func LinearBackoffPolicy(maxRetries int, interval time.Duration) *RetryPolicy {
 	return &RetryPolicy{
 		MaxRetries:      maxRetries,
 		InitialInterval: interval,
-		Multiplier:      1.0, // Linear means no multiplication
+		Multiplier:      1.0,          // Linear means no multiplication
 		MaxJitter:       interval / 6, // Smaller jitter for linear backoff
 	}
 }

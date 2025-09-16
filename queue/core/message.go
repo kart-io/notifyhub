@@ -10,7 +10,7 @@ import (
 type Message struct {
 	ID          string                  `json:"id"`
 	Message     *notifiers.Message      `json:"message"`
-	Options     interface{}             `json:"options"` // Can be client.Options or other options
+	Options     interface{}             `json:"options"`   // Can be client.Options or other options
 	Callbacks   interface{}             `json:"callbacks"` // Will be *callbacks.CallbackOptions when set
 	Attempts    int                     `json:"attempts"`
 	CreatedAt   time.Time               `json:"created_at"`

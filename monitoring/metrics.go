@@ -13,15 +13,15 @@ import (
 type Metrics struct {
 	mu sync.RWMutex
 
-	TotalSent       int64                 `json:"total_sent"`
-	TotalFailed     int64                 `json:"total_failed"`
-	SendsByPlatform map[string]int64      `json:"sends_by_platform"`
-	FailsByPlatform map[string]int64      `json:"fails_by_platform"`
-	LastErrors      map[string]string     `json:"last_errors"`
-	AvgDuration     time.Duration         `json:"avg_duration"`
-	MaxDuration     time.Duration         `json:"max_duration"`
-	PlatformHealth  map[string]bool       `json:"platform_health"`
-	StartTime       time.Time             `json:"start_time"`
+	TotalSent       int64             `json:"total_sent"`
+	TotalFailed     int64             `json:"total_failed"`
+	SendsByPlatform map[string]int64  `json:"sends_by_platform"`
+	FailsByPlatform map[string]int64  `json:"fails_by_platform"`
+	LastErrors      map[string]string `json:"last_errors"`
+	AvgDuration     time.Duration     `json:"avg_duration"`
+	MaxDuration     time.Duration     `json:"max_duration"`
+	PlatformHealth  map[string]bool   `json:"platform_health"`
+	StartTime       time.Time         `json:"start_time"`
 }
 
 // NewMetrics creates a new metrics instance

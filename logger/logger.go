@@ -11,7 +11,7 @@ import (
 type defaultLogger struct {
 	Writer
 	Config
-	infoStr, warnStr, errStr, debugStr string
+	infoStr, warnStr, errStr, debugStr  string
 	traceStr, traceWarnStr, traceErrStr string
 }
 

@@ -7,8 +7,8 @@ import (
 	"strconv"
 	"time"
 
-	"github.com/redis/go-redis/v9"
 	"github.com/kart-io/notifyhub/queue"
+	"github.com/redis/go-redis/v9"
 )
 
 // RedisConnectionConfig contains Redis connection configuration
@@ -66,12 +66,12 @@ func DefaultRedisQueueOptions() *RedisQueueOptions {
 
 // RedisQueue implements Queue interface using Redis Streams
 type RedisQueue struct {
-	client          *redis.Client
-	config          *RedisQueueConfig
-	ctx             context.Context
-	cancel          context.CancelFunc
-	closed          bool
-	externalClient  bool // Whether client is managed externally
+	client         *redis.Client
+	config         *RedisQueueConfig
+	ctx            context.Context
+	cancel         context.CancelFunc
+	closed         bool
+	externalClient bool // Whether client is managed externally
 }
 
 // NewRedisQueue creates a new Redis queue with internal connection management

@@ -68,18 +68,18 @@ func NewWorker(queue Queue, sender MessageSender, retryPolicy *RetryPolicy, conc
 
 // Retry policy constructors
 var (
-	DefaultRetryPolicy      = retry.DefaultRetryPolicy
+	DefaultRetryPolicy       = retry.DefaultRetryPolicy
 	ExponentialBackoffPolicy = retry.ExponentialBackoffPolicy
-	LinearBackoffPolicy     = retry.LinearBackoffPolicy
-	NoRetryPolicy          = retry.NoRetryPolicy
-	AggressiveRetryPolicy  = retry.AggressiveRetryPolicy
+	LinearBackoffPolicy      = retry.LinearBackoffPolicy
+	NoRetryPolicy            = retry.NoRetryPolicy
+	AggressiveRetryPolicy    = retry.AggressiveRetryPolicy
 )
 
 // Callback constructors
 var (
-	NewCallbackFunc       = callbacks.NewCallbackFunc
-	NewLoggingCallback    = callbacks.NewLoggingCallback
-	NewCallbackExecutor   = callbacks.NewCallbackExecutor
+	NewCallbackFunc     = callbacks.NewCallbackFunc
+	NewLoggingCallback  = callbacks.NewLoggingCallback
+	NewCallbackExecutor = callbacks.NewCallbackExecutor
 )
 
 // Scheduler constructors

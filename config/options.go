@@ -244,7 +244,7 @@ type RoutingConfig struct {
 
 type RoutingRule struct {
 	Name       string
-	Priority   int           // Higher values = higher priority
+	Priority   int // Higher values = higher priority
 	Enabled    bool
 	Conditions RuleConditions
 	Actions    []RuleAction
@@ -257,7 +257,7 @@ type RuleConditions struct {
 }
 
 type RuleAction struct {
-	Type      string   // "route"
+	Type      string // "route"
 	Platforms []string
 }
 
@@ -307,29 +307,29 @@ func WithDefaultRouting() Option {
 // ================================
 
 type TelemetryConfig struct {
-	ServiceName     string            `json:"service_name" yaml:"service_name"`
-	ServiceVersion  string            `json:"service_version" yaml:"service_version"`
-	Environment     string            `json:"environment" yaml:"environment"`
-	OTLPEndpoint    string            `json:"otlp_endpoint" yaml:"otlp_endpoint"`
-	OTLPHeaders     map[string]string `json:"otlp_headers" yaml:"otlp_headers"`
-	TracingEnabled  bool              `json:"tracing_enabled" yaml:"tracing_enabled"`
-	SampleRate      float64           `json:"sample_rate" yaml:"sample_rate"`
-	MetricsEnabled  bool              `json:"metrics_enabled" yaml:"metrics_enabled"`
-	Enabled         bool              `json:"enabled" yaml:"enabled"`
+	ServiceName    string            `json:"service_name" yaml:"service_name"`
+	ServiceVersion string            `json:"service_version" yaml:"service_version"`
+	Environment    string            `json:"environment" yaml:"environment"`
+	OTLPEndpoint   string            `json:"otlp_endpoint" yaml:"otlp_endpoint"`
+	OTLPHeaders    map[string]string `json:"otlp_headers" yaml:"otlp_headers"`
+	TracingEnabled bool              `json:"tracing_enabled" yaml:"tracing_enabled"`
+	SampleRate     float64           `json:"sample_rate" yaml:"sample_rate"`
+	MetricsEnabled bool              `json:"metrics_enabled" yaml:"metrics_enabled"`
+	Enabled        bool              `json:"enabled" yaml:"enabled"`
 }
 
 // WithTelemetry configures telemetry settings
 func WithTelemetry(serviceName, serviceVersion, environment string, otlpEndpoint string) Option {
 	return optionFunc(func(c *Config) {
 		c.telemetry = &TelemetryConfig{
-			ServiceName:     serviceName,
-			ServiceVersion:  serviceVersion,
-			Environment:     environment,
-			OTLPEndpoint:    otlpEndpoint,
-			TracingEnabled:  true,
-			MetricsEnabled:  true,
-			SampleRate:      1.0,
-			Enabled:         true,
+			ServiceName:    serviceName,
+			ServiceVersion: serviceVersion,
+			Environment:    environment,
+			OTLPEndpoint:   otlpEndpoint,
+			TracingEnabled: true,
+			MetricsEnabled: true,
+			SampleRate:     1.0,
+			Enabled:        true,
 		}
 	})
 }
@@ -344,15 +344,15 @@ func WithTelemetryFromEnv() Option {
 			}
 
 			c.telemetry = &TelemetryConfig{
-				ServiceName:     getEnvOrDefault("NOTIFYHUB_SERVICE_NAME", "notifyhub"),
-				ServiceVersion:  getEnvOrDefault("NOTIFYHUB_SERVICE_VERSION", "1.2.0"),
-				Environment:     getEnvOrDefault("NOTIFYHUB_ENVIRONMENT", "development"),
-				OTLPEndpoint:    getEnvOrDefault("NOTIFYHUB_OTLP_ENDPOINT", "http://localhost:4318"),
-				OTLPHeaders:     headers,
-				TracingEnabled:  getEnvBoolOrDefault("NOTIFYHUB_TRACING_ENABLED", true),
-				MetricsEnabled:  getEnvBoolOrDefault("NOTIFYHUB_METRICS_ENABLED", true),
-				SampleRate:      getEnvFloatOrDefault("NOTIFYHUB_SAMPLE_RATE", 1.0),
-				Enabled:         true,
+				ServiceName:    getEnvOrDefault("NOTIFYHUB_SERVICE_NAME", "notifyhub"),
+				ServiceVersion: getEnvOrDefault("NOTIFYHUB_SERVICE_VERSION", "1.2.0"),
+				Environment:    getEnvOrDefault("NOTIFYHUB_ENVIRONMENT", "development"),
+				OTLPEndpoint:   getEnvOrDefault("NOTIFYHUB_OTLP_ENDPOINT", "http://localhost:4318"),
+				OTLPHeaders:    headers,
+				TracingEnabled: getEnvBoolOrDefault("NOTIFYHUB_TRACING_ENABLED", true),
+				MetricsEnabled: getEnvBoolOrDefault("NOTIFYHUB_METRICS_ENABLED", true),
+				SampleRate:     getEnvFloatOrDefault("NOTIFYHUB_SAMPLE_RATE", 1.0),
+				Enabled:        true,
 			}
 		}
 	})

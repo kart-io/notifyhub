@@ -23,7 +23,6 @@
 //
 //	options := notifyhub.NewAsyncOptions().WithCallbacks(callbacks)
 //	taskID, err := hub.SendAsync(ctx, message, options)
-//
 package notifyhub
 
 import (

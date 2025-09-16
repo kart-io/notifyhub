@@ -22,31 +22,31 @@ import (
 
 // TelemetryProvider provides observability features
 type TelemetryProvider struct {
-	config       *config.TelemetryConfig
-	tracer       trace.Tracer
-	meter        metric.Meter
+	config        *config.TelemetryConfig
+	tracer        trace.Tracer
+	meter         metric.Meter
 	traceProvider *sdktrace.TracerProvider
 
 	// Metrics
-	messagesSent    metric.Int64Counter
+	messagesSent     metric.Int64Counter
 	messagesEnqueued metric.Int64Counter
-	messagesFailed  metric.Int64Counter
-	sendDuration    metric.Float64Histogram
-	queueSize       metric.Int64UpDownCounter
+	messagesFailed   metric.Int64Counter
+	sendDuration     metric.Float64Histogram
+	queueSize        metric.Int64UpDownCounter
 }
 
 // NewTelemetryProvider creates a new telemetry provider
 func NewTelemetryProvider(cfg *config.TelemetryConfig) (*TelemetryProvider, error) {
 	if cfg == nil {
 		cfg = &config.TelemetryConfig{
-			ServiceName:     "notifyhub",
-			ServiceVersion:  "1.2.0",
-			Environment:     "development",
-			OTLPEndpoint:    "http://localhost:4318",
-			TracingEnabled:  true,
-			MetricsEnabled:  true,
-			SampleRate:      1.0,
-			Enabled:         false,
+			ServiceName:    "notifyhub",
+			ServiceVersion: "1.2.0",
+			Environment:    "development",
+			OTLPEndpoint:   "http://localhost:4318",
+			TracingEnabled: true,
+			MetricsEnabled: true,
+			SampleRate:     1.0,
+			Enabled:        false,
 		}
 	}
 

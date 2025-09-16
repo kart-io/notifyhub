@@ -1,6 +1,7 @@
 package client
 
 import (
+	"context"
 	"fmt"
 	"strings"
 	"time"
@@ -12,7 +13,8 @@ import (
 // MessageBuilder provides fluent interface for building messages
 type MessageBuilder struct {
 	message *notifiers.Message
-	debug   bool // Enable debug output for this message
+	options *Options // Send options integrated into builder
+	debug   bool     // Enable debug output for this message
 }
 
 // NewMessage creates a new message builder
@@ -368,6 +370,112 @@ func (b *MessageBuilder) ToFeishu(target string) *MessageBuilder {
 	}
 }
 
+// ================================
+// Strong Typed Target Methods
+// ================================
+
+// EmailTarget adds a validated email target
+func (b *MessageBuilder) EmailTarget(email string) *MessageBuilder {
+	target, err := EmailTarget(email)
+	if err != nil {
+		// In builder pattern, we can either panic or silently ignore
+		// For now, we'll add it anyway and let validation catch it later
+		b.Email(email)
+	} else {
+		b.Target(target)
+	}
+	return b
+}
+
+// EmailTargets adds multiple validated email targets
+func (b *MessageBuilder) EmailTargets(emails ...string) *MessageBuilder {
+	targets, err := EmailTargets(emails...)
+	if err != nil {
+		// Add individually to avoid losing all on single failure
+		for _, email := range emails {
+			b.EmailTarget(email)
+		}
+	} else {
+		for _, target := range targets {
+			b.Target(target)
+		}
+	}
+	return b
+}
+
+// UserTarget adds a validated user target
+func (b *MessageBuilder) UserTarget(userID, platform string) *MessageBuilder {
+	target, err := UserTarget(userID, platform)
+	if err != nil {
+		b.User(userID, platform) // Fallback to original method
+	} else {
+		b.Target(target)
+	}
+	return b
+}
+
+// GroupTarget adds a validated group target
+func (b *MessageBuilder) GroupTarget(groupID, platform string) *MessageBuilder {
+	target, err := GroupTarget(groupID, platform)
+	if err != nil {
+		b.Group(groupID, platform) // Fallback to original method
+	} else {
+		b.Target(target)
+	}
+	return b
+}
+
+// ChannelTarget adds a validated channel target
+func (b *MessageBuilder) ChannelTarget(channelID, platform string) *MessageBuilder {
+	target, err := ChannelTarget(channelID, platform)
+	if err != nil {
+		b.Channel(channelID, platform) // Fallback to original method
+	} else {
+		b.Target(target)
+	}
+	return b
+}
+
+// ParseTarget adds a parsed target
+func (b *MessageBuilder) ParseTarget(target string) *MessageBuilder {
+	parsed, err := ParseTarget(target)
+	if err != nil {
+		// Try to add as-is if parsing fails
+		if isValidEmailFormat(target) {
+			b.Email(target)
+		}
+	} else {
+		b.Target(parsed)
+	}
+	return b
+}
+
+// ParseTargets adds multiple parsed targets
+func (b *MessageBuilder) ParseTargets(targets ...string) *MessageBuilder {
+	for _, target := range targets {
+		b.ParseTarget(target)
+	}
+	return b
+}
+
+// WithTargetBuilder uses a target builder to add targets
+func (b *MessageBuilder) WithTargetBuilder(builder *TargetBuilder) *MessageBuilder {
+	targets, err := builder.Build()
+	if err == nil {
+		for _, target := range targets {
+			b.Target(target)
+		}
+	}
+	return b
+}
+
+// SmartTargets intelligently parses and adds multiple targets
+func (b *MessageBuilder) SmartTargets(targets ...string) *MessageBuilder {
+	targetBuilder := NewTargetBuilder()
+	targetBuilder.ParseAll(targets...)
+	return b.WithTargetBuilder(targetBuilder)
+}
+
 // Conditional Building
 
 // If adds a condition to the builder chain
@@ -384,6 +492,22 @@ func (b *MessageBuilder) Unless(condition bool, fn func(*MessageBuilder) *Messag
 		return fn(b)
 	}
 	return b
+}
+
+// IfElse adds conditional logic with else branch
+func (b *MessageBuilder) IfElse(condition bool, ifFn func(*MessageBuilder) *MessageBuilder, elseFn func(*MessageBuilder) *MessageBuilder) *MessageBuilder {
+	if condition {
+		return ifFn(b)
+	}
+	return elseFn(b)
+}
+
+// When adds multiple conditional branches
+func (b *MessageBuilder) When(condition bool) *ConditionalBuilder {
+	return &ConditionalBuilder{
+		builder:   b,
+		condition: condition,
+	}
 }
 
 // Smart Formatting
@@ -505,4 +629,719 @@ func (b *MessageBuilder) Inspect() string {
 // IsDebugEnabled returns whether debug mode is enabled for this builder
 func (b *MessageBuilder) IsDebugEnabled() bool {
 	return b.debug
+}
+
+// ================================
+// Conditional Builder for Advanced Conditional Logic
+// ================================
+
+// ConditionalBuilder provides advanced conditional building capabilities
+type ConditionalBuilder struct {
+	builder   *MessageBuilder
+	condition bool
+}
+
+// Then executes the function if the condition is true
+func (cb *ConditionalBuilder) Then(fn func(*MessageBuilder) *MessageBuilder) *ElseBuilder {
+	if cb.condition {
+		cb.builder = fn(cb.builder)
+	}
+	return &ElseBuilder{
+		builder:   cb.builder,
+		condition: cb.condition,
+	}
+}
+
+// ElseBuilder provides else functionality for conditional building
+type ElseBuilder struct {
+	builder   *MessageBuilder
+	condition bool
+}
+
+// Else executes the function if the original condition was false
+func (eb *ElseBuilder) Else(fn func(*MessageBuilder) *MessageBuilder) *MessageBuilder {
+	if !eb.condition {
+		return fn(eb.builder)
+	}
+	return eb.builder
+}
+
+// ElseIf adds another condition to check
+func (eb *ElseBuilder) ElseIf(condition bool) *ConditionalBuilder {
+	if !eb.condition {
+		return &ConditionalBuilder{
+			builder:   eb.builder,
+			condition: condition,
+		}
+	}
+	return &ConditionalBuilder{
+		builder:   eb.builder,
+		condition: false, // Previous condition was true, skip remaining
+	}
+}
+
+// End returns the original MessageBuilder without else clause
+func (eb *ElseBuilder) End() *MessageBuilder {
+	return eb.builder
+}
+
+// ================================
+// Send Options Integration
+// ================================
+
+// WithOptions sets send options for the message
+func (b *MessageBuilder) WithOptions(options *Options) *MessageBuilder {
+	b.options = options
+	return b
+}
+
+// Async enables asynchronous sending
+func (b *MessageBuilder) Async(async bool) *MessageBuilder {
+	if b.options == nil {
+		b.options = NewOptions()
+	}
+	b.options.Async = async
+	return b
+}
+
+// AsyncSend enables asynchronous sending (convenience method)
+func (b *MessageBuilder) AsyncSend() *MessageBuilder {
+	return b.Async(true)
+}
+
+// SyncSend enables synchronous sending (convenience method)
+func (b *MessageBuilder) SyncSend() *MessageBuilder {
+	return b.Async(false)
+}
+
+// WithRetry enables retry on failure
+func (b *MessageBuilder) WithRetry(retry bool) *MessageBuilder {
+	if b.options == nil {
+		b.options = NewOptions()
+	}
+	b.options.Retry = retry
+	return b
+}
+
+// EnableRetry enables retry on failure (convenience method)
+func (b *MessageBuilder) EnableRetry() *MessageBuilder {
+	return b.WithRetry(true)
+}
+
+// DisableRetry disables retry on failure (convenience method)
+func (b *MessageBuilder) DisableRetry() *MessageBuilder {
+	return b.WithRetry(false)
+}
+
+// WithMaxRetries sets maximum retry attempts
+func (b *MessageBuilder) WithMaxRetries(maxRetries int) *MessageBuilder {
+	if b.options == nil {
+		b.options = NewOptions()
+	}
+	b.options.MaxRetries = maxRetries
+	return b
+}
+
+// WithTimeout sets operation timeout
+func (b *MessageBuilder) WithTimeout(timeout time.Duration) *MessageBuilder {
+	if b.options == nil {
+		b.options = NewOptions()
+	}
+	b.options.Timeout = timeout
+	return b
+}
+
+// WithDelay sets message delay in milliseconds
+func (b *MessageBuilder) WithDelay(delayMs int) *MessageBuilder {
+	if b.options == nil {
+		b.options = NewOptions()
+	}
+	b.options.DelayMs = delayMs
+	return b
+}
+
+// WithBatchSize sets batch size for batch operations
+func (b *MessageBuilder) WithBatchSize(batchSize int) *MessageBuilder {
+	if b.options == nil {
+		b.options = NewOptions()
+	}
+	b.options.BatchSize = batchSize
+	return b
+}
+
+// GetOptions returns the send options (for use with sending methods)
+func (b *MessageBuilder) GetOptions() *Options {
+	return b.options
+}
+
+// BuildWithOptions builds both message and options
+func (b *MessageBuilder) BuildWithOptions() (*notifiers.Message, *Options) {
+	return b.Build(), b.options
+}
+
+// ================================
+// Enhanced Builder Methods with Send Options
+// ================================
+
+// SendTo combines building and sending in one call
+// This requires a Hub to be passed in, making it convenient for one-liner sends
+func (b *MessageBuilder) SendTo(hub *Hub, ctx ...interface{}) error {
+	// Extract context if provided
+	var sendCtx interface{}
+	if len(ctx) > 0 {
+		sendCtx = ctx[0]
+	}
+
+	message := b.Build()
+	options := b.GetOptions()
+
+	// Use hub's send method based on context type
+	switch c := sendCtx.(type) {
+	case context.Context:
+		_, err := hub.Send(c, message, options)
+		return err
+	default:
+		// Default to background context
+		_, err := hub.Send(context.Background(), message, options)
+		return err
+	}
+}
+
+// SendAsyncTo combines building and async sending in one call
+func (b *MessageBuilder) SendAsyncTo(hub *Hub, ctx ...interface{}) (string, error) {
+	// Extract context if provided
+	var sendCtx interface{}
+	if len(ctx) > 0 {
+		sendCtx = ctx[0]
+	}
+
+	message := b.Build()
+	options := b.GetOptions()
+	if options == nil {
+		options = NewAsyncOptions()
+	} else {
+		options.Async = true
+	}
+
+	// Use hub's send method based on context type
+	switch c := sendCtx.(type) {
+	case context.Context:
+		return hub.SendAsync(c, message, options)
+	default:
+		// Default to background context
+		return hub.SendAsync(context.Background(), message, options)
+	}
+}
+
+// SendWithAnalysisTo combines building and sending with analysis in one call
+func (b *MessageBuilder) SendWithAnalysisTo(hub *Hub, ctx ...interface{}) ([]*notifiers.Result, *ResultAnalyzer, error) {
+	// Extract context if provided
+	var sendCtx interface{}
+	if len(ctx) > 0 {
+		sendCtx = ctx[0]
+	}
+
+	message := b.Build()
+	options := b.GetOptions()
+
+	// Use hub's send method based on context type
+	switch c := sendCtx.(type) {
+	case context.Context:
+		return hub.SendWithAnalysis(c, message, options)
+	default:
+		// Default to background context
+		return hub.SendWithAnalysis(context.Background(), message, options)
+	}
+}
+
+// ================================
+// Convenience Send Options Presets
+// ================================
+
+// AsQuickSend applies quick send options (sync, no retry, 5s timeout)
+func (b *MessageBuilder) AsQuickSend() *MessageBuilder {
+	return b.SyncSend().
+		DisableRetry().
+		WithTimeout(5 * time.Second)
+}
+
+// AsReliableSend applies reliable send options (sync, retry enabled, 30s timeout)
+func (b *MessageBuilder) AsReliableSend() *MessageBuilder {
+	return b.SyncSend().
+		EnableRetry().
+		WithMaxRetries(3).
+		WithTimeout(30 * time.Second)
+}
+
+// AsBackgroundSend applies background send options (async, retry enabled)
+func (b *MessageBuilder) AsBackgroundSend() *MessageBuilder {
+	return b.AsyncSend().
+		EnableRetry().
+		WithMaxRetries(5)
+}
+
+// AsDelayedSend applies delayed send options with specified delay
+func (b *MessageBuilder) AsDelayedSend(delayMs int) *MessageBuilder {
+	return b.WithDelay(delayMs).
+		EnableRetry()
+}
+
+// AsCriticalSend applies critical send options (sync, multiple retries, extended timeout)
+func (b *MessageBuilder) AsCriticalSend() *MessageBuilder {
+	return b.SyncSend().
+		EnableRetry().
+		WithMaxRetries(5).
+		WithTimeout(60 * time.Second)
+}
+
+// ================================
+// Platform-Specific Convenience Builders
+// ================================
+
+// ToSlack adds Slack-specific targets using smart detection
+func (b *MessageBuilder) ToSlack(targets ...string) *MessageBuilder {
+	for _, target := range targets {
+		if strings.HasPrefix(target, "#") {
+			// Channel
+			b.Target(notifiers.Target{
+				Type:     notifiers.TargetTypeChannel,
+				Value:    target,
+				Platform: "slack",
+			})
+		} else if strings.HasPrefix(target, "@") {
+			// User
+			b.Target(notifiers.Target{
+				Type:     notifiers.TargetTypeUser,
+				Value:    strings.TrimPrefix(target, "@"),
+				Platform: "slack",
+			})
+		} else {
+			// Assume it's a user ID
+			b.Target(notifiers.Target{
+				Type:     notifiers.TargetTypeUser,
+				Value:    target,
+				Platform: "slack",
+			})
+		}
+	}
+	return b
+}
+
+// ToFeishu adds Feishu-specific targets using smart detection
+func (b *MessageBuilder) ToFeishu(targets ...string) *MessageBuilder {
+	for _, target := range targets {
+		if strings.HasPrefix(target, "#") {
+			// Channel/Group
+			b.Target(notifiers.Target{
+				Type:     notifiers.TargetTypeGroup,
+				Value:    strings.TrimPrefix(target, "#"),
+				Platform: "feishu",
+			})
+		} else if strings.HasPrefix(target, "@") {
+			// User
+			b.Target(notifiers.Target{
+				Type:     notifiers.TargetTypeUser,
+				Value:    strings.TrimPrefix(target, "@"),
+				Platform: "feishu",
+			})
+		} else {
+			// Assume it's a group
+			b.Target(notifiers.Target{
+				Type:     notifiers.TargetTypeGroup,
+				Value:    target,
+				Platform: "feishu",
+			})
+		}
+	}
+	return b
+}
+
+// ToDiscord adds Discord-specific targets
+func (b *MessageBuilder) ToDiscord(targets ...string) *MessageBuilder {
+	for _, target := range targets {
+		if strings.HasPrefix(target, "#") {
+			// Channel
+			b.Target(notifiers.Target{
+				Type:     notifiers.TargetTypeChannel,
+				Value:    strings.TrimPrefix(target, "#"),
+				Platform: "discord",
+			})
+		} else if strings.HasPrefix(target, "@") {
+			// User
+			b.Target(notifiers.Target{
+				Type:     notifiers.TargetTypeUser,
+				Value:    strings.TrimPrefix(target, "@"),
+				Platform: "discord",
+			})
+		} else {
+			// Assume it's a user ID
+			b.Target(notifiers.Target{
+				Type:     notifiers.TargetTypeUser,
+				Value:    target,
+				Platform: "discord",
+			})
+		}
+	}
+	return b
+}
+
+// ToTeams adds Microsoft Teams-specific targets
+func (b *MessageBuilder) ToTeams(targets ...string) *MessageBuilder {
+	for _, target := range targets {
+		if strings.HasPrefix(target, "#") {
+			// Channel
+			b.Target(notifiers.Target{
+				Type:     notifiers.TargetTypeChannel,
+				Value:    strings.TrimPrefix(target, "#"),
+				Platform: "teams",
+			})
+		} else if strings.HasPrefix(target, "@") {
+			// User
+			b.Target(notifiers.Target{
+				Type:     notifiers.TargetTypeUser,
+				Value:    strings.TrimPrefix(target, "@"),
+				Platform: "teams",
+			})
+		} else {
+			// Assume it's a user or channel
+			b.Target(notifiers.Target{
+				Type:     notifiers.TargetTypeUser,
+				Value:    target,
+				Platform: "teams",
+			})
+		}
+	}
+	return b
+}
+
+// ToWebhook adds webhook targets (using user type with webhook platform)
+func (b *MessageBuilder) ToWebhook(urls ...string) *MessageBuilder {
+	for _, url := range urls {
+		b.Target(notifiers.Target{
+			Type:     notifiers.TargetTypeUser,
+			Value:    url,
+			Platform: "webhook",
+		})
+	}
+	return b
+}
+
+// ToSMS adds SMS targets (phone numbers, using user type with sms platform)
+func (b *MessageBuilder) ToSMS(phoneNumbers ...string) *MessageBuilder {
+	for _, phone := range phoneNumbers {
+		b.Target(notifiers.Target{
+			Type:     notifiers.TargetTypeUser,
+			Value:    phone,
+			Platform: "sms",
+		})
+	}
+	return b
+}
+
+// ToPush adds push notification targets (device tokens, using user type with push platform)
+func (b *MessageBuilder) ToPush(deviceTokens ...string) *MessageBuilder {
+	for _, token := range deviceTokens {
+		b.Target(notifiers.Target{
+			Type:     notifiers.TargetTypeUser,
+			Value:    token,
+			Platform: "push",
+		})
+	}
+	return b
+}
+
+// ================================
+// Specialized Platform Builders
+// ================================
+
+// SlackChannel adds a Slack channel target
+func (b *MessageBuilder) SlackChannel(channelName string) *MessageBuilder {
+	channelName = strings.TrimPrefix(channelName, "#")
+	return b.Target(notifiers.Target{
+		Type:     notifiers.TargetTypeChannel,
+		Value:    channelName,
+		Platform: "slack",
+	})
+}
+
+// SlackUser adds a Slack user target
+func (b *MessageBuilder) SlackUser(userID string) *MessageBuilder {
+	userID = strings.TrimPrefix(userID, "@")
+	return b.Target(notifiers.Target{
+		Type:     notifiers.TargetTypeUser,
+		Value:    userID,
+		Platform: "slack",
+	})
+}
+
+// SlackDM adds a Slack direct message target (using user type)
+func (b *MessageBuilder) SlackDM(userID string) *MessageBuilder {
+	userID = strings.TrimPrefix(userID, "@")
+	return b.Target(notifiers.Target{
+		Type:     notifiers.TargetTypeUser,
+		Value:    userID,
+		Platform: "slack",
+		Metadata: map[string]string{"dm": "true"},
+	})
+}
+
+// FeishuGroup adds a Feishu group target
+func (b *MessageBuilder) FeishuGroup(groupID string) *MessageBuilder {
+	groupID = strings.TrimPrefix(groupID, "#")
+	return b.Target(notifiers.Target{
+		Type:     notifiers.TargetTypeGroup,
+		Value:    groupID,
+		Platform: "feishu",
+	})
+}
+
+// FeishuUser adds a Feishu user target
+func (b *MessageBuilder) FeishuUser(userID string) *MessageBuilder {
+	userID = strings.TrimPrefix(userID, "@")
+	return b.Target(notifiers.Target{
+		Type:     notifiers.TargetTypeUser,
+		Value:    userID,
+		Platform: "feishu",
+	})
+}
+
+// FeishuBot adds a Feishu bot target (using user type with bot metadata)
+func (b *MessageBuilder) FeishuBot(botID string) *MessageBuilder {
+	return b.Target(notifiers.Target{
+		Type:     notifiers.TargetTypeUser,
+		Value:    botID,
+		Platform: "feishu",
+		Metadata: map[string]string{"type": "bot"},
+	})
+}
+
+// DiscordChannel adds a Discord channel target
+func (b *MessageBuilder) DiscordChannel(channelID string) *MessageBuilder {
+	channelID = strings.TrimPrefix(channelID, "#")
+	return b.Target(notifiers.Target{
+		Type:     notifiers.TargetTypeChannel,
+		Value:    channelID,
+		Platform: "discord",
+	})
+}
+
+// DiscordUser adds a Discord user target
+func (b *MessageBuilder) DiscordUser(userID string) *MessageBuilder {
+	userID = strings.TrimPrefix(userID, "@")
+	return b.Target(notifiers.Target{
+		Type:     notifiers.TargetTypeUser,
+		Value:    userID,
+		Platform: "discord",
+	})
+}
+
+// DiscordDM adds a Discord direct message target (using user type)
+func (b *MessageBuilder) DiscordDM(userID string) *MessageBuilder {
+	userID = strings.TrimPrefix(userID, "@")
+	return b.Target(notifiers.Target{
+		Type:     notifiers.TargetTypeUser,
+		Value:    userID,
+		Platform: "discord",
+		Metadata: map[string]string{"dm": "true"},
+	})
+}
+
+// TeamsChannel adds a Microsoft Teams channel target
+func (b *MessageBuilder) TeamsChannel(channelID string) *MessageBuilder {
+	channelID = strings.TrimPrefix(channelID, "#")
+	return b.Target(notifiers.Target{
+		Type:     notifiers.TargetTypeChannel,
+		Value:    channelID,
+		Platform: "teams",
+	})
+}
+
+// TeamsUser adds a Microsoft Teams user target
+func (b *MessageBuilder) TeamsUser(userID string) *MessageBuilder {
+	userID = strings.TrimPrefix(userID, "@")
+	return b.Target(notifiers.Target{
+		Type:     notifiers.TargetTypeUser,
+		Value:    userID,
+		Platform: "teams",
+	})
+}
+
+// ================================
+// Bulk Platform-Specific Methods
+// ================================
+
+// SlackChannels adds multiple Slack channels
+func (b *MessageBuilder) SlackChannels(channels ...string) *MessageBuilder {
+	for _, channel := range channels {
+		b.SlackChannel(channel)
+	}
+	return b
+}
+
+// SlackUsers adds multiple Slack users
+func (b *MessageBuilder) SlackUsers(users ...string) *MessageBuilder {
+	for _, user := range users {
+		b.SlackUser(user)
+	}
+	return b
+}
+
+// FeishuGroups adds multiple Feishu groups
+func (b *MessageBuilder) FeishuGroups(groups ...string) *MessageBuilder {
+	for _, group := range groups {
+		b.FeishuGroup(group)
+	}
+	return b
+}
+
+// FeishuUsers adds multiple Feishu users
+func (b *MessageBuilder) FeishuUsers(users ...string) *MessageBuilder {
+	for _, user := range users {
+		b.FeishuUser(user)
+	}
+	return b
+}
+
+// DiscordChannels adds multiple Discord channels
+func (b *MessageBuilder) DiscordChannels(channels ...string) *MessageBuilder {
+	for _, channel := range channels {
+		b.DiscordChannel(channel)
+	}
+	return b
+}
+
+// DiscordUsers adds multiple Discord users
+func (b *MessageBuilder) DiscordUsers(users ...string) *MessageBuilder {
+	for _, user := range users {
+		b.DiscordUser(user)
+	}
+	return b
+}
+
+// EmailsTo adds multiple email targets (alias for clearer intent)
+func (b *MessageBuilder) EmailsTo(emails ...string) *MessageBuilder {
+	return b.MultipleEmails(emails...)
+}
+
+// SMSTo adds multiple SMS targets
+func (b *MessageBuilder) SMSTo(phoneNumbers ...string) *MessageBuilder {
+	return b.ToSMS(phoneNumbers...)
+}
+
+// WebhooksTo adds multiple webhook targets
+func (b *MessageBuilder) WebhooksTo(urls ...string) *MessageBuilder {
+	return b.ToWebhook(urls...)
+}
+
+// ================================
+// Platform-Agnostic Smart Routing
+// ================================
+
+// ToChannel routes to appropriate channel based on context
+func (b *MessageBuilder) ToChannel(channelName string, platforms ...string) *MessageBuilder {
+	if len(platforms) == 0 {
+		// Default to common platforms
+		platforms = []string{"slack", "discord", "teams"}
+	}
+
+	for _, platform := range platforms {
+		switch platform {
+		case "slack":
+			b.SlackChannel(channelName)
+		case "discord":
+			b.DiscordChannel(channelName)
+		case "teams":
+			b.TeamsChannel(channelName)
+		case "feishu":
+			b.FeishuGroup(channelName)
+		}
+	}
+	return b
+}
+
+// ToUser routes to appropriate user targets based on context
+func (b *MessageBuilder) ToUser(userID string, platforms ...string) *MessageBuilder {
+	if len(platforms) == 0 {
+		// Default to common platforms
+		platforms = []string{"slack", "discord", "teams"}
+	}
+
+	for _, platform := range platforms {
+		switch platform {
+		case "slack":
+			b.SlackUser(userID)
+		case "discord":
+			b.DiscordUser(userID)
+		case "teams":
+			b.TeamsUser(userID)
+		case "feishu":
+			b.FeishuUser(userID)
+		}
+	}
+	return b
+}
+
+// ToIncidentResponse routes to incident response channels/users
+func (b *MessageBuilder) ToIncidentResponse() *MessageBuilder {
+	return b.SlackChannel("incidents").
+		DiscordChannel("incidents").
+		TeamsChannel("incidents").
+		Email("incident-response@company.com")
+}
+
+// ToOnCall routes to on-call personnel
+func (b *MessageBuilder) ToOnCall() *MessageBuilder {
+	return b.SlackUser("oncall").
+		Email("oncall@company.com").
+		ToSMS("+1-555-0123") // Example on-call phone
+}
+
+// ToDevOps routes to DevOps teams across platforms
+func (b *MessageBuilder) ToDevOps() *MessageBuilder {
+	return b.SlackChannel("devops").
+		FeishuGroup("devops-team").
+		Email("devops@company.com")
+}
+
+// ToSecurity routes to security teams
+func (b *MessageBuilder) ToSecurity() *MessageBuilder {
+	return b.SlackChannel("security").
+		Email("security@company.com").
+		TeamsChannel("security")
+}
+
+// ================================
+// Conditional Platform Routing
+// ================================
+
+// ToSlackIf conditionally adds Slack targets
+func (b *MessageBuilder) ToSlackIf(condition bool, targets ...string) *MessageBuilder {
+	if condition {
+		return b.ToSlack(targets...)
+	}
+	return b
+}
+
+// ToFeishuIf conditionally adds Feishu targets
+func (b *MessageBuilder) ToFeishuIf(condition bool, targets ...string) *MessageBuilder {
+	if condition {
+		return b.ToFeishu(targets...)
+	}
+	return b
+}
+
+// ToEmailIf conditionally adds email targets
+func (b *MessageBuilder) ToEmailIf(condition bool, emails ...string) *MessageBuilder {
+	if condition {
+		return b.MultipleEmails(emails...)
+	}
+	return b
+}
+
+// ToWebhookIf conditionally adds webhook targets
+func (b *MessageBuilder) ToWebhookIf(condition bool, urls ...string) *MessageBuilder {
+	if condition {
+		return b.ToWebhook(urls...)
+	}
+	return b
 }

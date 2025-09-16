@@ -84,12 +84,12 @@ func (m *MockNotifier) Send(ctx context.Context, message *Message) ([]*SendResul
 
 	for _, target := range message.Targets {
 		result := &SendResult{
-			Target:    target,
-			Platform:  m.name,
-			Success:   !m.shouldFail,
-			Duration:  m.delay,
-			SentAt:    time.Now(),
-			Attempts:  1,
+			Target:   target,
+			Platform: m.name,
+			Success:  !m.shouldFail,
+			Duration: m.delay,
+			SentAt:   time.Now(),
+			Attempts: 1,
 		}
 
 		if m.shouldFail {

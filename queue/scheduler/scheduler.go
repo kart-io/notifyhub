@@ -11,9 +11,9 @@ import (
 
 // DelayedMessage represents a message scheduled for future delivery
 type DelayedMessage struct {
-	Message   *core.Message  `json:"message"`
-	ScheduleAt time.Time `json:"schedule_at"`
-	index     int       // for heap.Interface
+	Message    *core.Message `json:"message"`
+	ScheduleAt time.Time     `json:"schedule_at"`
+	index      int           // for heap.Interface
 }
 
 // DelayedMessageHeap implements heap.Interface for DelayedMessage
@@ -46,13 +46,13 @@ func (h *DelayedMessageHeap) Pop() interface{} {
 
 // MessageScheduler manages delayed message scheduling using a min-heap
 type MessageScheduler struct {
-	heap     DelayedMessageHeap
-	mu       sync.RWMutex
-	queue    core.Queue
-	stopCh   chan struct{}
-	ticker   *time.Ticker
-	ctx      context.Context
-	cancel   context.CancelFunc
+	heap   DelayedMessageHeap
+	mu     sync.RWMutex
+	queue  core.Queue
+	stopCh chan struct{}
+	ticker *time.Ticker
+	ctx    context.Context
+	cancel context.CancelFunc
 }
 
 // NewMessageScheduler creates a new message scheduler

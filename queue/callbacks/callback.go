@@ -31,14 +31,14 @@ const (
 
 // CallbackContext contains information about the callback execution
 type CallbackContext struct {
-	MessageID   string                  `json:"message_id"`
-	Event       CallbackEvent           `json:"event"`
-	Message     *notifiers.Message      `json:"message"`
-	Results     []*notifiers.SendResult `json:"results,omitempty"`
-	Error       error                   `json:"error,omitempty"`
-	Attempts    int                     `json:"attempts"`
-	ExecutedAt  time.Time               `json:"executed_at"`
-	Duration    time.Duration           `json:"duration,omitempty"`
+	MessageID  string                  `json:"message_id"`
+	Event      CallbackEvent           `json:"event"`
+	Message    *notifiers.Message      `json:"message"`
+	Results    []*notifiers.SendResult `json:"results,omitempty"`
+	Error      error                   `json:"error,omitempty"`
+	Attempts   int                     `json:"attempts"`
+	ExecutedAt time.Time               `json:"executed_at"`
+	Duration   time.Duration           `json:"duration,omitempty"`
 }
 
 // Callback defines the interface for message processing callbacks

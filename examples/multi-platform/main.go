@@ -18,11 +18,11 @@ func main() {
 		),
 		// 邮件配置
 		notifyhub.WithEmail(
-			"smtp.gmail.com",     // SMTP服务器
-			587,                  // 端口
-			"your@gmail.com",     // 用户名
-			"your-app-password",  // 密码
-			"your@gmail.com",     // 发送方
+			"smtp.gmail.com",    // SMTP服务器
+			587,                 // 端口
+			"your@gmail.com",    // 用户名
+			"your-app-password", // 密码
+			"your@gmail.com",    // 发送方
 		),
 		// 队列配置
 		notifyhub.WithQueue("memory", 1000, 2),
@@ -30,11 +30,11 @@ func main() {
 		notifyhub.WithRouting(
 			notifyhub.NewRoutingRule("high_priority_all").
 				WithPriority(4, 5).
-				RouteTo("feishu", "email").  // 同时路由到两个平台
+				RouteTo("feishu", "email"). // 同时路由到两个平台
 				Build(),
 			notifyhub.NewRoutingRule("normal_feishu_only").
 				WithPriority(1, 2, 3).
-				RouteTo("feishu").  // 普通消息只发飞书
+				RouteTo("feishu"). // 普通消息只发飞书
 				Build(),
 		),
 	)
@@ -85,11 +85,11 @@ func main() {
 		Variable("features", []string{"新增用户管理", "优化性能", "修复bug"}).
 		Variable("release_date", time.Now().Format("2006-01-02")).
 		// 手动指定多个目标
-		FeishuGroup("dev-team").        // 发送到飞书开发团队群
-		FeishuUser("zhang_san").        // 发送到飞书用户
-		Email("team@company.com").      // 发送到团队邮箱
-		Email("manager@company.com").   // 发送到管理员邮箱
-		Priority(3). // 普通优先级
+		FeishuGroup("dev-team").      // 发送到飞书开发团队群
+		FeishuUser("zhang_san").      // 发送到飞书用户
+		Email("team@company.com").    // 发送到团队邮箱
+		Email("manager@company.com"). // 发送到管理员邮箱
+		Priority(3).                  // 普通优先级
 		Build()
 
 	results, err = hub.Send(ctx, manualMessage, nil)

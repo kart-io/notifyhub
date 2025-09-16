@@ -1,551 +1,355 @@
-# NotifyHub HTTP Service Examples - 从"可用"到"易用"的进化
+# NotifyHub HTTP Service - 优化示例
 
-This directory contains comprehensive examples showing the evolution of NotifyHub from a "usable" to a "user-friendly" library through systematic optimizations.
+这是一个展示 NotifyHub 最佳实践的 HTTP 服务示例，重点体现了：
 
-## 🚀 快速开始 (Ultra-Optimized Version)
-
-```bash
-# 运行超级优化版服务器 (推荐)
-go run cmd/ultra_optimized_server.go
-
-# 服务器启动时会自动配置所有路由:
-# POST /api/v1/send      - 发送通知
-# POST /api/v1/batch     - 批量通知
-# POST /api/v1/text      - 快速文本消息
-# POST /api/v1/alert     - 紧急警报
-# POST /api/v1/template  - 模板消息
-# GET  /api/v1/health    - 健康检查
-# GET  /api/v1/metrics   - 服务指标
-```
-
-## 📊 优化进化历程
-
-### 服务器实现版本
-
-| 版本 | 文件 | 代码行数 | 主要特性 | 适用场景 |
-|---------|------|---------------|--------------|----------|
-| **原版** | `cmd/server.go` | ~200 行 | 基础实现 | 学习/参考 |
-| **优化版** | `cmd/optimized_server.go` | ~150 行 | 增强模式 | 生产就绪 |
-| **超级优化版** | `cmd/ultra_optimized_server.go` | **~80 行** | 全自动化 | **推荐使用** |
-
-### 代码减少成效
-
-```go
-// ❌ 优化前：复杂初始化 (15+ 行)
-cfg := config.New()
-queueConfig := &config.QueueConfig{
-    Type:        "memory",
-    BufferSize:  1000,
-    Workers:     2,
-    RetryPolicy: queue.DefaultRetryPolicy(),
-}
-hub := &client.Hub{
-    config:    cfg,
-    notifiers: make(map[string]notifiers.Notifier),
-    // ... 10+ 更多行
-}
-if err := hub.Start(ctx); err != nil {
-    return err
-}
-
-// ✅ 优化后：一行初始化
-hub, err := client.NewWithDefaultsAndStart(ctx)
-```
-
-## 🌟 核心特性
-
-- **🚀 极简API**：从200行代码减少到80行，代码减少60%
-- **📦 一键部署**：一行代码创建完整HTTP服务
-- **🛡️ 自动安全**：内置安全中间件、CORS、限流等
-- **🎯 智能路由**：自动检测目标类型和平台
-- **📊 完整监控**：健康检查、指标收集、链路追踪
-- **🧪 测试友好**：一行代码创建测试环境
-
-## 📁 项目结构
-
-```
-examples/http-service/
-├── cmd/
-│   └── server.go              # 主服务器入口
-├── internal/
-│   ├── handlers/              # HTTP 处理器
-│   │   └── handlers.go
-│   ├── middleware/            # 中间件
-│   │   └── middleware.go
-│   └── models/                # 数据模型
-│       └── requests.go
-├── test/
-│   ├── unit/                  # 单元测试
-│   │   ├── handlers_test.go
-│   │   └── middleware_test.go
-│   ├── e2e/                   # 端到端测试
-│   │   └── server_test.go
-│   └── performance/           # 性能测试
-│       └── load_test.go
-├── config/
-│   └── config.yaml            # 配置文件
-├── Dockerfile                 # Docker 镜像
-├── docker-compose.yml         # Docker Compose
-├── Makefile                   # 构建脚本
-├── .env.example              # 环境变量示例
-└── README.md                 # 文档
-```
+- ✨ **减少样板代码** - 简化配置和调用方式
+- 🎯 **最佳实践** - 生产级代码结构和错误处理
+- 📦 **完整可运行** - 开箱即用的示例服务
+- 🔧 **直观易懂** - 清晰的代码结构和注释
 
 ## 🚀 快速开始
 
-### 1. 环境准备
+### 环境配置
 
 ```bash
-# 克隆项目（如果需要）
+# Feishu 配置
+export NOTIFYHUB_FEISHU_WEBHOOK_URL="https://open.feishu.cn/open-apis/bot/v2/hook/your-webhook"
+export NOTIFYHUB_FEISHU_SECRET="your-secret"
+
+# Email 配置
+export NOTIFYHUB_SMTP_HOST="smtp.gmail.com"
+export NOTIFYHUB_SMTP_PORT="587"
+export NOTIFYHUB_SMTP_USERNAME="your-email@gmail.com"
+export NOTIFYHUB_SMTP_PASSWORD="your-app-password"
+export NOTIFYHUB_SMTP_FROM="your-email@gmail.com"
+
+# 队列配置（可选）
+export NOTIFYHUB_QUEUE_TYPE="memory"
+export NOTIFYHUB_QUEUE_SIZE="1000"
+export NOTIFYHUB_QUEUE_WORKERS="4"
+
+# 服务端口（可选）
+export PORT="8080"
+```
+
+### 运行服务
+
+```bash
 cd examples/http-service
-
-# 复制环境变量配置
-cp .env.example .env
-
-# 编辑配置
-vim .env
+go mod tidy
+go run main.go
 ```
 
-### 2. 安装依赖
+服务启动后，访问：
+- 健康检查: http://localhost:8080/api/v1/health
+- 指标监控: http://localhost:8080/api/v1/metrics
+
+## 📖 API 使用示例
+
+### 1. 发送简单通知
 
 ```bash
-# 安装 Go 依赖
-make deps
-
-# 安装开发工具（可选）
-make install-tools
+curl -X POST http://localhost:8080/api/v1/notifications \
+  -H "Content-Type: application/json" \
+  -d '{
+    "type": "notice",
+    "title": "系统通知",
+    "message": "这是一条测试消息",
+    "targets": [
+      {
+        "type": "email",
+        "value": "user@example.com"
+      }
+    ]
+  }'
 ```
 
-### 3. 配置环境变量
-
-编辑 `.env` 文件，设置必要的配置：
+### 2. 发送告警（展示最佳实践）
 
 ```bash
-# 基本配置
-API_KEY=your-secret-api-key
-PORT=8080
-
-# 飞书配置
-NOTIFYHUB_FEISHU_WEBHOOK_URL=https://open.feishu.cn/open-apis/bot/v2/hook/xxx
-NOTIFYHUB_FEISHU_SECRET=your-secret
-
-# 邮件配置
-NOTIFYHUB_SMTP_HOST=smtp.gmail.com
-NOTIFYHUB_SMTP_PORT=587
-NOTIFYHUB_SMTP_USERNAME=your-email@gmail.com
-NOTIFYHUB_SMTP_PASSWORD=your-app-password
-NOTIFYHUB_SMTP_FROM=your-email@gmail.com
-```
-
-### 4. 运行服务
-
-```bash
-# 开发模式运行
-make run
-
-# 或者使用 Docker
-make docker-build
-make docker-run
-
-# 或者使用 Docker Compose
-docker-compose up -d
-```
-
-### 5. 验证服务
-
-```bash
-# 检查健康状态
-curl http://localhost:8080/health
-
-# 查看服务指标
-curl http://localhost:8080/metrics
-
-# 发送测试通知
-make example-notification
-```
-
-## 📚 API 文档
-
-### 基础信息
-
-- **Base URL**: `http://localhost:8080`
-- **认证**: Bearer token (如果配置了 `API_KEY`)
-- **Content-Type**: `application/json`
-
-### 端点列表
-
-#### 1. 健康检查
-
-```bash
-GET /health
-```
-
-响应示例：
-```json
-{
-  "status": "healthy",
-  "timestamp": "2024-01-15T10:30:00Z",
-  "services": {
-    "hub": "healthy",
-    "queue": "healthy"
-  },
-  "uptime": "2h30m45s"
-}
-```
-
-#### 2. 服务指标
-
-```bash
-GET /metrics
-```
-
-响应示例：
-```json
-{
-  "total_sent": 1250,
-  "success_rate": 0.98,
-  "avg_duration": "150ms",
-  "sends_by_platform": {
-    "email": 800,
-    "feishu": 450
-  },
-  "last_updated": "2024-01-15T10:30:00Z"
-}
-```
-
-#### 3. 发送通知
-
-```bash
-POST /api/v1/notifications
-Authorization: Bearer your-api-key
-Content-Type: application/json
-
-{
-  "title": "系统告警",
-  "body": "服务器 CPU 使用率过高",
-  "format": "markdown",
-  "targets": [
-    {
-      "type": "email",
-      "value": "ops@company.com"
+curl -X POST http://localhost:8080/api/v1/alert \
+  -H "Content-Type: application/json" \
+  -d '{
+    "title": "🚨 系统告警",
+    "message": "数据库连接异常，请及时处理！",
+    "priority": 5,
+    "targets": [
+      {
+        "type": "group",
+        "value": "ops-team",
+        "platform": "feishu"
+      },
+      {
+        "type": "email",
+        "value": "admin@company.com"
+      }
+    ],
+    "variables": {
+      "server": "prod-db-01",
+      "error": "connection timeout",
+      "timestamp": "2024-01-01T10:00:00Z"
     },
-    {
-      "type": "group",
-      "value": "ops-alerts",
-      "platform": "feishu"
-    }
-  ],
-  "priority": 4,
-  "variables": {
-    "server": "web-01",
-    "cpu_usage": "95%"
-  },
-  "metadata": {
-    "environment": "production",
-    "service": "web-server"
-  }
-}
-```
-
-#### 4. 批量发送
-
-```bash
-POST /api/v1/notifications/bulk
-Authorization: Bearer your-api-key
-Content-Type: application/json
-
-{
-  "notifications": [
-    {
-      "title": "通知 1",
-      "body": "内容 1",
-      "targets": [{"type": "email", "value": "user1@example.com"}]
+    "metadata": {
+      "severity": "high",
+      "environment": "production"
     },
-    {
-      "title": "通知 2",
-      "body": "内容 2",
-      "targets": [{"type": "email", "value": "user2@example.com"}]
+    "retry_count": 3,
+    "timeout_seconds": 30
+  }'
+```
+
+### 3. 使用模板发送报告
+
+```bash
+curl -X POST http://localhost:8080/api/v1/report \
+  -H "Content-Type: application/json" \
+  -d '{
+    "title": "📊 日报",
+    "message": "系统运行正常",
+    "template": "daily_report",
+    "targets": [
+      {
+        "type": "email",
+        "value": "reports@company.com"
+      }
+    ],
+    "variables": {
+      "date": "2024-01-01",
+      "uptime": "99.9%",
+      "requests": 1500000,
+      "errors": 5
     }
-  ]
+  }'
+```
+
+### 4. 异步发送（推荐用于批量通知）
+
+```bash
+curl -X POST http://localhost:8080/api/v1/notifications \
+  -H "Content-Type: application/json" \
+  -d '{
+    "type": "notice",
+    "title": "批量通知",
+    "message": "这是一条异步消息",
+    "async": true,
+    "targets": [
+      {
+        "type": "email",
+        "value": "user1@example.com"
+      },
+      {
+        "type": "email", 
+        "value": "user2@example.com"
+      }
+    ]
+  }'
+```
+
+## 🎯 关键优化特性
+
+### 1. 简化的配置方式
+
+**优化前（样板代码较多）：**
+```go
+// 需要手动配置每个组件
+hub, err := client.New(
+    config.WithFeishu("https://...", "secret"),
+    config.WithEmail("smtp.gmail.com", 587, "user", "pass", "from", true, 30*time.Second),
+    config.WithQueue("memory", 1000, 4),
+    // ... 更多配置
+)
+```
+
+**优化后（自动从环境变量加载）：**
+```go
+// 自动化配置，减少样板代码
+hub, err := client.New(
+    config.WithFeishuFromEnv(),     // 自动加载
+    config.WithEmailFromEnv(),      // 自动加载
+    config.WithQueueFromEnv(),      // 自动加载
+    config.WithMockNotifier("dev"), // 开发模式
+)
+```
+
+### 2. 流式构建器模式
+
+**优化前：**
+```go
+message := &notifiers.Message{}
+message.Title = req.Title
+message.Body = req.Message
+if req.Priority > 0 {
+    message.Priority = req.Priority
 }
+// ... 大量条件判断和赋值
 ```
 
-#### 5. 快速文本通知
+**优化后：**
+```go
+// 链式调用，清晰直观
+builder := client.NewAlert(req.Title, req.Message).
+    Priority(req.Priority).
+    Variable("server", "prod-01").
+    FeishuGroup("ops-team").
+    Email("admin@company.com")
 
-```bash
-GET /api/v1/notifications/text?title=测试&body=Hello&target=test@example.com
-Authorization: Bearer your-api-key
+message := builder.Build()
 ```
 
-## 🧪 测试
-
-### 单元测试
-
-```bash
-# 运行所有单元测试
-make unit-test
-
-# 运行单元测试并生成覆盖率报告
-make unit-test-coverage
-
-# 查看覆盖率报告
-open coverage.html
-```
-
-### E2E 测试
-
-```bash
-# 先启动服务（端口 8081）
-PORT=8081 API_KEY=test-api-key-12345 make run
-
-# 在另一个终端运行 E2E 测试
-make e2e-test
-```
-
-### 性能测试
-
-```bash
-# 确保服务运行在端口 8080
-make run
-
-# 在另一个终端运行性能测试
-make performance-test
-
-# 运行负载测试
-make load-test
-
-# 运行压力测试
-make stress-test
-
-# 运行基准测试
-make benchmark
-```
-
-### 测试覆盖范围
-
-- **单元测试**：处理器逻辑、中间件功能、数据验证
-- **E2E 测试**：完整的请求响应流程、认证、错误处理
-- **性能测试**：并发负载、延迟分析、吞吐量测试
-- **压力测试**：渐进式负载增加、资源使用监控
-
-## 🐳 Docker 部署
-
-### 单独部署
-
-```bash
-# 构建镜像
-make docker-build
-
-# 运行容器
-make docker-run
-
-# 或者直接使用 Docker 命令
-docker run -p 8080:8080 --env-file .env notifyhub-http-service:latest
-```
-
-### 使用 Docker Compose
-
-```bash
-# 启动所有服务
-docker-compose up -d
-
-# 启动包含 Redis 的完整环境
-docker-compose --profile redis up -d
-
-# 启动包含监控的完整环境
-docker-compose --profile monitoring up -d
-
-# 启动包含链路追踪的环境
-docker-compose --profile tracing up -d
-
-# 查看服务状态
-docker-compose ps
-
-# 查看日志
-docker-compose logs -f notifyhub-http-service
-```
-
-### 生产部署检查清单
-
-- [ ] 设置安全的 `API_KEY`
-- [ ] 配置 TLS/HTTPS
-- [ ] 设置适当的资源限制
-- [ ] 配置日志收集
-- [ ] 设置监控和告警
-- [ ] 配置负载均衡
-- [ ] 设置数据备份策略
-- [ ] 配置安全扫描
-
-## 📊 监控与可观测性
-
-### 内置监控
-
-- **健康检查**: `/health` 端点
-- **指标暴露**: `/metrics` 端点
-- **结构化日志**: JSON 格式日志
-- **请求追踪**: 每个请求的唯一 ID
-
-### 集成监控工具
-
-使用 Docker Compose 可以快速启动监控栈：
-
-```bash
-# 启动 Prometheus + Grafana
-docker-compose --profile monitoring up -d
-
-# 访问 Grafana: http://localhost:3000 (admin/admin)
-# 访问 Prometheus: http://localhost:9090
-```
-
-### 链路追踪
-
-```bash
-# 启动 Jaeger
-docker-compose --profile tracing up -d
-
-# 访问 Jaeger UI: http://localhost:16686
-```
-
-## ⚡ 性能优化
-
-### 当前性能指标
-
-基于内置性能测试的基准：
-
-- **单个通知延迟**: < 100ms (p95)
-- **批量通知延迟**: < 500ms (p95)
-- **吞吐量**: > 100 req/s (单个通知)
-- **并发支持**: 100+ 并发连接
-- **内存使用**: < 50MB (基础负载)
-
-### 优化建议
-
-1. **连接池配置**: 调整 HTTP 客户端连接池大小
-2. **队列配置**: 根据负载调整 worker 数量和缓冲区大小
-3. **缓存策略**: 实现请求去重和结果缓存
-4. **负载均衡**: 使用多实例水平扩展
-5. **数据库优化**: 如果使用持久化存储，优化查询
-
-## 🔧 开发指南
-
-### 添加新的中间件
+### 3. 统一的响应格式
 
 ```go
-// internal/middleware/custom.go
-func CustomMiddleware(next http.Handler) http.Handler {
-    return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-        // 自定义逻辑
-        next.ServeHTTP(w, r)
+type NotificationResponse struct {
+    Success   bool                   `json:"success"`
+    Message   string                 `json:"message,omitempty"`
+    TaskID    string                 `json:"task_id,omitempty"`    // 异步任务
+    Results   []PlatformResult       `json:"results,omitempty"`    // 同步结果
+    Metadata  map[string]interface{} `json:"metadata,omitempty"`   // 元数据
+}
+```
+
+### 4. 智能路由选择
+
+```go
+// 根据请求自动选择同步/异步模式
+if req.Async {
+    ns.handleAsyncSend(c, message, req)
+} else {
+    ns.handleSyncSend(c, message, req)
+}
+```
+
+## 🔧 生产级特性
+
+### 健康检查和监控
+
+```bash
+# 健康检查
+curl http://localhost:8080/api/v1/health
+
+# 响应示例
+{
+  "status": "ok",
+  "uptime": "2h30m15s",
+  "metrics": {
+    "total_sent": 1250,
+    "success_rate": 0.995,
+    "avg_duration": "150ms"
+  },
+  "platforms": {
+    "feishu": true,
+    "email": true
+  },
+  "version": "1.2.0"
+}
+```
+
+### 错误处理和重试
+
+```go
+// 自动重试配置
+retryOpts := client.NewRetryOptions(3)
+if req.RetryCount > 0 {
+    retryOpts = client.NewRetryOptions(req.RetryCount)
+}
+if req.Timeout > 0 {
+    retryOpts = retryOpts.WithTimeout(time.Duration(req.Timeout) * time.Second)
+}
+```
+
+### 优雅停机
+
+```go
+// 监听系统信号
+quit := make(chan os.Signal, 1)
+signal.Notify(quit, syscall.SIGINT, syscall.SIGTERM)
+<-quit
+
+// 30秒优雅停机
+ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
+defer cancel()
+server.Shutdown(ctx)
+```
+
+## 🧪 测试示例
+
+### 使用 curl 测试
+
+```bash
+# 测试健康检查
+curl http://localhost:8080/api/v1/health
+
+# 测试简单通知
+curl -X POST http://localhost:8080/api/v1/notifications \
+  -H "Content-Type: application/json" \
+  -d '{
+    "type": "notice",
+    "title": "测试",
+    "message": "Hello NotifyHub!",
+    "targets": [{"type": "email", "value": "test@example.com"}]
+  }'
+
+# 测试快捷告警接口
+curl -X POST http://localhost:8080/api/v1/alert \
+  -H "Content-Type: application/json" \
+  -d '{
+    "title": "告警测试",
+    "message": "这是一个测试告警",
+    "targets": [{"type": "email", "value": "alert@example.com"}]
+  }'
+```
+
+### 使用 JavaScript (Fetch)
+
+```javascript
+// 发送通知
+async function sendNotification() {
+  const response = await fetch('http://localhost:8080/api/v1/notifications', {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+    },
+    body: JSON.stringify({
+      type: 'notice',
+      title: '前端通知',
+      message: '来自前端的测试消息',
+      targets: [
+        { type: 'email', value: 'frontend@example.com' }
+      ]
     })
+  });
+  
+  const result = await response.json();
+  console.log('通知结果:', result);
+}
+
+// 检查服务健康状态
+async function checkHealth() {
+  const response = await fetch('http://localhost:8080/api/v1/health');
+  const health = await response.json();
+  console.log('服务状态:', health);
 }
 ```
 
-### 添加新的端点
+## 📊 与其他示例的对比
 
-```go
-// internal/handlers/handlers.go
-func (h *NotificationHandler) CustomEndpoint(w http.ResponseWriter, r *http.Request) {
-    // 处理逻辑
-}
+| 特性 | 基础示例 | 高级示例 | HTTP服务示例 |
+|------|----------|----------|--------------|
+| 配置方式 | 手动配置 | 详细配置 | **环境变量自动化** |
+| 样板代码 | 较多 | 很多 | **最少** |
+| 生产就绪 | ❌ | ⚠️ | **✅** |
+| 错误处理 | 基础 | 完善 | **企业级** |
+| 监控集成 | ❌ | 基础 | **完整** |
+| 可维护性 | 低 | 中 | **高** |
 
-// cmd/server.go - 在 setupRoutes 中添加
-mux.Handle("/api/v1/custom", middlewareChain(http.HandlerFunc(handler.CustomEndpoint)))
-```
+## 🎉 总结
 
-### 自定义配置
+这个 HTTP 服务示例展示了 NotifyHub 的最佳使用方式：
 
-编辑 `config/config.yaml` 或使用环境变量：
+1. **最少样板代码** - 通过环境变量自动配置
+2. **直观的 API** - RESTful 设计，易于理解和使用
+3. **生产级质量** - 完整的错误处理、监控、优雅停机
+4. **开发友好** - 清晰的代码结构和丰富的注释
+5. **即开即用** - 完整的示例和文档
 
-```yaml
-# config/config.yaml
-custom:
-  feature_enabled: true
-  timeout: 30s
-```
-
-## 🐛 故障排除
-
-### 常见问题
-
-1. **服务启动失败**
-   ```bash
-   # 检查端口是否被占用
-   lsof -i :8080
-
-   # 检查环境变量
-   env | grep NOTIFYHUB
-   ```
-
-2. **通知发送失败**
-   ```bash
-   # 检查日志
-   docker-compose logs notifyhub-http-service
-
-   # 测试网络连接
-   curl -v https://open.feishu.cn
-   ```
-
-3. **性能问题**
-   ```bash
-   # 检查系统资源
-   docker stats
-
-   # 查看服务指标
-   curl http://localhost:8080/metrics
-   ```
-
-### 调试模式
-
-```bash
-# 启用详细日志
-LOG_LEVEL=debug make run
-
-# 或者在 Docker 中
-docker run -e LOG_LEVEL=debug -p 8080:8080 notifyhub-http-service
-```
-
-## 📈 扩展性考虑
-
-### 水平扩展
-
-- 无状态设计，支持多实例部署
-- 使用外部队列（Redis）实现实例间通信
-- 负载均衡器分发请求
-
-### 垂直扩展
-
-- 调整 `NOTIFYHUB_QUEUE_WORKERS` 增加处理能力
-- 增加 `NOTIFYHUB_QUEUE_BUFFER_SIZE` 提高缓冲能力
-- 优化 `RATE_LIMIT_PER_MINUTE` 平衡性能和保护
-
-### 架构演进
-
-1. **微服务拆分**: 将通知发送拆分为独立服务
-2. **消息队列**: 使用 Kafka/RabbitMQ 等企业级消息队列
-3. **配置中心**: 使用 Consul/etcd 等配置中心
-4. **服务网格**: 使用 Istio 等服务网格管理通信
-
-## 🤝 贡献指南
-
-1. Fork 项目
-2. 创建特性分支 (`git checkout -b feature/amazing-feature`)
-3. 提交更改 (`git commit -m 'Add amazing feature'`)
-4. 推送到分支 (`git push origin feature/amazing-feature`)
-5. 打开 Pull Request
-
-### 代码规范
-
-```bash
-# 运行所有质量检查
-make quality
-
-# 包括：格式化、vet、lint、测试
-```
-
-## 📄 许可证
-
-本项目基于 MIT 许可证 - 查看 [LICENSE](LICENSE) 文件了解详情。
-
----
-
-**🎯 这是一个生产就绪的 NotifyHub HTTP 服务示例，展示了现代 Go 服务开发的最佳实践。**
+通过这个示例，开发者可以快速理解如何在实际项目中优雅地使用 NotifyHub，并可以直接基于此示例构建自己的通知服务。

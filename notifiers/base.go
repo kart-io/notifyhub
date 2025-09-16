@@ -44,20 +44,20 @@ type Message struct {
 	Template  string                 `json:"template,omitempty"`
 	Variables map[string]interface{} `json:"variables,omitempty"`
 	Metadata  map[string]string      `json:"metadata,omitempty"`
-	Priority  int                    `json:"priority"` // 1=low, 5=urgent
-	Delay     time.Duration          `json:"delay,omitempty"`     // 延迟发送时间
+	Priority  int                    `json:"priority"`        // 1=low, 5=urgent
+	Delay     time.Duration          `json:"delay,omitempty"` // 延迟发送时间
 	CreatedAt time.Time              `json:"created_at"`
 }
 
 // SendResult represents the result of a send operation
 type SendResult struct {
-	Target    Target        `json:"target"`
-	Platform  string        `json:"platform"`
-	Success   bool          `json:"success"`
-	Error     string        `json:"error,omitempty"`
-	Duration  time.Duration `json:"duration"`
-	SentAt    time.Time     `json:"sent_at"`
-	Attempts  int           `json:"attempts"`
+	Target   Target        `json:"target"`
+	Platform string        `json:"platform"`
+	Success  bool          `json:"success"`
+	Error    string        `json:"error,omitempty"`
+	Duration time.Duration `json:"duration"`
+	SentAt   time.Time     `json:"sent_at"`
+	Attempts int           `json:"attempts"`
 }
 
 // ValidationError represents validation errors for messages and targets
