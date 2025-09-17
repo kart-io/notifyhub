@@ -35,6 +35,13 @@ const (
 	FormatCard     MessageFormat = "card"
 )
 
+// AtMention represents a user mention configuration
+type AtMention struct {
+	UserID   string `json:"user_id"`   // 用户ID
+	UserName string `json:"user_name"` // 用户显示名称（可选）
+	IsAll    bool   `json:"is_all"`    // 是否@所有人
+}
+
 // Message represents a notification message
 type Message struct {
 	ID        string                 `json:"id"`
@@ -48,6 +55,7 @@ type Message struct {
 	Priority  int                    `json:"priority"`        // 1=low, 5=urgent
 	Delay     time.Duration          `json:"delay,omitempty"` // 延迟发送时间
 	CardData  interface{}            `json:"card_data,omitempty"` // 卡片数据，支持平台特定的卡片格式
+	AtMentions []AtMention           `json:"at_mentions,omitempty"` // @人配置列表
 	CreatedAt time.Time              `json:"created_at"`
 }
 

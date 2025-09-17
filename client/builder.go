@@ -86,6 +86,62 @@ func (b *MessageBuilder) CardData(cardData interface{}) *MessageBuilder {
 	return b
 }
 
+// AtUser adds a user mention to the message
+func (b *MessageBuilder) AtUser(userID string, userName ...string) *MessageBuilder {
+	if b.message.AtMentions == nil {
+		b.message.AtMentions = make([]notifiers.AtMention, 0)
+	}
+
+	mention := notifiers.AtMention{
+		UserID: userID,
+		IsAll:  false,
+	}
+
+	if len(userName) > 0 && userName[0] != "" {
+		mention.UserName = userName[0]
+	}
+
+	b.message.AtMentions = append(b.message.AtMentions, mention)
+	return b
+}
+
+// AtAll adds an @all mention to the message
+func (b *MessageBuilder) AtAll() *MessageBuilder {
+	if b.message.AtMentions == nil {
+		b.message.AtMentions = make([]notifiers.AtMention, 0)
+	}
+
+	mention := notifiers.AtMention{
+		UserID: "all",
+		IsAll:  true,
+	}
+
+	b.message.AtMentions = append(b.message.AtMentions, mention)
+	return b
+}
+
+// AtUsers adds multiple user mentions to the message
+func (b *MessageBuilder) AtUsers(userIDs ...string) *MessageBuilder {
+	for _, userID := range userIDs {
+		if userID != "" {
+			b.AtUser(userID)
+		}
+	}
+	return b
+}
+
+// AtMentions sets the @mentions list directly
+func (b *MessageBuilder) AtMentions(mentions []notifiers.AtMention) *MessageBuilder {
+	b.message.AtMentions = mentions
+	return b
+}
+
+// ClearAtMentions clears all @mentions from the message
+func (b *MessageBuilder) ClearAtMentions() *MessageBuilder {
+	b.message.AtMentions = nil
+	return b
+}
+
 // Target adds a notification target
 func (b *MessageBuilder) Target(target notifiers.Target) *MessageBuilder {
 	b.message.Targets = append(b.message.Targets, target)
@@ -565,6 +621,12 @@ func (b *MessageBuilder) Clone() *MessageBuilder {
 	// Deep copy targets
 	newBuilder.message.Targets = make([]notifiers.Target, len(b.message.Targets))
 	copy(newBuilder.message.Targets, b.message.Targets)
+
+	// Deep copy @mentions
+	if b.message.AtMentions != nil {
+		newBuilder.message.AtMentions = make([]notifiers.AtMention, len(b.message.AtMentions))
+		copy(newBuilder.message.AtMentions, b.message.AtMentions)
+	}
 
 	// Deep copy variables
 	newBuilder.message.Variables = make(map[string]interface{})

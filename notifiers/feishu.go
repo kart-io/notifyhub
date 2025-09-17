@@ -245,8 +245,11 @@ func (f *FeishuNotifier) buildPayload(message *Message, target Target, timestamp
 		}
 	}
 
-	// Add user mention if needed
+	// Add user mention if needed (legacy support)
 	f.addUserMention(payload, target)
+
+	// Add @mentions based on Message.AtMentions field
+	f.addAtMentions(payload, message)
 
 	// Add signature verification fields if configured
 	if f.secret != "" && timestamp != "" && signature != "" {
@@ -277,13 +280,135 @@ func (f *FeishuNotifier) formatTextContent(message *Message) string {
 	return content
 }
 
-// addUserMention adds user mention to the message if target is user
+// addUserMention adds user mention to the message based on AtMentions and target
 func (f *FeishuNotifier) addUserMention(payload map[string]interface{}, target Target) {
+	// 暂时保留原有的基于target的@人逻辑，用于向后兼容
 	if target.Type == TargetTypeUser && target.Value != "default" {
 		if content, ok := payload["content"].(map[string]string); ok {
 			content["text"] = fmt.Sprintf("<at user_id=\"%s\">@user</at> %s", target.Value, content["text"])
 		}
 	}
+}
+
+// addAtMentions adds @mentions to the message content based on AtMentions field
+func (f *FeishuNotifier) addAtMentions(payload map[string]interface{}, message *Message) {
+	if len(message.AtMentions) == 0 {
+		return
+	}
+
+	// Handle different payload content types
+	switch payload["msg_type"] {
+	case "text":
+		f.addAtMentionsToText(payload, message.AtMentions)
+	case "post":
+		f.addAtMentionsToRichText(payload, message.AtMentions)
+	case "interactive":
+		// 卡片消息中的@人需要特殊处理
+		f.addAtMentionsToCard(payload, message.AtMentions)
+	}
+}
+
+// addAtMentionsToText adds @mentions to text message content
+func (f *FeishuNotifier) addAtMentionsToText(payload map[string]interface{}, mentions []AtMention) {
+	if content, ok := payload["content"].(map[string]string); ok {
+		mentionText := f.buildMentionText(mentions)
+		if mentionText != "" {
+			content["text"] = mentionText + " " + content["text"]
+		}
+	}
+}
+
+// addAtMentionsToRichText adds @mentions to rich text message content
+func (f *FeishuNotifier) addAtMentionsToRichText(payload map[string]interface{}, mentions []AtMention) {
+	if content, ok := payload["content"].(map[string]interface{}); ok {
+		if post, ok := content["post"].(map[string]interface{}); ok {
+			if zhCn, ok := post["zh_cn"].(map[string]interface{}); ok {
+				if contentArray, ok := zhCn["content"].([][]map[string]interface{}); ok && len(contentArray) > 0 {
+					// 在第一行开头添加@人信息
+					mentionElements := f.buildMentionElements(mentions)
+					if len(mentionElements) > 0 {
+						// 将@人元素插入到第一行的开头
+						firstLine := contentArray[0]
+						contentArray[0] = append(mentionElements, firstLine...)
+						zhCn["content"] = contentArray
+					}
+				}
+			}
+		}
+	}
+}
+
+// addAtMentionsToCard adds @mentions to card message content
+func (f *FeishuNotifier) addAtMentionsToCard(payload map[string]interface{}, mentions []AtMention) {
+	if card, ok := payload["card"].(map[string]interface{}); ok {
+		if elements, ok := card["elements"].([]map[string]interface{}); ok && len(elements) > 0 {
+			// 在卡片的第一个文本元素前添加@人信息
+			mentionText := f.buildMentionText(mentions)
+			if mentionText != "" {
+				mentionElement := map[string]interface{}{
+					"tag": "div",
+					"text": map[string]interface{}{
+						"content": mentionText,
+						"tag":     "lark_md",
+					},
+				}
+				// 将@人元素插入到第一个位置
+				newElements := append([]map[string]interface{}{mentionElement}, elements...)
+				card["elements"] = newElements
+			}
+		}
+	}
+}
+
+// buildMentionText builds mention text for text and card formats
+func (f *FeishuNotifier) buildMentionText(mentions []AtMention) string {
+	if len(mentions) == 0 {
+		return ""
+	}
+
+	var mentionParts []string
+	for _, mention := range mentions {
+		if mention.IsAll {
+			mentionParts = append(mentionParts, "<at user_id=\"all\">所有人</at>")
+		} else if mention.UserID != "" {
+			displayName := mention.UserName
+			if displayName == "" {
+				displayName = "用户"
+			}
+			mentionParts = append(mentionParts, fmt.Sprintf("<at user_id=\"%s\">%s</at>", mention.UserID, displayName))
+		}
+	}
+
+	if len(mentionParts) > 0 {
+		return fmt.Sprintf("%s", mentionParts[0]) // 只返回第一个@人，多个的话可以用逗号分隔
+	}
+	return ""
+}
+
+// buildMentionElements builds mention elements for rich text format
+func (f *FeishuNotifier) buildMentionElements(mentions []AtMention) []map[string]interface{} {
+	var elements []map[string]interface{}
+
+	for _, mention := range mentions {
+		if mention.IsAll {
+			elements = append(elements, map[string]interface{}{
+				"tag":     "at",
+				"user_id": "all",
+			})
+		} else if mention.UserID != "" {
+			elements = append(elements, map[string]interface{}{
+				"tag":     "at",
+				"user_id": mention.UserID,
+			})
+		}
+		// 添加空格分隔
+		elements = append(elements, map[string]interface{}{
+			"tag":  "text",
+			"text": " ",
+		})
+	}
+
+	return elements
 }
 
 // Health checks if Feishu notifier is healthy

@@ -45,6 +45,12 @@ func main() {
 	// 测试3: 业务场景卡片
 	testBusinessCard(hub, ctx)
 
+	// 等待2秒
+	time.Sleep(2 * time.Second)
+
+	// 测试4: @人功能
+	testAtMentionFeatures(hub, ctx)
+
 	// 等待异步消息处理完成
 	fmt.Println("\n⏳ 等待异步消息处理完成...")
 	time.Sleep(3 * time.Second)
@@ -332,4 +338,195 @@ func getWeekRange() string {
 	return fmt.Sprintf("%s - %s",
 		monday.Format("01-02"),
 		sunday.Format("01-02"))
+}
+
+// 测试@人功能
+func testAtMentionFeatures(hub *client.Hub, ctx context.Context) {
+	fmt.Println("\n--- 测试4: @人功能演示 ---")
+
+	// 测试1: 文本消息@单个用户
+	fmt.Println("\n🔸 测试@单个用户（文本消息）")
+	textMessage := client.NewMessage().
+		Title("📢 重要通知").
+		Body("系统将于今晚22:00进行维护，预计耗时30分钟。").
+		AtUser("ou_123456789", "张三").
+		Priority(4).
+		FeishuGroup("default").
+		Build()
+
+	results, err := hub.Send(ctx, textMessage, nil)
+	if err != nil {
+		log.Printf("❌ 发送@人文本消息失败: %v", err)
+	} else {
+		for _, result := range results {
+			if result.Success {
+				fmt.Printf("✅ @人文本消息发送成功，耗时: %v\n", result.Duration)
+			} else {
+				fmt.Printf("❌ @人文本消息发送失败: %s\n", result.Error)
+			}
+		}
+	}
+
+	time.Sleep(2 * time.Second)
+
+	// 测试2: 富文本消息@多个用户
+	fmt.Println("\n🔸 测试@多个用户（富文本消息）")
+	richTextMessage := client.NewMessage().
+		Title("🚨 紧急事件").
+		Body("生产环境出现异常，请相关人员立即处理！").
+		Format(notifiers.FormatMarkdown).
+		AtUsers("ou_111111111", "ou_222222222", "ou_333333333").
+		Priority(5).
+		FeishuGroup("default").
+		Build()
+
+	results, err = hub.Send(ctx, richTextMessage, nil)
+	if err != nil {
+		log.Printf("❌ 发送@多人富文本消息失败: %v", err)
+	} else {
+		for _, result := range results {
+			if result.Success {
+				fmt.Printf("✅ @多人富文本消息发送成功，耗时: %v\n", result.Duration)
+			} else {
+				fmt.Printf("❌ @多人富文本消息发送失败: %s\n", result.Error)
+			}
+		}
+	}
+
+	time.Sleep(2 * time.Second)
+
+	// 测试3: 卡片消息@所有人
+	fmt.Println("\n🔸 测试@所有人（卡片消息）")
+	cardMessage := client.NewCard("🎉 发版通知", "新版本v2.1.0已成功发布！").
+		Metadata("版本", "v2.1.0").
+		Metadata("发布时间", time.Now().Format("2006-01-02 15:04:05")).
+		Metadata("更新内容", "新增@人功能、修复已知问题").
+		AtAll().
+		Priority(3).
+		FeishuGroup("default").
+		Build()
+
+	results, err = hub.Send(ctx, cardMessage, nil)
+	if err != nil {
+		log.Printf("❌ 发送@所有人卡片消息失败: %v", err)
+	} else {
+		for _, result := range results {
+			if result.Success {
+				fmt.Printf("✅ @所有人卡片消息发送成功，耗时: %v\n", result.Duration)
+			} else {
+				fmt.Printf("❌ @所有人卡片消息发送失败: %s\n", result.Error)
+			}
+		}
+	}
+
+	time.Sleep(2 * time.Second)
+
+	// 测试4: 自定义卡片消息@指定用户
+	fmt.Println("\n🔸 测试自定义卡片@指定用户")
+	customCardData := map[string]interface{}{
+		"elements": []map[string]interface{}{
+			{
+				"tag": "div",
+				"text": map[string]interface{}{
+					"content": "**🔔 任务分配通知**",
+					"tag":     "lark_md",
+				},
+			},
+			{
+				"tag": "hr",
+			},
+			{
+				"tag": "div",
+				"fields": []map[string]interface{}{
+					{
+						"is_short": true,
+						"text": map[string]interface{}{
+							"content": "**任务标题**\\n优化系统性能",
+							"tag":     "lark_md",
+						},
+					},
+					{
+						"is_short": true,
+						"text": map[string]interface{}{
+							"content": "**截止时间**\\n" + time.Now().AddDate(0, 0, 7).Format("2006-01-02"),
+							"tag":     "lark_md",
+						},
+					},
+					{
+						"is_short": true,
+						"text": map[string]interface{}{
+							"content": "**优先级**\\n🔴 高",
+							"tag":     "lark_md",
+						},
+					},
+					{
+						"is_short": true,
+						"text": map[string]interface{}{
+							"content": "**负责人**\\n@李四",
+							"tag":     "lark_md",
+						},
+					},
+				},
+			},
+			{
+				"tag": "action",
+				"actions": []map[string]interface{}{
+					{
+						"tag": "button",
+						"text": map[string]interface{}{
+							"content": "接受任务",
+							"tag":     "plain_text",
+						},
+						"type": "primary",
+						"url":  "https://task.example.com/accept",
+					},
+					{
+						"tag": "button",
+						"text": map[string]interface{}{
+							"content": "查看详情",
+							"tag":     "plain_text",
+						},
+						"type": "default",
+						"url":  "https://task.example.com/details",
+					},
+				},
+			},
+		},
+		"header": map[string]interface{}{
+			"title": map[string]interface{}{
+				"content": "任务分配",
+				"tag":     "plain_text",
+			},
+			"template": "orange",
+		},
+	}
+
+	customCardMessage := client.NewMessage().
+		Title("任务分配").
+		Format(notifiers.FormatCard).
+		CardData(customCardData).
+		AtUser("ou_444444444", "李四").
+		Priority(4).
+		FeishuGroup("default").
+		Build()
+
+	results, err = hub.Send(ctx, customCardMessage, nil)
+	if err != nil {
+		log.Printf("❌ 发送自定义卡片@人消息失败: %v", err)
+	} else {
+		for _, result := range results {
+			if result.Success {
+				fmt.Printf("✅ 自定义卡片@人消息发送成功，耗时: %v\n", result.Duration)
+			} else {
+				fmt.Printf("❌ 自定义卡片@人消息发送失败: %s\n", result.Error)
+			}
+		}
+	}
+
+	fmt.Println("\n📋 @人功能测试说明：")
+	fmt.Println("1. 文本消息支持@单个用户")
+	fmt.Println("2. 富文本消息支持@多个用户")
+	fmt.Println("3. 卡片消息支持@所有人")
+	fmt.Println("4. 自定义卡片支持@指定用户")
+	fmt.Println("5. 用户ID需要替换为真实的飞书用户ID")
 }
