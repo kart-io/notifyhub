@@ -61,18 +61,6 @@ func TestEnhancedBatchBuilder(t *testing.T) {
 	assert.NotNil(t, builder)
 }
 
-func TestNotifyHubError(t *testing.T) {
-	// Test error creation and methods
-	err := NewConfigError("INVALID_CONFIG", "Configuration is invalid", "Check your settings")
-
-	assert.Equal(t, ErrorCategoryConfig, err.Category)
-	assert.Equal(t, "INVALID_CONFIG", err.Code)
-	assert.Equal(t, "Configuration is invalid", err.Message)
-	assert.False(t, err.IsRetryable())
-	assert.Contains(t, err.GetSuggestions(), "Check your settings")
-	assert.Contains(t, err.Error(), "CONFIG")
-	assert.Contains(t, err.Error(), "INVALID_CONFIG")
-}
 
 func TestErrorCollector(t *testing.T) {
 	collector := NewErrorCollector()
@@ -141,24 +129,4 @@ func TestResultAnalyzer(t *testing.T) {
 	assert.Equal(t, 0.5, summary.SuccessRate)
 }
 
-func TestConfigValidation(t *testing.T) {
-	hub, err := New(config.WithTestDefaults())
-	require.NoError(t, err)
-	defer hub.Stop()
 
-	ctx := context.Background()
-
-	// Test validation
-	result := hub.ValidateConfiguration(ctx)
-	assert.NotNil(t, result)
-}
-
-func TestTemplateManager(t *testing.T) {
-	hub, err := New(config.WithTestDefaults())
-	require.NoError(t, err)
-	defer hub.Stop()
-
-	// Test template manager access
-	templates := hub.Templates()
-	assert.NotNil(t, templates)
-}

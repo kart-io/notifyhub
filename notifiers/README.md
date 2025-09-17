@@ -23,7 +23,8 @@ type Notifier interface {
 - **文件**: `feishu.go`
 - **支持格式**: Text、Markdown、Card
 - **目标类型**: 群组、用户
-- **特殊功能**: @用户提醒、富文本卡片
+- **特殊功能**: @用户提醒、富文本卡片、webhook签名验证
+- **安全特性**: 支持HMAC-SHA256签名验证，提供防重放攻击保护
 
 ### 2. 邮件 (Email)
 - **文件**: `email.go`
@@ -63,11 +64,22 @@ type Target struct {
 ### 创建Notifier实例
 
 ```go
-// 飞书Notifier
+// 飞书Notifier（推荐：带签名验证）
 feishuNotifier := notifiers.NewFeishuNotifier(
     "https://open.feishu.cn/open-apis/bot/v2/hook/xxx",
-    "your-secret",
+    "your-secret",  // 用于签名验证，提供安全保护
     30*time.Second,
+)
+
+// 便捷方法：简单创建（不启用签名验证）
+feishuSimple := notifiers.NewFeishuNotifierSimple(
+    "https://open.feishu.cn/open-apis/bot/v2/hook/xxx",
+)
+
+// 便捷方法：自定义超时（不启用签名验证）
+feishuWithTimeout := notifiers.NewFeishuNotifierWithTimeout(
+    "https://open.feishu.cn/open-apis/bot/v2/hook/xxx",
+    60*time.Second,  // 自定义超时时间
 )
 
 // 邮件Notifier
@@ -238,6 +250,59 @@ notifier := NewEmailNotifierWithRateLimit(
 3. **资源管理**: 实现Shutdown()方法进行优雅清理
 4. **健康检查**: 定期检查外部服务连接状态
 5. **速率限制**: 防止API限流，保护外部服务
+
+## 安全功能
+
+### 飞书 Webhook 签名验证
+
+NotifyHub 支持飞书机器人的安全签名验证功能，防止恶意请求和重放攻击。
+
+#### 签名算法
+- **算法**: HMAC-SHA256
+- **签名字符串**: `timestamp + "\n" + secret`
+- **编码**: Base64
+
+#### 使用方法
+
+**方法一：启用签名验证（推荐）**
+1. **在飞书机器人设置中配置签名密钥**
+2. **在代码中传入对应的 secret**:
+   ```go
+   notifier := notifiers.NewFeishuNotifier(
+       "https://open.feishu.cn/open-apis/bot/v2/hook/xxx",
+       "your-bot-secret",  // 飞书机器人设置中的签名密钥
+       30*time.Second,
+   )
+   ```
+
+**方法二：不使用签名验证（便捷方法）**
+```go
+// 最简单的创建方式
+notifier := notifiers.NewFeishuNotifierSimple(
+    "https://open.feishu.cn/open-apis/bot/v2/hook/xxx",
+)
+
+// 或者自定义超时时间
+notifier := notifiers.NewFeishuNotifierWithTimeout(
+    "https://open.feishu.cn/open-apis/bot/v2/hook/xxx",
+    60*time.Second,
+)
+```
+
+3. **NotifyHub 会自动在每个请求中添加签名头**（仅当启用签名时）:
+   - `timestamp`: Unix 时间戳
+   - `sign`: HMAC-SHA256 签名
+
+#### 安全建议
+- ✅ **生产环境强烈建议启用签名验证**
+- ✅ **定期更换签名密钥**
+- ✅ **妥善保存密钥，不要提交到版本控制**
+- ⚠️ **开发测试环境可以使用便捷方法（`NewFeishuNotifierSimple`）**
+- 📝 **便捷方法适用场景**：
+  - 本地开发调试
+  - 单元测试和集成测试
+  - 快速原型验证
+  - 内网环境（安全性要求较低）
 
 ## 文件说明
 

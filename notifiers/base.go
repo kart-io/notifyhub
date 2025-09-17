@@ -32,6 +32,7 @@ const (
 	FormatText     MessageFormat = "text"
 	FormatMarkdown MessageFormat = "markdown"
 	FormatHTML     MessageFormat = "html"
+	FormatCard     MessageFormat = "card"
 )
 
 // Message represents a notification message
@@ -46,6 +47,7 @@ type Message struct {
 	Metadata  map[string]string      `json:"metadata,omitempty"`
 	Priority  int                    `json:"priority"`        // 1=low, 5=urgent
 	Delay     time.Duration          `json:"delay,omitempty"` // 延迟发送时间
+	CardData  interface{}            `json:"card_data,omitempty"` // 卡片数据，支持平台特定的卡片格式
 	CreatedAt time.Time              `json:"created_at"`
 }
 

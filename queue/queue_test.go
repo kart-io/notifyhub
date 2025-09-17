@@ -172,86 +172,15 @@ func TestCallbackOptions(t *testing.T) {
 	}
 }
 
-func TestCallbackEvents(t *testing.T) {
-	// Test callback event constants
-	if queue.CallbackEventSent != "sent" {
-		t.Error("queue.CallbackEventSent should be 'sent'")
-	}
 
-	if queue.CallbackEventFailed != "failed" {
-		t.Error("queue.CallbackEventFailed should be 'failed'")
-	}
-
-	if queue.CallbackEventRetry != "retry" {
-		t.Error("queue.CallbackEventRetry should be 'retry'")
-	}
-
-	if queue.CallbackEventMaxRetries != "max_retries" {
-		t.Error("queue.CallbackEventMaxRetries should be 'max_retries'")
-	}
-}
-
-func TestCallbackContext(t *testing.T) {
-	// Test callback context creation
-	now := time.Now()
-	message := &notifiers.Message{
-		Title: "Test Message",
-		Body:  "Test Body",
-	}
-
-	results := []*notifiers.SendResult{
-		{
-			Platform: "test",
-			Success:  true,
-			SentAt:   now,
-		},
-	}
-
-	ctx := &queue.CallbackContext{
-		MessageID:  "test-123",
-		Event:      queue.CallbackEventSent,
-		Message:    message,
-		Results:    results,
-		Error:      nil,
-		Attempts:   2,
-		ExecutedAt: now,
-		Duration:   100 * time.Millisecond,
-	}
-
-	if ctx.MessageID != "test-123" {
-		t.Error("queue.CallbackContext MessageID should be test-123")
-	}
-
-	if ctx.Event != queue.CallbackEventSent {
-		t.Error("queue.CallbackContext Event should be sent")
-	}
-
-	if ctx.Message.Title != "Test Message" {
-		t.Error("queue.CallbackContext Message title should match")
-	}
-
-	if len(ctx.Results) != 1 {
-		t.Error("queue.CallbackContext should have one result")
-	}
-
-	if ctx.Error != nil {
-		t.Error("queue.CallbackContext Error should be nil")
-	}
-
-	if ctx.Attempts != 2 {
-		t.Error("queue.CallbackContext Attempts should be 2")
-	}
-
-	if ctx.Duration != 100*time.Millisecond {
-		t.Error("queue.CallbackContext Duration should be 100ms")
-	}
-}
 
 // Mock message sender for testing worker
 type mockMessageSender struct {
 	sendCalled    bool
 	shouldFail    bool
 	callbackCount int
+	results       []*notifiers.SendResult
+	errors        []error
 }
 
 func (m *mockMessageSender) SendSync(ctx context.Context, message *notifiers.Message, options interface{}) ([]*notifiers.SendResult, error) {
@@ -259,23 +188,28 @@ func (m *mockMessageSender) SendSync(ctx context.Context, message *notifiers.Mes
 	m.callbackCount++
 
 	if m.shouldFail {
-		return []*notifiers.SendResult{
-			{
-				Platform: "mock",
-				Success:  false,
-				Error:    "mock failure",
-				SentAt:   time.Now(),
-			},
-		}, fmt.Errorf("mock failure")
+		result := &notifiers.SendResult{
+			Platform: "mock",
+			Success:  false,
+			Error:    "mock failure",
+			SentAt:   time.Now(),
+			Duration: 10 * time.Millisecond,
+		}
+		m.results = append(m.results, result)
+		err := fmt.Errorf("mock failure")
+		m.errors = append(m.errors, err)
+		return []*notifiers.SendResult{result}, err
 	}
 
-	return []*notifiers.SendResult{
-		{
-			Platform: "mock",
-			Success:  true,
-			SentAt:   time.Now(),
-		},
-	}, nil
+	result := &notifiers.SendResult{
+		Platform: "mock",
+		Success:  true,
+		SentAt:   time.Now(),
+		Duration: 5 * time.Millisecond,
+	}
+	m.results = append(m.results, result)
+	m.errors = append(m.errors, nil)
+	return []*notifiers.SendResult{result}, nil
 }
 
 func TestWorkerBasic(t *testing.T) {

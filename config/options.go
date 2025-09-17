@@ -66,6 +66,17 @@ func WithFeishu(webhookURL string, secret string) Option {
 	})
 }
 
+// WithFeishuSimple configures Feishu webhook settings
+func WithFeishuSimple(webhookURL string) Option {
+	return optionFunc(func(c *Config) {
+		c.feishu = &FeishuConfig{
+			WebhookURL: webhookURL,
+			Timeout:    30 * time.Second, // default timeout
+		}
+	})
+}
+
+
 // WithFeishuTimeout sets Feishu timeout
 func WithFeishuTimeout(timeout time.Duration) Option {
 	return optionFunc(func(c *Config) {

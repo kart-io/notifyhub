@@ -80,6 +80,12 @@ func (b *MessageBuilder) Priority(priority int) *MessageBuilder {
 	return b
 }
 
+// CardData sets the custom card data for platforms that support interactive cards
+func (b *MessageBuilder) CardData(cardData interface{}) *MessageBuilder {
+	b.message.CardData = cardData
+	return b
+}
+
 // Target adds a notification target
 func (b *MessageBuilder) Target(target notifiers.Target) *MessageBuilder {
 	b.message.Targets = append(b.message.Targets, target)
@@ -155,6 +161,14 @@ func NewHTML(title, body string) *MessageBuilder {
 		Title(title).
 		Body(body).
 		Format(notifiers.FormatHTML)
+}
+
+// NewCard creates a new card message builder
+func NewCard(title, body string) *MessageBuilder {
+	return NewMessage().
+		Title(title).
+		Body(body).
+		Format(notifiers.FormatCard)
 }
 
 // Additional convenience methods for fluent API
@@ -527,6 +541,11 @@ func (b *MessageBuilder) AsPlainText() *MessageBuilder {
 	return b.Format(notifiers.FormatText)
 }
 
+// AsCard sets the message format to card
+func (b *MessageBuilder) AsCard() *MessageBuilder {
+	return b.Format(notifiers.FormatCard)
+}
+
 // Clone creates a copy of the current builder
 func (b *MessageBuilder) Clone() *MessageBuilder {
 	newBuilder := &MessageBuilder{
@@ -538,6 +557,7 @@ func (b *MessageBuilder) Clone() *MessageBuilder {
 			Priority:  b.message.Priority,
 			Template:  b.message.Template,
 			Delay:     b.message.Delay,
+			CardData:  b.message.CardData,
 			CreatedAt: b.message.CreatedAt,
 		},
 	}
