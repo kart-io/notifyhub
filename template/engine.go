@@ -9,6 +9,7 @@ import (
 	"strings"
 	textTemplate "text/template"
 	"time"
+	"unicode"
 
 	"github.com/kart-io/notifyhub/notifiers"
 )
@@ -37,12 +38,39 @@ func NewEngine() *Engine {
 	return engine
 }
 
+// title implements title case conversion to replace deprecated strings.Title
+func title(s string) string {
+	if s == "" {
+		return s
+	}
+
+	runes := []rune(s)
+	result := make([]rune, len(runes))
+	inWord := false
+
+	for i, r := range runes {
+		if unicode.IsLetter(r) || unicode.IsDigit(r) {
+			if !inWord {
+				result[i] = unicode.ToUpper(r)
+				inWord = true
+			} else {
+				result[i] = unicode.ToLower(r)
+			}
+		} else {
+			result[i] = r
+			inWord = false
+		}
+	}
+
+	return string(result)
+}
+
 // createFuncMap creates template functions
 func createFuncMap() textTemplate.FuncMap {
 	return textTemplate.FuncMap{
 		"upper": strings.ToUpper,
 		"lower": strings.ToLower,
-		"title": strings.Title,
+		"title": title,
 		"trim":  strings.TrimSpace,
 		"now":   time.Now,
 		"formatTime": func(t time.Time, layout string) string {
@@ -229,7 +257,7 @@ Time: {{.CreatedAt.Format "2006-01-02 15:04:05"}}
 ---
 This is an automated alert from NotifyHub`
 
-	e.AddTextTemplate("alert", alertText)
+	_ = e.AddTextTemplate("alert", alertText)
 
 	// Notice template
 	noticeText := `📢 {{.Title}}
@@ -242,7 +270,7 @@ This is an automated alert from NotifyHub`
 
 Sent at {{.CreatedAt.Format "2006-01-02 15:04:05"}}`
 
-	e.AddTextTemplate("notice", noticeText)
+	_ = e.AddTextTemplate("notice", noticeText)
 
 	// Report template
 	reportText := `📊 {{.Title | upper}}
@@ -262,7 +290,7 @@ Summary: {{.Variables.summary}}
 
 Generated on {{.CreatedAt.Format "2006-01-02 15:04:05"}}`
 
-	e.AddTextTemplate("report", reportText)
+	_ = e.AddTextTemplate("report", reportText)
 
 	// HTML Alert template
 	alertHTML := `<!DOCTYPE html>
@@ -295,7 +323,7 @@ Generated on {{.CreatedAt.Format "2006-01-02 15:04:05"}}`
 </body>
 </html>`
 
-	e.AddHTMLTemplate("alert", alertHTML)
+	_ = e.AddHTMLTemplate("alert", alertHTML)
 }
 
 // GetAvailableTemplates returns list of available templates
@@ -349,7 +377,7 @@ func (e *Engine) LoadTemplateFromURL(name, url string, format notifiers.MessageF
 	if err != nil {
 		return fmt.Errorf("fetch template: %v", err)
 	}
-	defer resp.Body.Close()
+	defer func() { _ = resp.Body.Close() }()
 
 	if resp.StatusCode != http.StatusOK {
 		return fmt.Errorf("HTTP %d: %s", resp.StatusCode, resp.Status)

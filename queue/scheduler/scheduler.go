@@ -137,6 +137,7 @@ func (s *MessageScheduler) processScheduledMessages() {
 			if _, err := s.queue.Enqueue(s.ctx, msg); err != nil {
 				// TODO: Log error or handle failure
 				// Could implement a retry mechanism here
+				_ = err // Explicitly acknowledge error handling is TODO
 			}
 		}(delayedMsg.Message)
 	}

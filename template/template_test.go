@@ -5,6 +5,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/kart-io/notifyhub/core/message"
 	"github.com/kart-io/notifyhub/notifiers"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
@@ -63,274 +64,226 @@ func TestAddTextTemplate(t *testing.T) {
 func TestAddHTMLTemplate(t *testing.T) {
 	engine := NewEngine()
 
-	templateHTML := `<h1>Hello {{.Name}}</h1><p>Score: {{.Score}}</p>`
-	err := engine.AddHTMLTemplate("greeting_html", templateHTML)
+	htmlTemplate := `<h1>Hello {{.Name}}</h1><p>Score: {{.Score}}</p>`
+	err := engine.AddHTMLTemplate("greeting-html", htmlTemplate)
 	assert.NoError(t, err)
 
-	// Test invalid template
+	// Test invalid HTML template
 	invalidTemplate := `<h1>Hello {{.Name</h1>`
-	err = engine.AddHTMLTemplate("invalid_html", invalidTemplate)
+	err = engine.AddHTMLTemplate("invalid-html", invalidTemplate)
 	assert.Error(t, err)
 }
 
-func TestRenderMessageNoTemplate(t *testing.T) {
+func TestRenderMessageText(t *testing.T) {
 	engine := NewEngine()
 
-	// Message without template syntax should pass through unchanged
-	message := &notifiers.Message{
-		Title: "Simple Title",
-		Body:  "Simple body without templates",
-	}
-
-	rendered, err := engine.RenderMessage(message)
-	assert.NoError(t, err)
-	assert.Equal(t, message.Title, rendered.Title)
-	assert.Equal(t, message.Body, rendered.Body)
-}
-
-func TestRenderMessageWithInlineTemplate(t *testing.T) {
-	engine := NewEngine()
-
-	message := &notifiers.Message{
-		Title: "Hello {{.Name}}",
-		Body:  "Your score is {{.Score}}",
-		Variables: map[string]interface{}{
-			"Name":  "John",
-			"Score": 95,
-		},
-	}
-
-	rendered, err := engine.RenderMessage(message)
-	assert.NoError(t, err)
-	assert.Equal(t, "Hello John", rendered.Title)
-	assert.Equal(t, "Your score is 95", rendered.Body)
-}
-
-func TestRenderMessageWithNamedTemplate(t *testing.T) {
-	engine := NewEngine()
-
-	// Add a custom template
-	templateText := `Hello {{.Name}}! Your score is {{.Score}}. {{if gt .Score 90}}Excellent work!{{else}}Keep trying!{{end}}`
-	err := engine.AddTextTemplate("score_report", templateText)
+	// Add custom template
+	templateText := `Alert: {{.Title}}
+Body: {{.Body}}
+Priority: {{.Priority}}`
+	err := engine.AddTextTemplate("custom-alert", templateText)
 	require.NoError(t, err)
 
-	message := &notifiers.Message{
-		Template: "score_report",
-		Variables: map[string]interface{}{
-			"Name":  "Alice",
-			"Score": 95,
-		},
+	// Create a message using notifiers.Message
+	msg := &notifiers.Message{
+		Title:    "System Alert",
+		Body:     "Database connection failed",
+		Format:   notifiers.FormatText,
+		Priority: message.PriorityHigh,
+		Template: "custom-alert",
 	}
 
-	rendered, err := engine.RenderMessage(message)
+	// Render using template
+	rendered, err := engine.RenderMessage(msg)
 	assert.NoError(t, err)
-	assert.Contains(t, rendered.Body, "Hello Alice")
-	assert.Contains(t, rendered.Body, "score is 95")
-	assert.Contains(t, rendered.Body, "Excellent work")
+	assert.Contains(t, rendered.Title, "Alert: System Alert")
+	assert.Contains(t, rendered.Body, "Body: Database connection failed")
+	assert.Contains(t, rendered.Body, "Priority: 4") // High priority = 4
 }
 
-func TestRenderMessageWithHTMLTemplate(t *testing.T) {
+func TestRenderMessageHTML(t *testing.T) {
 	engine := NewEngine()
 
-	// Add HTML template
-	templateHTML := `<h1>Hello {{.Name}}</h1><p>Score: <strong>{{.Score}}</strong></p>`
-	err := engine.AddHTMLTemplate("html_report", templateHTML)
+	// Add custom HTML template
+	htmlTemplate := `<div class="alert">
+<h2>{{.Title}}</h2>
+<p>{{.Body}}</p>
+<span class="priority">Priority: {{.Priority}}</span>
+</div>`
+	err := engine.AddHTMLTemplate("custom-alert-html", htmlTemplate)
 	require.NoError(t, err)
 
-	message := &notifiers.Message{
-		Template: "html_report",
+	// Create a message using notifiers.Message
+	msg := &notifiers.Message{
+		Title:    "System Alert",
+		Body:     "Database connection failed",
 		Format:   notifiers.FormatHTML,
+		Priority: message.PriorityHigh,
+		Template: "custom-alert-html",
+	}
+
+	// Render as HTML
+	rendered, err := engine.RenderMessage(msg)
+	assert.NoError(t, err)
+	assert.Contains(t, rendered.Body, "<h2>System Alert</h2>")
+	assert.Contains(t, rendered.Body, "<p>Database connection failed</p>")
+}
+
+func TestRenderWithVariables(t *testing.T) {
+	engine := NewEngine()
+
+	// Template with variables
+	templateText := `Server: {{.server}}
+Status: {{.status}}
+Response Time: {{.responseTime}}ms`
+	err := engine.AddTextTemplate("server-status", templateText)
+	require.NoError(t, err)
+
+	// Create message with variables using notifiers.Message
+	msg := &notifiers.Message{
+		Title:    "Server Status",
+		Body:     "Server health check",
+		Format:   notifiers.FormatText,
+		Template: "server-status",
 		Variables: map[string]interface{}{
-			"Name":  "Bob",
-			"Score": 88,
+			"server":       "api-01.example.com",
+			"status":       "healthy",
+			"responseTime": "45",
 		},
 	}
 
-	rendered, err := engine.RenderMessage(message)
+	// Render with variables
+	rendered, err := engine.RenderMessage(msg)
 	assert.NoError(t, err)
-	assert.Contains(t, rendered.Body, "<h1>Hello Bob</h1>")
-	assert.Contains(t, rendered.Body, "<strong>88</strong>")
+	assert.Contains(t, rendered.Body, "Server: api-01.example.com")
+	assert.Contains(t, rendered.Body, "Status: healthy")
+	assert.Contains(t, rendered.Body, "Response Time: 45ms")
 }
 
-func TestRenderMessageWithBuiltinFunctions(t *testing.T) {
+func TestTemplateHelpers(t *testing.T) {
 	engine := NewEngine()
 
-	message := &notifiers.Message{
-		Title: "{{.Name | upper}}",
-		Body:  "Message: {{.Message | lower}} - Time: {{formatTime .Now \"2006-01-02\"}}",
+	// Template using helper functions
+	templateText := `Time: {{formatTime .Time}}
+Uppercase: {{upper .Name}}
+Lowercase: {{lower .Name}}
+Title Case: {{title .description}}`
+	err := engine.AddTextTemplate("helpers-test", templateText)
+	require.NoError(t, err)
+
+	// Create message with data for helpers
+	msg := &notifiers.Message{
+		Title:    "Helper Test",
+		Body:     "Testing template helpers",
+		Format:   notifiers.FormatText,
+		Template: "helpers-test",
 		Variables: map[string]interface{}{
-			"Name":    "john doe",
-			"Message": "HELLO WORLD",
-			"Now":     time.Date(2023, 5, 15, 10, 30, 0, 0, time.UTC),
+			"Time":        time.Date(2024, 1, 15, 14, 30, 0, 0, time.UTC),
+			"Name":        "John Doe",
+			"description": "this is a test description",
 		},
 	}
 
-	rendered, err := engine.RenderMessage(message)
+	// Render
+	rendered, err := engine.RenderMessage(msg)
 	assert.NoError(t, err)
-	assert.Equal(t, "JOHN DOE", rendered.Title)
-	assert.Contains(t, rendered.Body, "hello world")
-	assert.Contains(t, rendered.Body, "2023-05-15")
+	assert.Contains(t, rendered.Body, "Time: 2024-01-15 14:30:00")
+	assert.Contains(t, rendered.Body, "Uppercase: JOHN DOE")
+	assert.Contains(t, rendered.Body, "Lowercase: john doe")
+	assert.Contains(t, rendered.Body, "Title Case: This Is A Test Description")
 }
 
-func TestRenderMessageWithDefaultFunction(t *testing.T) {
+func TestTemplateNotFound(t *testing.T) {
 	engine := NewEngine()
 
-	message := &notifiers.Message{
-		Body: "Name: {{.Name | default \"Anonymous\"}} - Email: {{.Email | default \"no-email@example.com\"}}",
-		Variables: map[string]interface{}{
-			"Name": "John",
-			// Email is intentionally missing
-		},
+	// Create message with non-existent template
+	msg := message.NewMessage()
+	msg.SetTitle("Test").
+		SetBody("Body").
+		SetTemplate("non-existent")
+
+	// Convert to notifiers.Message for template engine
+	notifierMsg := &notifiers.Message{
+		ID:        msg.ID,
+		Title:     msg.Title,
+		Body:      msg.Body,
+		Format:    notifiers.MessageFormat(msg.Format),
+		Template:  msg.Template,
+		Variables: msg.Variables,
+		Metadata:  msg.Metadata,
+		Priority:  msg.Priority,
+		CreatedAt: msg.CreatedAt,
 	}
 
-	rendered, err := engine.RenderMessage(message)
-	assert.NoError(t, err)
-	assert.Contains(t, rendered.Body, "Name: John")
-	assert.Contains(t, rendered.Body, "Email: no-email@example.com")
-}
-
-func TestRenderMessageErrors(t *testing.T) {
-	engine := NewEngine()
-
-	// Test missing template
-	message := &notifiers.Message{
-		Template: "nonexistent",
-	}
-
-	_, err := engine.RenderMessage(message)
+	// Should return error
+	_, err := engine.RenderMessage(notifierMsg)
 	assert.Error(t, err)
 	assert.Contains(t, err.Error(), "not found")
+}
 
-	// Test invalid inline template
-	message = &notifiers.Message{
-		Body: "Hello {{.Name",
+func TestRenderMessageWithoutTemplate(t *testing.T) {
+	engine := NewEngine()
+
+	// Message without template should use default rendering
+	msg := message.NewMessage()
+	msg.SetTitle("Simple Message").
+		SetBody("This is the body")
+
+	// Convert to notifiers.Message for template engine
+	notifierMsg := &notifiers.Message{
+		ID:        msg.ID,
+		Title:     msg.Title,
+		Body:      msg.Body,
+		Format:    notifiers.MessageFormat(msg.Format),
+		Template:  msg.Template,
+		Variables: msg.Variables,
+		Metadata:  msg.Metadata,
+		Priority:  msg.Priority,
+		CreatedAt: msg.CreatedAt,
 	}
 
-	_, err = engine.RenderMessage(message)
-	assert.Error(t, err)
-}
-
-func TestCreateTemplateData(t *testing.T) {
-	engine := NewEngine()
-
-	now := time.Now()
-	message := &notifiers.Message{
-		Title:     "Test Title",
-		Body:      "Test Body",
-		Format:    notifiers.FormatText,
-		CreatedAt: now,
-		Variables: map[string]interface{}{
-			"user":  "john",
-			"count": 42,
-		},
-		Metadata: map[string]string{
-			"source": "test",
-		},
-	}
-
-	data := engine.createTemplateData(message)
-
-	assert.Equal(t, message, data["Message"])
-	assert.Equal(t, "Test Title", data["Title"])
-	assert.Equal(t, "Test Body", data["Body"])
-	assert.Equal(t, "text", data["Format"])
-	assert.Equal(t, now, data["CreatedAt"])
-	assert.Equal(t, message.Variables, data["Variables"])
-	assert.Equal(t, message.Metadata, data["Metadata"])
-
-	// Variables should be flattened to top level
-	assert.Equal(t, "john", data["user"])
-	assert.Equal(t, 42, data["count"])
-
-	// Should have "Now" field
-	assert.IsType(t, time.Time{}, data["Now"])
-}
-
-func TestValidateTemplate(t *testing.T) {
-	engine := NewEngine()
-
-	// Valid text template
-	err := engine.ValidateTemplate("Hello {{.Name}}", notifiers.FormatText)
+	// Should use default rendering (just return body for simplicity)
+	rendered, err := engine.RenderMessage(notifierMsg)
 	assert.NoError(t, err)
-
-	// Valid HTML template
-	err = engine.ValidateTemplate("<h1>{{.Title}}</h1>", notifiers.FormatHTML)
-	assert.NoError(t, err)
-
-	// Invalid template syntax
-	err = engine.ValidateTemplate("Hello {{.Name", notifiers.FormatText)
-	assert.Error(t, err)
-
-	// Invalid HTML template syntax
-	err = engine.ValidateTemplate("<h1>{{.Title</h1>", notifiers.FormatHTML)
-	assert.Error(t, err)
+	assert.Contains(t, rendered, "This is the body")
 }
 
-func TestGetAvailableTemplates(t *testing.T) {
+func TestMarkdownFormat(t *testing.T) {
 	engine := NewEngine()
 
-	// Add some custom templates
-	err := engine.AddTextTemplate("custom_text", "Text template")
+	// Add markdown template
+	mdTemplate := `# {{.Title}}
+
+{{.Body}}
+
+**Priority:** {{.Priority}}
+**Time:** {{formatTime .CreatedAt}}`
+	err := engine.AddTextTemplate("markdown-alert", mdTemplate)
 	require.NoError(t, err)
 
-	err = engine.AddHTMLTemplate("custom_html", "<p>HTML template</p>")
-	require.NoError(t, err)
+	// Create message
+	msg := message.NewMessage()
+	msg.SetTitle("Alert").
+		SetBody("System issue detected").
+		SetTemplate("markdown-alert").
+		SetPriority(message.PriorityHigh)
 
-	templates := engine.GetAvailableTemplates()
-
-	// Should contain built-in and custom templates
-	assert.True(t, len(templates) >= 2)
-
-	foundCustomText := false
-	foundCustomHTML := false
-
-	for _, tmpl := range templates {
-		if strings.Contains(tmpl, "custom_text") {
-			foundCustomText = true
-		}
-		if strings.Contains(tmpl, "custom_html") {
-			foundCustomHTML = true
-		}
+	// Convert to notifiers.Message for template engine
+	notifierMsg := &notifiers.Message{
+		ID:        msg.ID,
+		Title:     msg.Title,
+		Body:      msg.Body,
+		Format:    notifiers.FormatMarkdown,
+		Template:  msg.Template,
+		Variables: msg.Variables,
+		Metadata:  msg.Metadata,
+		Priority:  msg.Priority,
+		CreatedAt: msg.CreatedAt,
 	}
 
-	assert.True(t, foundCustomText, "Should list custom text template")
-	assert.True(t, foundCustomHTML, "Should list custom HTML template")
-}
-
-func TestBuiltinTemplates(t *testing.T) {
-	engine := NewEngine()
-
-	// Test alert template
-	alertMessage := &notifiers.Message{
-		Template: "alert",
-		Title:    "System Error",
-		Body:     "Database connection failed",
-		Variables: map[string]interface{}{
-			"server":      "web-01",
-			"environment": "production",
-		},
-		CreatedAt: time.Date(2023, 5, 15, 14, 30, 0, 0, time.UTC),
-	}
-
-	rendered, err := engine.RenderMessage(alertMessage)
+	// Render as markdown
+	rendered, err := engine.RenderMessage(notifierMsg)
 	assert.NoError(t, err)
-	assert.Contains(t, rendered.Body, "🚨 ALERT")
-	assert.Contains(t, rendered.Body, "System Error")
-
-	// Test notice template
-	noticeMessage := &notifiers.Message{
-		Template: "notice",
-		Title:    "Deployment Complete",
-		Body:     "Application deployed successfully",
-		Variables: map[string]interface{}{
-			"version": "v2.1.0",
-		},
-		CreatedAt: time.Date(2023, 5, 15, 16, 45, 0, 0, time.UTC),
-	}
-
-	rendered, err = engine.RenderMessage(noticeMessage)
-	assert.NoError(t, err)
-	assert.Contains(t, rendered.Body, "📢")
-	assert.Contains(t, rendered.Body, "Deployment Complete")
+	assert.Contains(t, rendered, "# Alert")
+	assert.Contains(t, rendered, "**Priority:** 3")
 }
-

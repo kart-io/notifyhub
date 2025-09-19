@@ -41,7 +41,7 @@ func (l LogLevel) String() string {
 }
 
 // Interface defines the logger interface that NotifyHub uses
-// This follows GORM's logger interface design pattern
+// This follows GORM's logger interface design pattern exactly
 type Interface interface {
 	// LogMode sets the log level and returns a new logger instance
 	LogMode(level LogLevel) Interface
@@ -59,7 +59,8 @@ type Interface interface {
 	Debug(ctx context.Context, msg string, data ...interface{})
 
 	// Trace logs message sending operations with duration (like GORM's SQL trace)
-	Trace(ctx context.Context, begin time.Time, fc func() (operation string, targets int64), err error)
+	// Now supports flexible key-value pairs like other log methods for more consistent interface
+	Trace(ctx context.Context, begin time.Time, fc func() (operation string, targets int64), err error, data ...interface{})
 }
 
 // Writer defines the interface for log output (like GORM's Writer)

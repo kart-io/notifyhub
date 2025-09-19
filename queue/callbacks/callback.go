@@ -11,7 +11,7 @@ import (
 	"net/http"
 	"time"
 
-	"github.com/kart-io/notifyhub/notifiers"
+	"github.com/kart-io/notifyhub/core/sending"
 	"github.com/kart-io/notifyhub/queue/core"
 )
 
@@ -33,8 +33,8 @@ const (
 type CallbackContext struct {
 	MessageID  string                  `json:"message_id"`
 	Event      CallbackEvent           `json:"event"`
-	Message    *notifiers.Message      `json:"message"`
-	Results    []*notifiers.SendResult `json:"results,omitempty"`
+	Message    interface{}             `json:"message"` // Can be *message.Message
+	Results    *sending.SendingResults `json:"results,omitempty"`
 	Error      error                   `json:"error,omitempty"`
 	Attempts   int                     `json:"attempts"`
 	ExecutedAt time.Time               `json:"executed_at"`
@@ -118,7 +118,7 @@ func NewCallbackExecutor() *CallbackExecutor {
 }
 
 // ExecuteCallbacks executes all callbacks for a given event
-func (ce *CallbackExecutor) ExecuteCallbacks(ctx context.Context, event CallbackEvent, queueMsg *core.Message, results []*notifiers.SendResult, err error, duration time.Duration) {
+func (ce *CallbackExecutor) ExecuteCallbacks(ctx context.Context, event CallbackEvent, queueMsg *core.Message, results *sending.SendingResults, err error, duration time.Duration) {
 	// Type assert callbacks to our CallbackOptions type
 	callbacks, ok := queueMsg.Callbacks.(*CallbackOptions)
 	if !ok || callbacks == nil {
@@ -224,7 +224,7 @@ func (ce *CallbackExecutor) executeWebhookCallback(ctx context.Context, callback
 		log.Printf("Webhook failed for message %s: %v (took %v)", callbackCtx.MessageID, err, duration)
 		return
 	}
-	defer resp.Body.Close()
+	defer func() { _ = resp.Body.Close() }()
 
 	if resp.StatusCode >= 200 && resp.StatusCode < 300 {
 		log.Printf("Webhook succeeded for message %s: HTTP %d (took %v)", callbackCtx.MessageID, resp.StatusCode, duration)

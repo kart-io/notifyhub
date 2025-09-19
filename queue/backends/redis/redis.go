@@ -90,7 +90,7 @@ func NewRedisQueue(options *RedisQueueOptions) (*RedisQueue, error) {
 	// Test connection
 	ctx := context.Background()
 	if err := client.Ping(ctx).Err(); err != nil {
-		client.Close()
+		_ = client.Close()
 		return nil, fmt.Errorf("redis connection failed: %v", err)
 	}
 
@@ -112,7 +112,7 @@ func NewRedisQueueWithOptions(options *RedisQueueOptions) (*RedisQueue, error) {
 	// Test connection
 	ctx := context.Background()
 	if err := client.Ping(ctx).Err(); err != nil {
-		client.Close()
+		_ = client.Close()
 		return nil, fmt.Errorf("redis connection failed: %v", err)
 	}
 
@@ -154,7 +154,7 @@ func newRedisQueueInternal(client *redis.Client, config *RedisQueueConfig, exter
 	if err := q.initializeStream(); err != nil {
 		cancel()
 		if !externalClient {
-			client.Close()
+			_ = client.Close()
 		}
 		return nil, fmt.Errorf("initialize stream failed: %v", err)
 	}
@@ -361,6 +361,3 @@ func (r *RedisQueue) Health(ctx context.Context) error {
 func generateID() string {
 	return strconv.FormatInt(time.Now().UnixNano(), 36)
 }
-
-// Update Message struct to include StreamID for Redis
-// This should be added to the Message struct in queue.go

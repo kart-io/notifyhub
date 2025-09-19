@@ -6,6 +6,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/kart-io/notifyhub/config/routing"
 	"github.com/kart-io/notifyhub/logger"
 	"github.com/kart-io/notifyhub/queue"
 )
@@ -16,13 +17,18 @@ import (
 
 // Config holds NotifyHub configuration
 type Config struct {
-	feishu       *FeishuConfig
-	email        *EmailConfig
-	queue        *QueueConfig
-	routing      *RoutingConfig
-	telemetry    *TelemetryConfig
-	logger       logger.Interface
-	mockNotifier *MockNotifierConfig
+	feishu        *FeishuConfig
+	email         *EmailConfig
+	queue         *QueueConfigOptions
+	routing       []routing.Rule
+	telemetry     *TelemetryConfig
+	logger        logger.Interface
+	mockNotifier  *MockNotifierConfig
+
+	// 外部队列实现支持
+	queueConfigs        map[string]interface{}     // 队列类型特定配置
+	externalQueue       queue.ExternalQueue        // 外部队列实例
+	externalQueueFactory queue.ExternalQueueFactory // 外部队列工厂
 }
 
 // MockNotifierConfig holds mock notifier configuration
@@ -75,7 +81,6 @@ func WithFeishuSimple(webhookURL string) Option {
 		}
 	})
 }
-
 
 // WithFeishuTimeout sets Feishu timeout
 func WithFeishuTimeout(timeout time.Duration) Option {
@@ -201,20 +206,30 @@ func WithMockNotifierDelay(delay time.Duration) Option {
 // Queue Configuration Options
 // ================================
 
+// QueueConfig holds basic queue configuration
 type QueueConfig struct {
-	Type        string
-	BufferSize  int
-	Workers     int
+	Enabled    bool
+	Type       string // "memory", "redis"
+	BufferSize int
+	Workers    int
+}
+
+// QueueConfigOptions extends the base QueueConfig with runtime options
+type QueueConfigOptions struct {
+	QueueConfig
 	RetryPolicy *queue.RetryPolicy
 }
 
 // WithQueue configures queue settings
 func WithQueue(queueType string, bufferSize, workers int) Option {
 	return optionFunc(func(c *Config) {
-		c.queue = &QueueConfig{
-			Type:        queueType,
-			BufferSize:  bufferSize,
-			Workers:     workers,
+		c.queue = &QueueConfigOptions{
+			QueueConfig: QueueConfig{
+				Enabled:    true,
+				Type:       queueType,
+				BufferSize: bufferSize,
+				Workers:    workers,
+			},
 			RetryPolicy: queue.DefaultRetryPolicy(),
 		}
 	})
@@ -232,10 +247,13 @@ func WithQueueRetryPolicy(policy *queue.RetryPolicy) Option {
 // WithQueueFromEnv configures queue from environment variables
 func WithQueueFromEnv() Option {
 	return optionFunc(func(c *Config) {
-		c.queue = &QueueConfig{
-			Type:       getEnvOrDefault("NOTIFYHUB_QUEUE_TYPE", "memory"),
-			BufferSize: getEnvIntOrDefault("NOTIFYHUB_QUEUE_BUFFER_SIZE", 1000),
-			Workers:    getEnvIntOrDefault("NOTIFYHUB_QUEUE_WORKERS", 2),
+		c.queue = &QueueConfigOptions{
+			QueueConfig: QueueConfig{
+				Enabled:    true,
+				Type:       getEnvOrDefault("NOTIFYHUB_QUEUE_TYPE", "memory"),
+				BufferSize: getEnvIntOrDefault("NOTIFYHUB_QUEUE_BUFFER_SIZE", 1000),
+				Workers:    getEnvIntOrDefault("NOTIFYHUB_QUEUE_WORKERS", 2),
+			},
 			RetryPolicy: &queue.RetryPolicy{
 				MaxRetries:      getEnvIntOrDefault("NOTIFYHUB_RETRY_MAX", 3),
 				InitialInterval: getEnvDurationOrDefault("NOTIFYHUB_RETRY_INTERVAL", 30*time.Second),
@@ -249,67 +267,18 @@ func WithQueueFromEnv() Option {
 // Routing Configuration Options
 // ================================
 
-type RoutingConfig struct {
-	Rules []RoutingRule
-}
-
-type RoutingRule struct {
-	Name       string
-	Priority   int // Higher values = higher priority
-	Enabled    bool
-	Conditions RuleConditions
-	Actions    []RuleAction
-}
-
-type RuleConditions struct {
-	MessageType []string
-	Priority    []int
-	Metadata    map[string]string
-}
-
-type RuleAction struct {
-	Type      string // "route"
-	Platforms []string
-}
-
 // WithRouting configures routing rules
-func WithRouting(rules ...RoutingRule) Option {
+func WithRouting(rules ...routing.Rule) Option {
 	return optionFunc(func(c *Config) {
-		c.routing = &RoutingConfig{
-			Rules: rules,
-		}
+		c.routing = rules
 	})
 }
 
-// WithDefaultRouting configures default routing rules
+// WithDefaultRouting configures basic routing rules
 func WithDefaultRouting() Option {
 	return optionFunc(func(c *Config) {
-		c.routing = &RoutingConfig{
-			Rules: []RoutingRule{
-				{
-					Name:     "high_priority_all",
-					Priority: 100, // High priority rule
-					Enabled:  true,
-					Conditions: RuleConditions{
-						Priority: []int{4, 5},
-					},
-					Actions: []RuleAction{
-						{Type: "route", Platforms: []string{"feishu", "email"}},
-					},
-				},
-				{
-					Name:     "alerts_to_feishu",
-					Priority: 50, // Medium priority rule
-					Enabled:  true,
-					Conditions: RuleConditions{
-						Metadata: map[string]string{"type": "alert"},
-					},
-					Actions: []RuleAction{
-						{Type: "route", Platforms: []string{"feishu"}},
-					},
-				},
-			},
-		}
+		// Keep routing minimal for toolkit - users can add their own rules
+		c.routing = []routing.Rule{}
 	})
 }
 
@@ -318,15 +287,15 @@ func WithDefaultRouting() Option {
 // ================================
 
 type TelemetryConfig struct {
-	ServiceName    string            `json:"service_name" yaml:"service_name"`
-	ServiceVersion string            `json:"service_version" yaml:"service_version"`
-	Environment    string            `json:"environment" yaml:"environment"`
-	OTLPEndpoint   string            `json:"otlp_endpoint" yaml:"otlp_endpoint"`
-	OTLPHeaders    map[string]string `json:"otlp_headers" yaml:"otlp_headers"`
-	TracingEnabled bool              `json:"tracing_enabled" yaml:"tracing_enabled"`
-	SampleRate     float64           `json:"sample_rate" yaml:"sample_rate"`
-	MetricsEnabled bool              `json:"metrics_enabled" yaml:"metrics_enabled"`
-	Enabled        bool              `json:"enabled" yaml:"enabled"`
+	ServiceName    string
+	ServiceVersion string
+	Environment    string
+	OTLPEndpoint   string
+	OTLPHeaders    map[string]string
+	TracingEnabled bool
+	SampleRate     float64
+	MetricsEnabled bool
+	Enabled        bool
 }
 
 // WithTelemetry configures telemetry settings
@@ -345,24 +314,18 @@ func WithTelemetry(serviceName, serviceVersion, environment string, otlpEndpoint
 	})
 }
 
-// WithTelemetryFromEnv configures telemetry from environment variables
+// WithTelemetryFromEnv configures telemetry from environment variables (simplified)
 func WithTelemetryFromEnv() Option {
 	return optionFunc(func(c *Config) {
 		if getEnvBoolOrDefault("NOTIFYHUB_TELEMETRY_ENABLED", false) {
-			headers := make(map[string]string)
-			if authHeader := getEnvOrDefault("NOTIFYHUB_OTLP_AUTH", ""); authHeader != "" {
-				headers["Authorization"] = authHeader
-			}
-
 			c.telemetry = &TelemetryConfig{
 				ServiceName:    getEnvOrDefault("NOTIFYHUB_SERVICE_NAME", "notifyhub"),
 				ServiceVersion: getEnvOrDefault("NOTIFYHUB_SERVICE_VERSION", "1.2.0"),
 				Environment:    getEnvOrDefault("NOTIFYHUB_ENVIRONMENT", "development"),
 				OTLPEndpoint:   getEnvOrDefault("NOTIFYHUB_OTLP_ENDPOINT", "http://localhost:4318"),
-				OTLPHeaders:    headers,
-				TracingEnabled: getEnvBoolOrDefault("NOTIFYHUB_TRACING_ENABLED", true),
-				MetricsEnabled: getEnvBoolOrDefault("NOTIFYHUB_METRICS_ENABLED", true),
-				SampleRate:     getEnvFloatOrDefault("NOTIFYHUB_SAMPLE_RATE", 1.0),
+				TracingEnabled: true,
+				MetricsEnabled: true,
+				SampleRate:     1.0,
 				Enabled:        true,
 			}
 		}
@@ -407,14 +370,20 @@ func WithSilentLogger() Option {
 // Preset Option Combinations
 // ================================
 
-// WithDefaults applies default configuration from environment variables
+// WithDefaults applies sensible default configuration for quick setup
 func WithDefaults() Option {
 	return optionFunc(func(c *Config) {
+		// Load from environment variables if available
 		WithFeishuFromEnv().apply(c)
 		WithEmailFromEnv().apply(c)
 		WithQueueFromEnv().apply(c)
-		WithTelemetryFromEnv().apply(c)
-		WithDefaultRouting().apply(c)
+
+		// Apply default queue if none configured
+		if c.queue == nil {
+			WithQueue("memory", 1000, 4).apply(c)
+		}
+
+		// Apply default logger if none configured
 		if c.logger == nil {
 			WithDefaultLogger(logger.Warn).apply(c)
 		}
@@ -470,12 +439,12 @@ func (c *Config) Email() *EmailConfig {
 }
 
 // Queue returns Queue configuration
-func (c *Config) Queue() *QueueConfig {
+func (c *Config) Queue() *QueueConfigOptions {
 	return c.queue
 }
 
-// Routing returns Routing configuration
-func (c *Config) Routing() *RoutingConfig {
+// Routing returns routing rules
+func (c *Config) Routing() []routing.Rule {
 	return c.routing
 }
 
@@ -492,6 +461,110 @@ func (c *Config) Logger() logger.Interface {
 // MockNotifier returns MockNotifier configuration
 func (c *Config) MockNotifier() *MockNotifierConfig {
 	return c.mockNotifier
+}
+
+// QueueConfigs returns queue type specific configurations
+func (c *Config) QueueConfigs() map[string]interface{} {
+	return c.queueConfigs
+}
+
+// ExternalQueue returns external queue instance
+func (c *Config) ExternalQueue() queue.ExternalQueue {
+	return c.externalQueue
+}
+
+// ExternalQueueFactory returns external queue factory
+func (c *Config) ExternalQueueFactory() queue.ExternalQueueFactory {
+	return c.externalQueueFactory
+}
+
+// ================================
+// External Queue Implementation Options
+// ================================
+
+// WithExternalQueueConfig 使用外部队列实现配置
+func WithExternalQueueConfig(queueType string, config map[string]interface{}) Option {
+	return optionFunc(func(c *Config) {
+		// 提取基础配置
+		bufferSize, _ := config["buffer_size"].(int)
+		if bufferSize <= 0 {
+			bufferSize = 1000
+		}
+
+		workers, _ := config["workers"].(int)
+		if workers <= 0 {
+			workers = 4
+		}
+
+		c.queue = &QueueConfigOptions{
+			QueueConfig: QueueConfig{
+				Enabled:    true,
+				Type:       queueType,
+				BufferSize: bufferSize,
+				Workers:    workers,
+			},
+			RetryPolicy: queue.DefaultRetryPolicy(),
+		}
+
+		// 存储队列特定配置
+		if c.queueConfigs == nil {
+			c.queueConfigs = make(map[string]interface{})
+		}
+		c.queueConfigs[queueType] = config
+	})
+}
+
+// WithExternalQueue 直接使用外部队列实例（最灵活）
+func WithExternalQueue(instance queue.ExternalQueue) Option {
+	return optionFunc(func(c *Config) {
+		c.queue = &QueueConfigOptions{
+			QueueConfig: QueueConfig{
+				Enabled:    true,
+				Type:       "external",
+				BufferSize: 1000, // 默认值，实际由外部队列管理
+				Workers:    4,    // 默认值，实际由外部队列管理
+			},
+			RetryPolicy: queue.DefaultRetryPolicy(),
+		}
+
+		// 存储外部队列实例
+		c.externalQueue = instance
+	})
+}
+
+// WithExternalQueueFactory 使用外部队列工厂
+func WithExternalQueueFactory(factory queue.ExternalQueueFactory, config map[string]interface{}) Option {
+	return optionFunc(func(c *Config) {
+		queueType := factory.Name()
+
+		// 提取基础配置
+		bufferSize, _ := config["buffer_size"].(int)
+		if bufferSize <= 0 {
+			bufferSize = 1000
+		}
+
+		workers, _ := config["workers"].(int)
+		if workers <= 0 {
+			workers = 4
+		}
+
+		c.queue = &QueueConfigOptions{
+			QueueConfig: QueueConfig{
+				Enabled:    true,
+				Type:       queueType,
+				BufferSize: bufferSize,
+				Workers:    workers,
+			},
+			RetryPolicy: queue.DefaultRetryPolicy(),
+		}
+
+		// 存储工厂和配置
+		if c.queueConfigs == nil {
+			c.queueConfigs = make(map[string]interface{})
+		}
+		c.queueConfigs[queueType] = config
+		c.externalQueueFactory = factory
+	})
 }
 
 // ================================
@@ -517,15 +590,6 @@ func getEnvIntOrDefault(key string, defaultValue int) int {
 func getEnvBoolOrDefault(key string, defaultValue bool) bool {
 	if value := os.Getenv(key); value != "" {
 		return strings.ToLower(value) == "true"
-	}
-	return defaultValue
-}
-
-func getEnvFloatOrDefault(key string, defaultValue float64) float64 {
-	if value := os.Getenv(key); value != "" {
-		if f, err := strconv.ParseFloat(value, 64); err == nil {
-			return f
-		}
 	}
 	return defaultValue
 }

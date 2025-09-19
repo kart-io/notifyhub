@@ -1,0 +1,71 @@
+graph TD
+    %% 定义样式
+    classDef corePackage fill:#e1f5fe,stroke:#01579b,stroke-width:2px
+    classDef infrastructurePackage fill:#f3e5f5,stroke:#4a148c,stroke-width:2px
+    classDef queueSubpackage fill:#fff3e0,stroke:#e65100,stroke-width:1px
+    classDef problemPackage fill:#ffebee,stroke:#c62828,stroke-width:2px
+
+    %% 基础设施层（Layer 0）
+    internal[internal<br/>工具包]:::infrastructurePackage
+    logger[logger<br/>日志接口]:::infrastructurePackage
+    monitoring[monitoring<br/>监控指标]:::infrastructurePackage
+    retry[queue/retry<br/>重试策略]:::queueSubpackage
+
+    %% 第一层（Layer 1）
+    notifiers[notifiers<br/>平台适配器]:::corePackage
+    queueCore[queue/core<br/>队列核心]:::queueSubpackage
+
+    %% 第二层（Layer 2）
+    template[template<br/>模板引擎]:::corePackage
+    queueCallbacks[queue/callbacks<br/>回调处理]:::queueSubpackage
+    queueScheduler[queue/scheduler<br/>消息调度]:::queueSubpackage
+    config[config<br/>配置管理]:::problemPackage
+
+    %% 第三层（Layer 3）
+    queueWorker[queue/worker<br/>工作池]:::queueSubpackage
+    queue[queue<br/>队列系统]:::corePackage
+    observability[observability<br/>可观测性]:::corePackage
+
+    %% 第四层（Layer 4）
+    client[client<br/>核心协调器]:::corePackage
+
+    %% 依赖关系
+    notifiers --> internal
+    queueCore --> internal
+    queueCore --> notifiers
+
+    template --> notifiers
+    queueCallbacks --> notifiers
+    queueCallbacks --> queueCore
+    queueScheduler --> internal
+    queueScheduler --> queueCore
+    config --> logger
+    config --> notifiers
+    config --> queue
+
+    queueWorker --> notifiers
+    queueWorker --> queueCallbacks
+    queueWorker --> queueCore
+    queueWorker --> retry
+    queue --> queueCallbacks
+    queue --> queueCore
+    queue --> retry
+    queue --> queueScheduler
+    queue --> queueWorker
+    observability --> config
+
+    client --> config
+    client --> logger
+    client --> monitoring
+    client --> notifiers
+    client --> observability
+    client --> queue
+    client --> template
+    client --> internal
+
+    %% 问题标识和改进
+    config -.->|问题: 依赖具体实现| notifiers
+    queueWorker -.->|✅ 已解决: 通过接口分离| queueCallbacks
+    queueWorker -.->|✅ 已解决: 通过接口分离| queueCore
+    queueWorker -.->|✅ 已解决: 通过接口分离| retry
+    queueWorker -.->|✅ 已解决: 职责分离完成| notifiers

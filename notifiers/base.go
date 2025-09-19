@@ -37,26 +37,27 @@ const (
 
 // AtMention represents a user mention configuration
 type AtMention struct {
-	UserID   string `json:"user_id"`   // 用户ID
-	UserName string `json:"user_name"` // 用户显示名称（可选）
-	IsAll    bool   `json:"is_all"`    // 是否@所有人
+	UserID         string `json:"user_id"`          // 用户ID
+	UserName       string `json:"user_name"`        // 用户显示名称（可选）
+	IsAll          bool   `json:"is_all"`           // 是否@所有人
+	FallbackToText bool   `json:"fallback_to_text"` // 当@人失效时是否降级为普通文本
 }
 
 // Message represents a notification message
 type Message struct {
-	ID        string                 `json:"id"`
-	Title     string                 `json:"title"`
-	Body      string                 `json:"body"`
-	Format    MessageFormat          `json:"format"`
-	Targets   []Target               `json:"targets"`
-	Template  string                 `json:"template,omitempty"`
-	Variables map[string]interface{} `json:"variables,omitempty"`
-	Metadata  map[string]string      `json:"metadata,omitempty"`
-	Priority  int                    `json:"priority"`        // 1=low, 5=urgent
-	Delay     time.Duration          `json:"delay,omitempty"` // 延迟发送时间
-	CardData  interface{}            `json:"card_data,omitempty"` // 卡片数据，支持平台特定的卡片格式
-	AtMentions []AtMention           `json:"at_mentions,omitempty"` // @人配置列表
-	CreatedAt time.Time              `json:"created_at"`
+	ID         string                 `json:"id"`
+	Title      string                 `json:"title"`
+	Body       string                 `json:"body"`
+	Format     MessageFormat          `json:"format"`
+	Targets    []Target               `json:"targets"`
+	Template   string                 `json:"template,omitempty"`
+	Variables  map[string]interface{} `json:"variables,omitempty"`
+	Metadata   map[string]string      `json:"metadata,omitempty"`
+	Priority   int                    `json:"priority"`              // 1=low, 5=urgent
+	Delay      time.Duration          `json:"delay,omitempty"`       // 延迟发送时间
+	CardData   interface{}            `json:"card_data,omitempty"`   // 卡片数据，支持平台特定的卡片格式
+	AtMentions []AtMention            `json:"at_mentions,omitempty"` // @人配置列表
+	CreatedAt  time.Time              `json:"created_at"`
 }
 
 // SendResult represents the result of a send operation
@@ -109,6 +110,11 @@ func (ves *ValidationErrors) Add(field, message, value string) {
 // HasErrors returns true if there are validation errors
 func (ves ValidationErrors) HasErrors() bool {
 	return len(ves) > 0
+}
+
+// CurrentTime returns the current time, useful for testing and mocking
+func CurrentTime() time.Time {
+	return time.Now()
 }
 
 // Notifier interface that all notification platforms must implement

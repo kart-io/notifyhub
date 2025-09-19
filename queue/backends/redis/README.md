@@ -135,10 +135,15 @@ func main() {
     }
     defer queue.Close()
 
-    // Start workers
-    worker := worker.NewWorker(queue, sender, retryPolicy, 10)
-    worker.Start(ctx)
-    defer worker.Stop()
+    // Start workers using WorkerV2
+    factory := worker.NewWorkerFactory()
+    config := &worker.WorkerConfig{
+        Concurrency: 10,
+        RetryPolicy: retryPolicy,
+    }
+    workerV2 := factory.CreateWorker(queue, sender, config)
+    workerV2.Start(ctx)
+    defer workerV2.Stop()
 }
 ```
 

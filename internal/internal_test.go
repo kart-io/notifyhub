@@ -11,10 +11,12 @@ import (
 )
 
 func TestGenerateID(t *testing.T) {
-	// Test basic ID generation and format
+	// Test basic ID generation and format (UUID v4 format)
 	id := GenerateID()
 	assert.NotEmpty(t, id)
-	assert.Regexp(t, `^\d+-\d+$`, id)
+	// Check for UUID v4 format: xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx
+	// Where y is one of [8,9,a,b] and x is any hex digit
+	assert.Regexp(t, `^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$`, id)
 }
 
 func TestGenerateIDConcurrency(t *testing.T) {
@@ -253,8 +255,3 @@ func TestEnsureRateLimiter(t *testing.T) {
 	assert.Equal(t, context.DeadlineExceeded, err)
 	assert.False(t, executed)
 }
-
-
-
-
-

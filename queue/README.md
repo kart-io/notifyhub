@@ -188,9 +188,14 @@ if err != nil {
 }
 
 // 消息会在5分钟后自动进入队列供Dequeue获取
-// Worker可以正常处理延迟后的消息
-worker := queue.NewWorker(enhancedQueue, hub, retryPolicy, 4)
-worker.Start(ctx)
+// 使用新版本WorkerV2处理延迟后的消息
+factory := worker.NewWorkerFactory()
+config := &worker.WorkerConfig{
+    Concurrency: 4,
+    RetryPolicy: retryPolicy,
+}
+workerV2 := factory.CreateWorker(enhancedQueue, hub, config)
+workerV2.Start(ctx)
 ```
 
 ### 独立调度器使用
@@ -230,12 +235,17 @@ func NewWorker(queue Queue, sender MessageSender, retryPolicy *RetryPolicy, work
 ### 启动Worker
 
 ```go
-// 创建Worker
-worker := queue.NewWorker(
-    queue,        // 队列实例
-    hub,         // Hub作为MessageSender
-    retryPolicy, // 重试策略
-    4,           // worker数量
+// 创建WorkerV2 (推荐使用新版本)
+factory := worker.NewWorkerFactory()
+config := &worker.WorkerConfig{
+    Concurrency: 4,           // worker数量
+    RetryPolicy: retryPolicy, // 重试策略
+    ProcessTimeout: 30 * time.Second,
+}
+workerV2 := factory.CreateWorker(
+    queue,  // 队列实例
+    hub,    // Hub作为MessageSender
+    config, // 配置
 )
 
 // 启动处理
@@ -422,7 +432,13 @@ workers := runtime.NumCPU()
 // I/O密集型：worker数量 = CPU核数 * 2-4
 workers := runtime.NumCPU() * 3
 
-worker := queue.NewWorker(queue, hub, retryPolicy, workers)
+// 使用新版本WorkerV2
+factory := worker.NewWorkerFactory()
+config := &worker.WorkerConfig{
+    Concurrency: workers,
+    RetryPolicy: retryPolicy,
+}
+workerV2 := factory.CreateWorker(queue, hub, config)
 ```
 
 ### 3. 重试策略

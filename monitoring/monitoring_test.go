@@ -37,7 +37,7 @@ func TestRecordSend(t *testing.T) {
 	assert.Equal(t, int64(1), metrics.TotalFailed)
 	assert.Equal(t, int64(1), metrics.FailsByPlatform["email"])
 	assert.Equal(t, "connection timeout", metrics.LastErrors["email"])
-	
+
 	// Average duration should be updated: (100 + 50) / 2 = 75ms
 	assert.Equal(t, 75*time.Millisecond, metrics.AvgDuration)
 	assert.Equal(t, 100*time.Millisecond, metrics.MaxDuration) // Max unchanged
@@ -91,10 +91,10 @@ func TestGetSuccessRate(t *testing.T) {
 
 func TestGetUptime(t *testing.T) {
 	metrics := NewMetrics()
-	
+
 	// Sleep a small amount to ensure uptime > 0
 	time.Sleep(10 * time.Millisecond)
-	
+
 	uptime := metrics.GetUptime()
 	assert.True(t, uptime > 0)
 	assert.True(t, uptime < time.Second) // Should be very small
@@ -160,7 +160,7 @@ func TestMetricsConcurrency(t *testing.T) {
 			defer wg.Done()
 			for j := 0; j < operationsPerGoroutine; j++ {
 				platform := "platform" + string(rune('0'+id%5)) // 5 different platforms
-				success := j%2 == 0                              // Alternate success/failure
+				success := j%2 == 0                             // Alternate success/failure
 				duration := time.Duration(id*10+j) * time.Millisecond
 				errorMsg := ""
 				if !success {
@@ -178,7 +178,7 @@ func TestMetricsConcurrency(t *testing.T) {
 			defer wg.Done()
 			for j := 0; j < operationsPerGoroutine; j++ {
 				platform := "health" + string(rune('0'+id%3)) // 3 different platforms
-				healthy := j%2 == 0                            // Alternate healthy/unhealthy
+				healthy := j%2 == 0                           // Alternate healthy/unhealthy
 				metrics.RecordHealth(platform, healthy)
 			}
 		}(i)
@@ -203,5 +203,3 @@ func TestMetricsConcurrency(t *testing.T) {
 	expectedRate := float64(expectedSuccessful) / float64(totalOperations)
 	assert.InDelta(t, expectedRate, metrics.GetSuccessRate(), 0.001)
 }
-
-
