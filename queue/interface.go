@@ -43,12 +43,12 @@ type ExternalQueueFactory interface {
 
 // ExternalMessage 外部队列消息结构
 type ExternalMessage struct {
-	ID        string                 `json:"id"`
-	Data      []byte                 `json:"data"`
-	Headers   map[string]string      `json:"headers"`
-	CreatedAt time.Time              `json:"created_at"`
-	RetryCount int                   `json:"retry_count"`
-	NextRetry  time.Time              `json:"next_retry,omitempty"`
+	ID         string            `json:"id"`
+	Data       []byte            `json:"data"`
+	Headers    map[string]string `json:"headers"`
+	CreatedAt  time.Time         `json:"created_at"`
+	RetryCount int               `json:"retry_count"`
+	NextRetry  time.Time         `json:"next_retry,omitempty"`
 
 	// 用于存储队列特定的元数据（如Redis的StreamID）
 	Metadata map[string]interface{} `json:"metadata,omitempty"`

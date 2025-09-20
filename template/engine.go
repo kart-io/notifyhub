@@ -226,6 +226,7 @@ func (e *Engine) createTemplateData(message *notifiers.Message) map[string]inter
 		"Message":   message,
 		"Title":     message.Title,
 		"Body":      message.Body,
+		"Priority":  message.Priority,
 		"Format":    string(message.Format),
 		"Variables": message.Variables,
 		"Metadata":  message.Metadata,

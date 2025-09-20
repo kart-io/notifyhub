@@ -17,26 +17,28 @@ import (
 
 // Config holds NotifyHub configuration
 type Config struct {
-	feishu        *FeishuConfig
-	email         *EmailConfig
-	queue         *QueueConfigOptions
-	routing       []routing.Rule
-	telemetry     *TelemetryConfig
-	logger        logger.Interface
-	mockNotifier  *MockNotifierConfig
+	feishu       *FeishuConfig
+	email        *EmailConfig
+	queue        *QueueConfigOptions
+	routing      []routing.Rule
+	telemetry    *TelemetryConfig
+	logger       logger.Interface
+	mockNotifier *MockNotifierConfig
 
 	// 外部队列实现支持
-	queueConfigs        map[string]interface{}     // 队列类型特定配置
-	externalQueue       queue.ExternalQueue        // 外部队列实例
+	queueConfigs         map[string]interface{}     // 队列类型特定配置
+	externalQueue        queue.ExternalQueue        // 外部队列实例
 	externalQueueFactory queue.ExternalQueueFactory // 外部队列工厂
 }
 
-// MockNotifierConfig holds mock notifier configuration
+// MockNotifierConfig holds null transport configuration for testing/development
+// Note: Despite the "Mock" name for backward compatibility, this actually configures
+// null transports that discard messages. For actual testing mocks, use tests/mocks package.
 type MockNotifierConfig struct {
 	Name             string
-	ShouldFail       bool
+	ShouldFail       bool // Currently unused in null transport
 	Delay            time.Duration
-	SupportedTargets []string
+	SupportedTargets []string // Currently unused in null transport
 }
 
 // Option defines a configuration option
@@ -172,7 +174,9 @@ func WithEmailFromEnv() Option {
 // Mock Notifier Configuration Options (for testing)
 // ================================
 
-// WithMockNotifier configures a mock notifier for testing
+// WithMockNotifier configures null transports for testing/development
+// Despite the "Mock" name (kept for backward compatibility), this creates null transports
+// that discard messages but report successful delivery. For testing with verification, use tests/mocks.
 func WithMockNotifier(name string) Option {
 	return optionFunc(func(c *Config) {
 		c.mockNotifier = &MockNotifierConfig{
@@ -184,7 +188,8 @@ func WithMockNotifier(name string) Option {
 	})
 }
 
-// WithMockNotifierFailure configures mock notifier to fail
+// WithMockNotifierFailure configures null transport failure behavior
+// Note: Currently unused as null transports always succeed
 func WithMockNotifierFailure() Option {
 	return optionFunc(func(c *Config) {
 		if c.mockNotifier != nil {
@@ -193,7 +198,7 @@ func WithMockNotifierFailure() Option {
 	})
 }
 
-// WithMockNotifierDelay configures mock notifier delay
+// WithMockNotifierDelay configures null transport delay
 func WithMockNotifierDelay(delay time.Duration) Option {
 	return optionFunc(func(c *Config) {
 		if c.mockNotifier != nil {

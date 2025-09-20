@@ -6,7 +6,7 @@ import (
 	"time"
 
 	"github.com/kart-io/notifyhub/api"
-	"github.com/kart-io/notifyhub/config"
+	apiconfig "github.com/kart-io/notifyhub/api/config"
 	"github.com/kart-io/notifyhub/core/message"
 	"github.com/kart-io/notifyhub/core/sending"
 	"github.com/kart-io/notifyhub/tests/mocks"
@@ -185,11 +185,15 @@ func CreateTestTarget(targetType sending.TargetType, value, platform string) sen
 }
 
 // CreateTestConfig 创建测试配置
-func CreateTestConfig() *config.Config {
-	return config.New(
-		config.WithQueue("memory", 100, 2),
-		config.WithSilentLogger(),
-	)
+func CreateTestConfig() *apiconfig.Config {
+	cfg := apiconfig.NewConfig()
+	cfg.Queue = &apiconfig.QueueConfig{
+		Type:    "memory",
+		Size:    100,
+		Workers: 2,
+	}
+	cfg.Debug = false
+	return cfg
 }
 
 // WaitForCondition 等待条件满足
@@ -272,15 +276,13 @@ func NewMockLogger() *mocks.MockLogger {
 	return mocks.NewMockLogger()
 }
 
-// CreateTestHub creates a test hub
-func CreateTestHub(t *testing.T) *api.NotifyHub {
+// CreateTestHub creates a test client (V2 API)
+func CreateTestHub(t *testing.T) *api.Client {
 	config := CreateTestConfig()
-	opts := &api.Options{
-		Logger: NewMockLogger(),
-	}
-	hub, err := api.New(config, opts)
+	// Note: V2 API doesn't use separate Options, logger is configured in config
+	client, err := api.New(config)
 	AssertNoError(t, err)
-	return hub
+	return client
 }
 
 // CreateTestMessage creates a test message (no parameters version)

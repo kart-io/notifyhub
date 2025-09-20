@@ -2,6 +2,7 @@ package http
 
 import (
 	"context"
+	"encoding/json"
 	"net/http"
 	"time"
 
@@ -10,7 +11,7 @@ import (
 
 // HTTPServer implements HTTP transport layer as specified in the proposal
 type HTTPServer struct {
-	hub        *api.NotifyHub
+	hub        *api.Client
 	server     *http.Server
 	port       string
 	middleware []Middleware
@@ -49,7 +50,7 @@ type Context interface {
 type Middleware func(HandlerFunc) HandlerFunc
 
 // NewHTTPServer creates a new HTTP server
-func NewHTTPServer(hub *api.NotifyHub, config *Config) *HTTPServer {
+func NewHTTPServer(hub *api.Client, config *Config) *HTTPServer {
 	if config.Port == "" {
 		config.Port = ":8080"
 	}
@@ -119,19 +120,31 @@ func (s *HTTPServer) handleMetrics(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	metrics := s.hub.GetMetrics()
+	metrics := s.hub.Metrics()
 
-	// Simple JSON response
+	// Calculate success rate
+	totalMessages := metrics.MessagesSent + metrics.MessagesFailed
+	var successRate float64
+	if totalMessages > 0 {
+		successRate = float64(metrics.MessagesSent) / float64(totalMessages)
+	}
+
+	// Build metrics response
+	response := map[string]interface{}{
+		"messages_sent":    metrics.MessagesSent,
+		"messages_queued":  metrics.MessagesQueued,
+		"messages_failed":  metrics.MessagesFailed,
+		"success_rate":     successRate,
+		"average_latency":  metrics.AverageLatency.String(),
+		"platform_metrics": metrics.PlatformMetrics,
+		"timestamp":        metrics.Timestamp,
+	}
+
 	w.Header().Set("Content-Type", "application/json")
 	w.WriteHeader(http.StatusOK)
 
-	// This is a simplified metrics response
-	// In a real implementation, you'd use a proper JSON encoder
-	response := `{
-		"total_sent": ` + string(rune(metrics.TotalSent)) + `,
-		"total_failed": ` + string(rune(metrics.TotalFailed)) + `,
-		"success_rate": ` + string(rune(int(metrics.SuccessRate*100))) + `
-	}`
-
-	_, _ = w.Write([]byte(response))
+	// Use proper JSON encoding
+	if err := json.NewEncoder(w).Encode(response); err != nil {
+		http.Error(w, "Failed to encode metrics", http.StatusInternalServerError)
+	}
 }

@@ -11,6 +11,7 @@ import (
 	"github.com/kart-io/notifyhub/core/sending"
 	"github.com/kart-io/notifyhub/queue"
 	"github.com/kart-io/notifyhub/tests/mocks"
+	"github.com/kart-io/notifyhub/tests/testutil"
 	"github.com/kart-io/notifyhub/tests/utils"
 )
 
@@ -306,7 +307,6 @@ func TestTargetExpressionResolution(t *testing.T) {
 	helper := utils.NewTestHelper(t)
 
 	cfg := config.New(
-		config.WithMockNotifier("test"),
 		config.WithQueue("memory", 100, 1),
 		config.WithSilentLogger(),
 	)
@@ -315,6 +315,9 @@ func TestTargetExpressionResolution(t *testing.T) {
 	helper.AssertNoError(err, "Failed to create hub")
 	defer func() { _ = hub.Shutdown(context.Background()) }()
 
+	// Register mock transports for testing
+	testutil.RegisterMockTransports(hub, 10*time.Millisecond)
+
 	msg := hub.NewMessage()
 	msg.SetTitle("Target Expression Test")
 	msg.SetBody("Testing target expression resolution")
@@ -322,10 +325,9 @@ func TestTargetExpressionResolution(t *testing.T) {
 
 	// 测试目标表达式
 	expressions := []string{
-		"email:admin@company.com",
-		"user:john@feishu",
-		"group:developers@slack",
-		"channel:general@discord",
+		"direct:email:admin@company.com",
+		"direct:feishu:user:john",
+		"static:default", // Use static provider for group targets
 	}
 
 	ctx := context.Background()

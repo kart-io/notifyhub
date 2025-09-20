@@ -1,30 +1,33 @@
 package message
 
-import "errors"
+import (
+	"github.com/kart-io/notifyhub/core/errors"
+)
 
+// Re-export standard errors for backward compatibility
 var (
 	// ErrEmptyMessage indicates that the message has no title or body
-	ErrEmptyMessage = errors.New("message must have either title or body")
+	ErrEmptyMessage = errors.ErrEmptyMessage
 
 	// ErrInvalidPriority indicates an invalid priority value
-	ErrInvalidPriority = errors.New("priority must be between 1 and 5")
+	ErrInvalidPriority = errors.ErrInvalidPriority
 
 	// ErrInvalidFormat indicates an invalid message format
-	ErrInvalidFormat = errors.New("invalid message format")
+	ErrInvalidFormat = errors.ErrInvalidFormat
 
 	// ErrMissingTemplate indicates that a template name is required
-	ErrMissingTemplate = errors.New("template name is required")
+	ErrMissingTemplate = errors.ErrTemplateError
 
 	// ErrTemplateRenderFailed indicates template rendering failure
-	ErrTemplateRenderFailed = errors.New("template rendering failed")
+	ErrTemplateRenderFailed = errors.ErrTemplateError
 
 	// Target-related errors
 	// ErrInvalidTargetType indicates an invalid target type
-	ErrInvalidTargetType = errors.New("invalid target type")
+	ErrInvalidTargetType = errors.ErrInvalidTarget
 
 	// ErrEmptyTargetValue indicates an empty target value
-	ErrEmptyTargetValue = errors.New("target value cannot be empty")
+	ErrEmptyTargetValue = errors.ErrEmptyTarget
 
 	// ErrEmptyPlatform indicates an empty platform
-	ErrEmptyPlatform = errors.New("platform cannot be empty")
+	ErrEmptyPlatform = errors.ErrInvalidPlatform
 )

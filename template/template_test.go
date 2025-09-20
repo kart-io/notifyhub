@@ -96,7 +96,8 @@ Priority: {{.Priority}}`
 	// Render using template
 	rendered, err := engine.RenderMessage(msg)
 	assert.NoError(t, err)
-	assert.Contains(t, rendered.Title, "Alert: System Alert")
+	assert.Equal(t, "System Alert", rendered.Title) // Title unchanged when using named template
+	assert.Contains(t, rendered.Body, "Alert: System Alert")
 	assert.Contains(t, rendered.Body, "Body: Database connection failed")
 	assert.Contains(t, rendered.Body, "Priority: 4") // High priority = 4
 }
@@ -164,7 +165,7 @@ func TestTemplateHelpers(t *testing.T) {
 	engine := NewEngine()
 
 	// Template using helper functions
-	templateText := `Time: {{formatTime .Time}}
+	templateText := `Time: {{formatTime .Time "2006-01-02 15:04:05"}}
 Uppercase: {{upper .Name}}
 Lowercase: {{lower .Name}}
 Title Case: {{title .description}}`
@@ -245,7 +246,7 @@ func TestRenderMessageWithoutTemplate(t *testing.T) {
 	// Should use default rendering (just return body for simplicity)
 	rendered, err := engine.RenderMessage(notifierMsg)
 	assert.NoError(t, err)
-	assert.Contains(t, rendered, "This is the body")
+	assert.Contains(t, rendered.Body, "This is the body")
 }
 
 func TestMarkdownFormat(t *testing.T) {
@@ -257,7 +258,7 @@ func TestMarkdownFormat(t *testing.T) {
 {{.Body}}
 
 **Priority:** {{.Priority}}
-**Time:** {{formatTime .CreatedAt}}`
+**Time:** {{formatTime .CreatedAt "2006-01-02 15:04:05"}}`
 	err := engine.AddTextTemplate("markdown-alert", mdTemplate)
 	require.NoError(t, err)
 
@@ -284,6 +285,6 @@ func TestMarkdownFormat(t *testing.T) {
 	// Render as markdown
 	rendered, err := engine.RenderMessage(notifierMsg)
 	assert.NoError(t, err)
-	assert.Contains(t, rendered, "# Alert")
-	assert.Contains(t, rendered, "**Priority:** 3")
+	assert.Contains(t, rendered.Body, "# Alert")
+	assert.Contains(t, rendered.Body, "**Priority:** 4")
 }

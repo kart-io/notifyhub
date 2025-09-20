@@ -9,11 +9,11 @@ import (
 
 // BatchHandler handles batch message sending
 type BatchHandler struct {
-	hub *api.NotifyHub
+	hub *api.Client
 }
 
 // NewBatchHandler creates a new batch handler
-func NewBatchHandler(hub *api.NotifyHub) *BatchHandler {
+func NewBatchHandler(hub *api.Client) *BatchHandler {
 	return &BatchHandler{hub: hub}
 }
 

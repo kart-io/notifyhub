@@ -1,11 +1,10 @@
 package message
 
 import (
+	"math/rand"
 	"time"
 
 	"github.com/kart-io/notifyhub/notifiers"
-	"github.com/kart-io/notifyhub/platforms/common"
-	"github.com/kart-io/notifyhub/platforms/registry"
 )
 
 // CoreMessageBuilder implements the common.MessageBuilder interface
@@ -122,46 +121,40 @@ func (b *CoreMessageBuilder) ID(id string) *CoreMessageBuilder {
 	return b
 }
 
+// CorePlatformBuilder defines the interface for core platform builders
+type CorePlatformBuilder interface {
+	Platform() string
+	Builder() *CoreMessageBuilder
+}
+
 // === Platform-specific builders ===
 
 // Feishu returns a Feishu-specific builder
-func (b *CoreMessageBuilder) Feishu() common.PlatformBuilder {
-	builder, err := registry.CreatePlatformBuilder("feishu", &common.MessageBuilder{})
-	if err != nil {
-		// Return a no-op builder if Feishu is not available
-		return &noOpPlatformBuilder{base: &common.MessageBuilder{}}
-	}
-	return builder
+func (b *CoreMessageBuilder) Feishu() CorePlatformBuilder {
+	// Platform-specific builders are not available in core
+	// Use the client package for platform-specific features
+	return &noOpPlatformBuilder{base: b}
 }
 
 // Email returns an Email-specific builder
-func (b *CoreMessageBuilder) Email() common.PlatformBuilder {
-	builder, err := registry.CreatePlatformBuilder("email", &common.MessageBuilder{})
-	if err != nil {
-		// Return a no-op builder if Email is not available
-		return &noOpPlatformBuilder{base: &common.MessageBuilder{}}
-	}
-	return builder
+func (b *CoreMessageBuilder) Email() CorePlatformBuilder {
+	// Platform-specific builders are not available in core
+	// Use the client package for platform-specific features
+	return &noOpPlatformBuilder{base: b}
 }
 
 // SMS returns an SMS-specific builder
-func (b *CoreMessageBuilder) SMS() common.PlatformBuilder {
-	builder, err := registry.CreatePlatformBuilder("sms", &common.MessageBuilder{})
-	if err != nil {
-		// Return a no-op builder if SMS is not available
-		return &noOpPlatformBuilder{base: &common.MessageBuilder{}}
-	}
-	return builder
+func (b *CoreMessageBuilder) SMS() CorePlatformBuilder {
+	// Platform-specific builders are not available in core
+	// Use the client package for platform-specific features
+	return &noOpPlatformBuilder{base: b}
 }
 
 // Platform returns a platform-specific builder by name
-func (b *CoreMessageBuilder) Platform(platform string) common.PlatformBuilder {
-	builder, err := registry.CreatePlatformBuilder(platform, &common.MessageBuilder{})
-	if err != nil {
-		// Return a no-op builder if platform is not available
-		return &noOpPlatformBuilder{base: &common.MessageBuilder{}}
-	}
-	return builder
+func (b *CoreMessageBuilder) Platform(platform string) CorePlatformBuilder {
+	// Platform-specific builders are not available in core
+	// Use the client package for platform-specific features
+	return &noOpPlatformBuilder{base: b}
 }
 
 // === Convenience methods for quick message creation ===
@@ -271,14 +264,14 @@ func (b *CoreMessageBuilder) Validate() error {
 
 // noOpPlatformBuilder is a no-operation platform builder for unregistered platforms
 type noOpPlatformBuilder struct {
-	base *common.MessageBuilder
+	base *CoreMessageBuilder
 }
 
 func (n *noOpPlatformBuilder) Platform() string {
 	return "unknown"
 }
 
-func (n *noOpPlatformBuilder) Builder() *common.MessageBuilder {
+func (n *noOpPlatformBuilder) Builder() *CoreMessageBuilder {
 	return n.base
 }
 
@@ -291,8 +284,9 @@ func generateMessageID() string {
 func generateRandomString(length int) string {
 	const charset = "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789"
 	result := make([]byte, length)
+	rng := rand.New(rand.NewSource(time.Now().UnixNano()))
 	for i := range result {
-		result[i] = charset[time.Now().UnixNano()%int64(len(charset))]
+		result[i] = charset[rng.Intn(len(charset))]
 	}
 	return string(result)
 }

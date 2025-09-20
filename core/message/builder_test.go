@@ -5,7 +5,6 @@ import (
 	"time"
 
 	"github.com/kart-io/notifyhub/notifiers"
-	"github.com/kart-io/notifyhub/platforms/common"
 	"github.com/stretchr/testify/assert"
 )
 
@@ -367,21 +366,13 @@ func TestBuilderValidation(t *testing.T) {
 
 func TestNoOpPlatformBuilder(t *testing.T) {
 	t.Run("NoOp platform builder", func(t *testing.T) {
-		// Create a common.MessageBuilder instead of CoreMessageBuilder for compatibility
-		baseBuilder := common.NewMessageBuilder()
+		// Create a CoreMessageBuilder for compatibility
+		baseBuilder := NewBuilder()
 		noOp := &noOpPlatformBuilder{base: baseBuilder}
 
 		assert.Equal(t, "unknown", noOp.Platform())
 		assert.Equal(t, baseBuilder, noOp.Builder())
 		assert.Equal(t, baseBuilder.Build(), noOp.Builder().Build())
-		// noOp没有Validate方法，这里测试有效性时跳过
-		// assert.NoError(t, noOp.Validate())
-
-		// noOp没有Capabilities方法，跳过此测试
-		// capabilities := noOp.Capabilities()
-		// assert.False(t, capabilities.SupportsMentions)
-		// assert.False(t, capabilities.SupportsAttachments)
-		// assert.Empty(t, capabilities.SupportedFormats)
 	})
 }
 
@@ -421,9 +412,8 @@ func TestGetMessage(t *testing.T) {
 }
 
 func TestMessageBuilderInterfaceCompliance(t *testing.T) {
-	t.Run("Implements MessageBuilder interface", func(t *testing.T) {
-		// 使用common.NewMessageBuilder而不是NewBuilder来确保类型兼容性
-		builder := common.NewMessageBuilder()
+	t.Run("Implements CoreMessageBuilder interface", func(t *testing.T) {
+		builder := NewBuilder()
 
 		// Test interface methods
 		result := builder.Title("Interface Test")
@@ -432,13 +422,11 @@ func TestMessageBuilderInterfaceCompliance(t *testing.T) {
 		result = builder.Body("Interface Body")
 		assert.NotNil(t, result)
 
-		// common.MessageBuilder没有Priority方法，跳过此测试
-		// result = builder.Priority(3)
-		// assert.NotNil(t, result)
+		result = builder.Priority(3)
+		assert.NotNil(t, result)
 
-		// common.MessageBuilder没有Format方法，跳过此测试
-		// result = builder.Format(notifiers.FormatText)
-		// assert.NotNil(t, result)
+		result = builder.Format(notifiers.FormatText)
+		assert.NotNil(t, result)
 
 		target := notifiers.Target{Type: notifiers.TargetTypeEmail, Value: "test@example.com"}
 		result = builder.AddTarget(target)
@@ -446,22 +434,18 @@ func TestMessageBuilderInterfaceCompliance(t *testing.T) {
 
 		message := builder.Build()
 		assert.NotNil(t, message)
-		// Build()返回map[string]interface{}，不是结构体
-		if title, ok := message["title"]; ok {
-			assert.Equal(t, "Interface Test", title)
-		}
+		assert.Equal(t, "Interface Test", message.Title)
+		assert.Equal(t, "Interface Body", message.Body)
 
-		// common.MessageBuilder没有平台特定方法，跳过此测试
-		// platformBuilder := builder.Feishu()
-		// assert.NotNil(t, platformBuilder)
-		// platformBuilder = builder.Email()
-		// assert.NotNil(t, platformBuilder)
-
-		// platformBuilder = builder.SMS()
-		// assert.NotNil(t, platformBuilder)
-
-		// platformBuilder = builder.Platform("test")
-		// assert.NotNil(t, platformBuilder)
+		// Test platform-specific methods
+		platformBuilder := builder.Feishu()
+		assert.NotNil(t, platformBuilder)
+		platformBuilder = builder.Email()
+		assert.NotNil(t, platformBuilder)
+		platformBuilder = builder.SMS()
+		assert.NotNil(t, platformBuilder)
+		platformBuilder = builder.Platform("test")
+		assert.NotNil(t, platformBuilder)
 	})
 }
 

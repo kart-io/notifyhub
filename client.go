@@ -2,15 +2,40 @@ package notifyhub
 
 import (
 	"context"
+	"fmt"
 	"time"
 
 	"github.com/kart-io/notifyhub/core/hub"
 	"github.com/kart-io/notifyhub/core/message"
 	"github.com/kart-io/notifyhub/core/sending"
 	"github.com/kart-io/notifyhub/logger"
+	"github.com/kart-io/notifyhub/platforms"
+	"github.com/kart-io/notifyhub/platforms/registry"
 )
 
-// Client 是 NotifyHub 的统一客户端，提供简化的API入口
+// Client is the unified client for NotifyHub, providing a simplified API entry point.
+//
+// The Client wraps the core Hub functionality and provides a streamlined interface
+// for sending notifications across multiple platforms. It handles configuration,
+// target resolution, and provides builder patterns for different message types.
+//
+// Example usage:
+//
+//	client, err := notifyhub.New(
+//		WithFeishu("webhook-url", "secret"),
+//		WithEmail("smtp.example.com", 587, "user", "pass", "from@example.com"),
+//	)
+//	if err != nil {
+//		log.Fatal(err)
+//	}
+//	defer client.Shutdown(context.Background())
+//
+//	err = client.Send(ctx).
+//		Title("Alert").
+//		Body("System alert message").
+//		ToEmail("admin@example.com").
+//		ToFeishu("webhook-id").
+//		Execute()
 type Client struct {
 	hub      *hub.Hub
 	logger   logger.Interface
@@ -18,13 +43,31 @@ type Client struct {
 	resolver *TargetResolver
 }
 
-// Config 简化的配置结构
+// Config represents the simplified configuration structure for the NotifyHub client.
+//
+// This configuration is designed to be easy to use while providing full control
+// over platform settings, queue management, retry behavior, and rate limiting.
+// All fields are optional with sensible defaults.
 type Config struct {
+	// Platforms contains the configuration for each notification platform.
+	// Each platform can be individually enabled/disabled and configured.
 	Platforms []PlatformConfig `json:"platforms"`
-	Queue     *QueueConfig     `json:"queue,omitempty"`
-	Retry     *RetryConfig     `json:"retry,omitempty"`
+
+	// Queue configures the internal message queue system.
+	// Defaults to in-memory queue with 1000 capacity and 4 workers.
+	Queue *QueueConfig `json:"queue,omitempty"`
+
+	// Retry configures the retry behavior for failed messages.
+	// Defaults to 3 attempts with exponential backoff.
+	Retry *RetryConfig `json:"retry,omitempty"`
+
+	// RateLimit configures per-platform rate limiting.
+	// Helps prevent overwhelming external APIs.
 	RateLimit *RateLimitConfig `json:"rate_limit,omitempty"`
-	Logger    logger.Interface `json:"-"`
+
+	// Logger provides the logging interface for the client.
+	// Defaults to the standard logger if not provided.
+	Logger logger.Interface `json:"-"`
 }
 
 // PlatformConfig 平台配置抽象
@@ -69,7 +112,32 @@ type RateLimitConfig struct {
 // Option 配置选项
 type Option func(*Config)
 
-// New 创建 NotifyHub 客户端 - 统一入口
+// New creates a new NotifyHub client with the provided configuration options.
+//
+// This is the main entry point for creating a NotifyHub client. It accepts
+// functional options to configure platforms, queue settings, retry behavior,
+// and other client parameters.
+//
+// The client is created with sensible defaults:
+//   - In-memory queue with 1000 capacity and 4 concurrent workers
+//   - 3 retry attempts with exponential backoff
+//   - Standard logger
+//
+// Example:
+//
+//	client, err := notifyhub.New(
+//		WithFeishu("https://open.feishu.cn/open-apis/bot/v2/hook/xxx", "secret"),
+//		WithEmail("smtp.gmail.com", 587, "user@gmail.com", "password", "noreply@company.com"),
+//		WithRetry(5, time.Second*2),
+//		WithMemoryQueue(2000, 8),
+//	)
+//	if err != nil {
+//		return fmt.Errorf("failed to create NotifyHub client: %w", err)
+//	}
+//
+// The returned client must be properly shut down when no longer needed:
+//
+//	defer client.Shutdown(context.Background())
 func New(options ...Option) (*Client, error) {
 	cfg := &Config{
 		Platforms: make([]PlatformConfig, 0),
@@ -86,25 +154,25 @@ func New(options ...Option) (*Client, error) {
 		Logger: logger.Default,
 	}
 
-	// 应用配置选项
+	// Apply configuration options
 	for _, option := range options {
 		option(cfg)
 	}
 
-	// 创建Hub选项
+	// Create Hub options
 	hubOpts := &hub.Options{
 		Logger: cfg.Logger,
 	}
 
-	// 创建核心Hub
+	// Create core Hub
 	h := hub.NewHub(hubOpts)
 
-	// 注册平台传输器
+	// Register platform transports using the new platform system
 	if err := registerPlatformTransports(h, cfg.Platforms); err != nil {
 		return nil, err
 	}
 
-	// 创建目标解析器
+	// Create target resolver
 	resolver := &TargetResolver{}
 
 	client := &Client{
@@ -117,7 +185,28 @@ func New(options ...Option) (*Client, error) {
 	return client, nil
 }
 
-// Send 创建发送构建器 - 统一发送入口
+// Send creates a new message sending builder for composing and sending notifications.
+//
+// This method returns a SendBuilder that provides a fluent interface for constructing
+// messages with titles, bodies, formats, and target recipients across multiple platforms.
+// The builder pattern allows for easy composition of complex messages.
+//
+// Example usage:
+//
+//	err := client.Send(ctx).
+//		Title("System Alert").
+//		Body("Database connection failed").
+//		Format(message.FormatMarkdown).
+//		Priority(message.PriorityHigh).
+//		ToEmail("admin@example.com").
+//		ToFeishu("general").
+//		Execute()
+//	if err != nil {
+//		log.Printf("Failed to send notification: %v", err)
+//	}
+//
+// The context passed to this method will be used for the entire sending operation,
+// including timeout handling and cancellation.
 func (c *Client) Send(ctx context.Context) *SendBuilder {
 	return &SendBuilder{
 		client:  c,
@@ -127,7 +216,29 @@ func (c *Client) Send(ctx context.Context) *SendBuilder {
 	}
 }
 
-// Alert 创建告警构建器
+// Alert creates a pre-configured message builder optimized for alert notifications.
+//
+// This method returns an AlertBuilder that is pre-configured with high priority
+// and alert-specific defaults. It's designed for urgent notifications that require
+// immediate attention, such as system failures, security incidents, or critical errors.
+//
+// The AlertBuilder extends SendBuilder with alert-specific functionality and
+// automatically sets the message priority to High.
+//
+// Example usage:
+//
+//	err := client.Alert(ctx).
+//		Title("CRITICAL: Database Down").
+//		Body("Primary database cluster is unreachable").
+//		Severity("critical").
+//		ToOnCall().
+//		Execute()
+//	if err != nil {
+//		log.Printf("Failed to send alert: %v", err)
+//	}
+//
+// Alerts are typically sent to on-call engineers, incident response teams,
+// or escalation channels configured in your notification setup.
 func (c *Client) Alert(ctx context.Context) *AlertBuilder {
 	return &AlertBuilder{
 		SendBuilder: c.Send(ctx),
@@ -135,7 +246,29 @@ func (c *Client) Alert(ctx context.Context) *AlertBuilder {
 	}
 }
 
-// Notification 创建通知构建器
+// Notification creates a pre-configured message builder for general notifications.
+//
+// This method returns a NotificationBuilder that is pre-configured with normal priority
+// and designed for routine, informational messages. It's suitable for status updates,
+// reports, reminders, and other non-urgent communications.
+//
+// The NotificationBuilder extends SendBuilder with notification-specific functionality
+// and automatically sets the message priority to Normal.
+//
+// Example usage:
+//
+//	err := client.Notification(ctx).
+//		Title("Daily Report").
+//		Body("System processed 1,234 requests today").
+//		ToChannel("general").
+//		Schedule(time.Now().Add(time.Hour)).
+//		Execute()
+//	if err != nil {
+//		log.Printf("Failed to send notification: %v", err)
+//	}
+//
+// Notifications are typically sent to general channels, team inboxes,
+// or subscriber lists for informational purposes.
 func (c *Client) Notification(ctx context.Context) *NotificationBuilder {
 	return &NotificationBuilder{
 		SendBuilder: c.Send(ctx),
@@ -152,16 +285,77 @@ func (c *Client) Configure(options ...Option) error {
 	return nil
 }
 
-// Health 健康检查
+// Health performs a comprehensive health check of the NotifyHub client and all its components.
+//
+// This method checks the status of all registered transport connections, queue systems,
+// and internal components. It returns a HealthStatus that indicates whether the system
+// is operating normally and provides detailed information about each component.
+//
+// The health check includes:
+//   - Transport connectivity (can reach external APIs)
+//   - Queue system status (memory usage, worker health)
+//   - Rate limiter status
+//   - Overall system health
+//
+// Example usage:
+//
+//	status := client.Health()
+//	if !status.Healthy {
+//		log.Printf("NotifyHub unhealthy: %+v", status.Details)
+//		// Take remedial action
+//	}
+//
+// This method is safe to call frequently and can be used for monitoring
+// and health check endpoints in web services.
 func (c *Client) Health() HealthStatus {
 	hubStatus := c.hub.Health(context.Background())
+
+	// Add platform health information
+	platformHealth := make(map[string]interface{})
+	for _, info := range registry.GlobalRegistry.ListWithInfo() {
+		platformHealth[info.Name] = map[string]interface{}{
+			"description": info.Description,
+			"capabilities": map[string]interface{}{
+				"formats":     info.Capabilities.SupportedFormats(),
+				"features":    info.Capabilities.Features(),
+				"rate_limits": info.Capabilities.RateLimits(),
+			},
+		}
+	}
+
+	hubStatus.Details["platforms"] = platformHealth
+
 	return HealthStatus{
 		Healthy: hubStatus.Healthy,
 		Details: hubStatus.Details,
 	}
 }
 
-// Shutdown 优雅关闭
+// Shutdown gracefully shuts down the NotifyHub client and all its components.
+//
+// This method ensures that all pending messages are processed, connections are
+// properly closed, and resources are cleaned up. It should be called when the
+// application is terminating or when the client is no longer needed.
+//
+// The shutdown process includes:
+//   - Stopping acceptance of new messages
+//   - Waiting for queued messages to be sent (respecting context timeout)
+//   - Closing transport connections
+//   - Cleaning up internal resources
+//
+// Example usage:
+//
+//	// Give the client 30 seconds to finish pending operations
+//	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
+//	defer cancel()
+//
+//	if err := client.Shutdown(ctx); err != nil {
+//		log.Printf("Error during shutdown: %v", err)
+//	}
+//
+// If the context expires before shutdown completes, some messages may be lost.
+// For critical applications, consider using a longer timeout or monitoring
+// the queue depth before initiating shutdown.
 func (c *Client) Shutdown(ctx context.Context) error {
 	return c.hub.Shutdown(ctx)
 }
@@ -172,13 +366,119 @@ type HealthStatus struct {
 	Details map[string]interface{} `json:"details"`
 }
 
-// TargetResolver 目标解析器
-type TargetResolver struct {
-	// 目标解析逻辑
+// GetPlatformCapabilities returns the capabilities of a specific platform
+func (c *Client) GetPlatformCapabilities(platformName string) (platforms.Capabilities, error) {
+	platform, err := registry.GlobalRegistry.Get(platformName)
+	if err != nil {
+		return nil, fmt.Errorf("platform %s not found: %w", platformName, err)
+	}
+	return platform.Capabilities(), nil
 }
 
-// registerPlatformTransports 注册平台传输器
-func registerPlatformTransports(h *hub.Hub, platforms []PlatformConfig) error {
-	// TODO: 实现平台传输器注册逻辑
+// ListAvailablePlatforms returns information about all available platforms
+func (c *Client) ListAvailablePlatforms() []registry.PlatformInfo {
+	return registry.GlobalRegistry.ListWithInfo()
+}
+
+// TargetResolver resolves targets to appropriate platforms
+type TargetResolver struct {
+	// Target resolution logic
+}
+
+// registerPlatformTransports registers platform transports with the hub
+func registerPlatformTransports(h *hub.Hub, platformConfigs []PlatformConfig) error {
+	// Get all registered platforms from the registry
+	registeredPlatforms := registry.GlobalRegistry.GetAll()
+
+	for _, cfg := range platformConfigs {
+		if !cfg.Enabled {
+			continue
+		}
+
+		// Find the platform implementation
+		platform, exists := registeredPlatforms[cfg.Name]
+		if !exists {
+			return fmt.Errorf("platform %s not registered", cfg.Name)
+		}
+
+		// Validate configuration
+		if err := platform.ValidateConfig(cfg.Settings); err != nil {
+			return fmt.Errorf("invalid config for platform %s: %w", cfg.Name, err)
+		}
+
+		// Create transport
+		transport, err := platform.CreateTransport(cfg.Settings)
+		if err != nil {
+			return fmt.Errorf("failed to create transport for %s: %w", cfg.Name, err)
+		}
+
+		// Register transport with hub
+		h.RegisterTransport(&transportAdapter{
+			transport: transport,
+			platform:  platform,
+		})
+	}
+
 	return nil
+}
+
+// transportAdapter adapts platform.Transport to hub.Transport
+type transportAdapter struct {
+	transport platforms.Transport
+	platform  platforms.Platform
+}
+
+func (t *transportAdapter) Send(ctx context.Context, msg *message.Message, target sending.Target) (*sending.Result, error) {
+	// Check platform capabilities before sending
+	caps := t.platform.Capabilities()
+
+	// Convert message format to platform format
+	platformFormat := platforms.Format(msg.Format)
+
+	// Validate message format
+	if !caps.SupportsFormat(platformFormat) {
+		return nil, fmt.Errorf("platform %s does not support format %s", t.platform.Name(), msg.Format)
+	}
+
+	// Check message size limits
+	if len(msg.Title) > caps.MaxTitleLength() {
+		return nil, fmt.Errorf("title exceeds maximum length of %d", caps.MaxTitleLength())
+	}
+	if len(msg.Body) > caps.MaxBodyLength() {
+		return nil, fmt.Errorf("body exceeds maximum length of %d", caps.MaxBodyLength())
+	}
+
+	// Call transport and convert result
+	result, err := t.transport.Send(ctx, msg, target)
+	if err != nil {
+		return nil, err
+	}
+
+	// Convert interface{} result to *sending.Result
+	if sendingResult, ok := result.(*sending.Result); ok {
+		return sendingResult, nil
+	}
+
+	// Create a new result if conversion failed
+	now := time.Now()
+	return &sending.Result{
+		MessageID: "",
+		Status:    sending.StatusSent,
+		Platform:  t.platform.Name(),
+		Target:    target,
+		Response:  result,
+		SentAt:    &now,
+		CreatedAt: now,
+		UpdatedAt: now,
+		Timestamp: now,
+		Success:   true,
+	}, nil
+}
+
+func (t *transportAdapter) Name() string {
+	return t.transport.Name()
+}
+
+func (t *transportAdapter) Shutdown() error {
+	return t.transport.Shutdown()
 }

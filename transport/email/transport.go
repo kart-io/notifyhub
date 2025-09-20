@@ -8,6 +8,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/kart-io/notifyhub/core/errors"
 	"github.com/kart-io/notifyhub/core/message"
 	"github.com/kart-io/notifyhub/core/sending"
 )
@@ -66,7 +67,7 @@ func (t *Transport) Send(ctx context.Context, msg *message.Message, target sendi
 
 	// Validate target is email
 	if target.Type != sending.TargetTypeEmail {
-		err := fmt.Errorf("invalid target type for email transport: %s", target.Type)
+		err := errors.NewEmailError(errors.CodeInvalidTarget, fmt.Sprintf("invalid target type for email transport: %s", target.Type))
 		result.SetError(err)
 		return result, err
 	}
@@ -74,14 +75,17 @@ func (t *Transport) Send(ctx context.Context, msg *message.Message, target sendi
 	// Build email content
 	emailMsg, err := t.buildEmailMessage(msg, target)
 	if err != nil {
-		result.SetError(fmt.Errorf("failed to build email message: %w", err))
-		return result, err
+		wrappedErr := errors.WrapWithPlatform(errors.CodeProcessingFailed, errors.CategoryTransport, "failed to build email message", "email", err)
+		result.SetError(wrappedErr)
+		return result, wrappedErr
 	}
 
 	// Send email
 	if err := t.sendEmail(ctx, target.Value, emailMsg); err != nil {
-		result.SetError(fmt.Errorf("failed to send email: %w", err))
-		return result, err
+		// Use specialized SMTP error mapping
+		smtpErr := errors.MapSMTPError(err)
+		result.SetError(smtpErr)
+		return result, smtpErr
 	}
 
 	result.SetStatus(sending.StatusSent)
@@ -154,9 +158,9 @@ func (t *Transport) sendEmail(ctx context.Context, to, message string) error {
 	case err := <-done:
 		return err
 	case <-ctx.Done():
-		return ctx.Err()
+		return errors.WrapWithPlatform(errors.CodeTimeout, errors.CategoryNetwork, "context cancelled", "email", ctx.Err())
 	case <-time.After(t.timeout):
-		return fmt.Errorf("email send timeout after %v", t.timeout)
+		return errors.NewEmailError(errors.CodeTimeout, fmt.Sprintf("email send timeout after %v", t.timeout))
 	}
 }
 

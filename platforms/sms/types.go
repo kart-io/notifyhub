@@ -1,14 +1,16 @@
 package sms
 
-import "errors"
+import (
+	"github.com/kart-io/notifyhub/core/errors"
+)
 
-// SMS-specific errors
+// SMS-specific errors using standardized error system
 var (
-	ErrInvalidConfig   = errors.New("invalid SMS config")
-	ErrEmptyMessage    = errors.New("message cannot be empty")
-	ErrInvalidNumber   = errors.New("invalid phone number")
-	ErrMessageTooLong  = errors.New("message too long for SMS")
-	ErrInvalidProvider = errors.New("invalid SMS provider")
+	ErrInvalidConfig   = errors.NewSMSError(errors.CodeInvalidConfig, "invalid SMS config")
+	ErrEmptyMessage    = errors.NewSMSError(errors.CodeEmptyMessage, "message cannot be empty")
+	ErrInvalidNumber   = errors.NewSMSError(errors.CodeInvalidTarget, "invalid phone number")
+	ErrMessageTooLong  = errors.NewSMSError(errors.CodeInvalidFormat, "message too long for SMS")
+	ErrInvalidProvider = errors.NewSMSError(errors.CodeInvalidConfig, "invalid SMS provider")
 )
 
 // SMSPriority represents SMS priority levels

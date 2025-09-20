@@ -13,6 +13,7 @@ import (
 	"strconv"
 	"time"
 
+	"github.com/kart-io/notifyhub/core/errors"
 	"github.com/kart-io/notifyhub/core/message"
 	"github.com/kart-io/notifyhub/core/sending"
 )
@@ -74,9 +75,22 @@ func (t *Transport) Send(ctx context.Context, msg *message.Message, target sendi
 
 	// Check response
 	if response.Code != 0 {
-		err = fmt.Errorf("feishu API error: code=%d, msg=%s", response.Code, response.Msg)
-		result.SetError(err)
-		return result, err
+		// Map Feishu API error codes to standard errors
+		var notifyErr *errors.NotifyError
+		switch response.Code {
+		case 9499: // Invalid webhook URL
+			notifyErr = errors.NewFeishuError(errors.CodeInvalidConfig, fmt.Sprintf("Invalid webhook URL: %s", response.Msg))
+		case 19001: // Invalid app_id
+			notifyErr = errors.NewFeishuError(errors.CodeInvalidCredentials, fmt.Sprintf("Invalid app_id: %s", response.Msg))
+		case 19002: // Invalid signature
+			notifyErr = errors.NewFeishuError(errors.CodeInvalidCredentials, fmt.Sprintf("Invalid signature: %s", response.Msg))
+		case 19003: // Request too frequent
+			notifyErr = errors.NewFeishuError(errors.CodeRateLimited, fmt.Sprintf("Rate limited: %s", response.Msg))
+		default:
+			notifyErr = errors.NewFeishuError(errors.CodeSendingFailed, fmt.Sprintf("Feishu API error (code=%d): %s", response.Code, response.Msg))
+		}
+		result.SetError(notifyErr)
+		return result, notifyErr
 	}
 
 	result.SetStatus(sending.StatusSent)
@@ -220,20 +234,25 @@ func (t *Transport) sendRequest(ctx context.Context, payload *FeishuPayload) (*F
 	// Send request
 	resp, err := t.client.Do(req)
 	if err != nil {
-		return nil, fmt.Errorf("HTTP request failed: %w", err)
+		return nil, errors.MapNetworkError(err, "feishu")
 	}
 	defer func() { _ = resp.Body.Close() }()
 
 	// Read response
 	body, err := io.ReadAll(resp.Body)
 	if err != nil {
-		return nil, fmt.Errorf("failed to read response: %w", err)
+		return nil, errors.MapNetworkError(err, "feishu")
+	}
+
+	// Check HTTP status code
+	if resp.StatusCode != http.StatusOK {
+		return nil, errors.MapHTTPError(resp.StatusCode, string(body), "feishu")
 	}
 
 	// Parse response
 	var feishuResp FeishuResponse
 	if err := json.Unmarshal(body, &feishuResp); err != nil {
-		return nil, fmt.Errorf("failed to parse response: %w", err)
+		return nil, errors.WrapWithPlatform(errors.CodeProcessingFailed, errors.CategoryTransport, "failed to parse Feishu response", "feishu", err)
 	}
 
 	return &feishuResp, nil

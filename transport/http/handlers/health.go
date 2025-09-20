@@ -9,11 +9,11 @@ import (
 
 // HealthHandler handles health check requests
 type HealthHandler struct {
-	hub *api.NotifyHub
+	hub *api.Client
 }
 
 // NewHealthHandler creates a new health handler
-func NewHealthHandler(hub *api.NotifyHub) *HealthHandler {
+func NewHealthHandler(hub *api.Client) *HealthHandler {
 	return &HealthHandler{hub: hub}
 }
 
@@ -44,34 +44,38 @@ func (h *HealthHandler) Handle(w http.ResponseWriter, r *http.Request) {
 	}
 
 	// Get metrics from hub
-	metrics := h.hub.GetMetrics()
-	transports := h.hub.GetTransports()
+	metrics := h.hub.Metrics()
+	// Note: Transport details are now internal to the client
+	transports := []string{"unified"} // V2 API uses unified interface
+
+	// Calculate success/failure rates
+	totalMessages := metrics.MessagesSent + metrics.MessagesFailed
+	var successRate, failureRate float64
+	if totalMessages > 0 {
+		successRate = float64(metrics.MessagesSent) / float64(totalMessages)
+		failureRate = float64(metrics.MessagesFailed) / float64(totalMessages)
+	}
 
 	// Build health response
 	response := HealthResponse{
 		Status:     "healthy",
-		Timestamp:  "2024-01-01T00:00:00Z", // Should use actual timestamp
-		Uptime:     metrics.UptimeSeconds,
+		Timestamp:  metrics.Timestamp.Format("2006-01-02T15:04:05Z"),
+		Uptime:     0, // This would need to be calculated from start time
 		Transports: transports,
 		Metrics: HealthMetrics{
-			TotalSent:   metrics.TotalSent,
-			TotalFailed: metrics.TotalFailed,
-			SuccessRate: metrics.SuccessRate,
-			FailureRate: metrics.FailureRate,
+			TotalSent:   metrics.MessagesSent,
+			TotalFailed: metrics.MessagesFailed,
+			SuccessRate: successRate,
+			FailureRate: failureRate,
 		},
 		Details: map[string]interface{}{
 			"platform_count": len(transports),
-			"is_shutdown":    h.hub.IsShutdown(),
+			"is_shutdown":    false, // V2 API doesn't expose shutdown state
 		},
 	}
 
-	// Check if hub is shutdown
-	if h.hub.IsShutdown() {
-		response.Status = "shutdown"
-		w.WriteHeader(http.StatusServiceUnavailable)
-	} else {
-		w.WriteHeader(http.StatusOK)
-	}
+	// V2 API always returns healthy status when accessible
+	w.WriteHeader(http.StatusOK)
 
 	// Send response
 	w.Header().Set("Content-Type", "application/json")

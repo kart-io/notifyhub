@@ -1,32 +1,35 @@
 package sending
 
-import "errors"
+import (
+	"github.com/kart-io/notifyhub/core/errors"
+)
 
+// Re-export standard errors for backward compatibility
 var (
 	// ErrInvalidTargetType indicates an invalid target type
-	ErrInvalidTargetType = errors.New("invalid target type")
+	ErrInvalidTargetType = errors.ErrInvalidTarget
 
 	// ErrEmptyTargetValue indicates an empty target value
-	ErrEmptyTargetValue = errors.New("target value cannot be empty")
+	ErrEmptyTargetValue = errors.ErrEmptyTarget
 
 	// ErrEmptyPlatform indicates an empty platform
-	ErrEmptyPlatform = errors.New("platform cannot be empty")
+	ErrEmptyPlatform = errors.ErrInvalidPlatform
 
 	// ErrUnsupportedPlatform indicates an unsupported platform
-	ErrUnsupportedPlatform = errors.New("unsupported platform")
+	ErrUnsupportedPlatform = errors.ErrInvalidPlatform
 
 	// ErrSendingFailed indicates a general sending failure
-	ErrSendingFailed = errors.New("message sending failed")
+	ErrSendingFailed = errors.ErrSendingFailed
 
 	// ErrTimeout indicates a timeout during sending
-	ErrTimeout = errors.New("sending timeout")
+	ErrTimeout = errors.ErrTimeout
 
 	// ErrRateLimited indicates rate limiting
-	ErrRateLimited = errors.New("rate limited")
+	ErrRateLimited = errors.ErrRateLimited
 
 	// ErrInvalidCredentials indicates invalid credentials
-	ErrInvalidCredentials = errors.New("invalid credentials")
+	ErrInvalidCredentials = errors.ErrInvalidCredentials
 
 	// ErrNetworkError indicates a network error
-	ErrNetworkError = errors.New("network error")
+	ErrNetworkError = errors.ErrNetworkError
 )

@@ -1,13 +1,15 @@
 package feishu
 
-import "errors"
+import (
+	"github.com/kart-io/notifyhub/core/errors"
+)
 
-// Feishu-specific errors
+// Feishu-specific errors using standardized error system
 var (
-	ErrInvalidConfig = errors.New("invalid Feishu config")
-	ErrEmptyMessage  = errors.New("message cannot be empty")
-	ErrInvalidUser   = errors.New("invalid user ID")
-	ErrInvalidGroup  = errors.New("invalid group ID")
+	ErrInvalidConfig = errors.NewFeishuError(errors.CodeInvalidConfig, "invalid Feishu config")
+	ErrEmptyMessage  = errors.NewFeishuError(errors.CodeEmptyMessage, "message cannot be empty")
+	ErrInvalidUser   = errors.NewFeishuError(errors.CodeInvalidTarget, "invalid user ID")
+	ErrInvalidGroup  = errors.NewFeishuError(errors.CodeInvalidTarget, "invalid group ID")
 )
 
 // FeishuConfig holds Feishu-specific configuration

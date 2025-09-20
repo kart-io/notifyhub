@@ -1,13 +1,15 @@
 package email
 
-import "errors"
+import (
+	"github.com/kart-io/notifyhub/core/errors"
+)
 
-// Email-specific errors
+// Email-specific errors using standardized error system
 var (
-	ErrInvalidConfig      = errors.New("invalid email config")
-	ErrEmptyMessage       = errors.New("message cannot be empty")
-	ErrInvalidEmail       = errors.New("invalid email address")
-	ErrAttachmentTooLarge = errors.New("attachment too large")
+	ErrInvalidConfig      = errors.NewEmailError(errors.CodeInvalidConfig, "invalid email config")
+	ErrEmptyMessage       = errors.NewEmailError(errors.CodeEmptyMessage, "message cannot be empty")
+	ErrInvalidEmail       = errors.NewEmailError(errors.CodeInvalidTarget, "invalid email address")
+	ErrAttachmentTooLarge = errors.NewEmailError(errors.CodeInvalidFormat, "attachment too large")
 )
 
 // EmailPriority represents email priority levels
