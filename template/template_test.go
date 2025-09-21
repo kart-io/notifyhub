@@ -212,7 +212,7 @@ func TestTemplateNotFound(t *testing.T) {
 		Template:  msg.Template,
 		Variables: msg.Variables,
 		Metadata:  msg.Metadata,
-		Priority:  msg.Priority,
+		Priority:  int(msg.Priority),
 		CreatedAt: msg.CreatedAt,
 	}
 
@@ -239,7 +239,7 @@ func TestRenderMessageWithoutTemplate(t *testing.T) {
 		Template:  msg.Template,
 		Variables: msg.Variables,
 		Metadata:  msg.Metadata,
-		Priority:  msg.Priority,
+		Priority:  int(msg.Priority),
 		CreatedAt: msg.CreatedAt,
 	}
 
@@ -267,7 +267,7 @@ func TestMarkdownFormat(t *testing.T) {
 	msg.SetTitle("Alert").
 		SetBody("System issue detected").
 		SetTemplate("markdown-alert").
-		SetPriority(message.PriorityHigh)
+		SetPriority(message.Priority(message.PriorityHigh))
 
 	// Convert to notifiers.Message for template engine
 	notifierMsg := &notifiers.Message{
@@ -278,7 +278,7 @@ func TestMarkdownFormat(t *testing.T) {
 		Template:  msg.Template,
 		Variables: msg.Variables,
 		Metadata:  msg.Metadata,
-		Priority:  msg.Priority,
+		Priority:  int(msg.Priority),
 		CreatedAt: msg.CreatedAt,
 	}
 

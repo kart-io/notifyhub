@@ -3,118 +3,134 @@ package fixtures
 import (
 	"github.com/kart-io/notifyhub/config"
 	"github.com/kart-io/notifyhub/config/routing"
-	"github.com/kart-io/notifyhub/core/message"
-	"github.com/kart-io/notifyhub/core/sending"
+	"github.com/kart-io/notifyhub/core"
 )
 
 // TestMessages 测试消息集合
 var TestMessages = struct {
-	Simple      *message.Message
-	Complex     *message.Message
-	Alert       *message.Message
-	Templated   *message.Message
-	MultiTarget *message.Message
+	Simple      *core.Message
+	Complex     *core.Message
+	Alert       *core.Message
+	Templated   *core.Message
+	MultiTarget *core.Message
 }{
-	Simple: func() *message.Message {
-		msg := message.NewMessage()
-		msg.SetTitle("Simple Test Message")
-		msg.SetBody("This is a simple test message")
-		msg.SetPriority(3)
+	Simple: func() *core.Message {
+		msg := core.NewMessage()
+		msg.Title = "Simple Test Message"
+		msg.Body = "This is a simple test message"
+		msg.Priority = core.Priority(3)
 		return msg
 	}(),
 
-	Complex: func() *message.Message {
-		msg := message.NewMessage()
-		msg.SetTitle("Complex Test Message")
-		msg.SetBody("This is a complex message with multiple attributes")
-		msg.SetPriority(4)
-		msg.SetFormat("markdown")
-		msg.AddVariable("user", "testuser")
-		msg.AddVariable("action", "login")
-		msg.AddVariable("timestamp", "2024-01-01T12:00:00Z")
-		msg.AddMetadata("source", "api")
-		msg.AddMetadata("type", "notification")
-		msg.AddMetadata("env", "test")
+	Complex: func() *core.Message {
+		msg := core.NewMessage()
+		msg.Title = "Complex Test Message"
+		msg.Body = "This is a complex message with multiple attributes"
+		msg.Priority = core.Priority(4)
+		msg.Format = core.FormatMarkdown
+		if msg.Variables == nil {
+			msg.Variables = make(map[string]interface{})
+		}
+		msg.Variables["user"] = "testuser"
+		msg.Variables["action"] = "login"
+		msg.Variables["timestamp"] = "2024-01-01T12:00:00Z"
+		if msg.Metadata == nil {
+			msg.Metadata = make(map[string]string)
+		}
+		msg.Metadata["source"] = "api"
+		msg.Metadata["type"] = "notification"
+		msg.Metadata["env"] = "test"
 		return msg
 	}(),
 
-	Alert: func() *message.Message {
-		msg := message.NewMessage()
-		msg.SetTitle("Critical System Alert")
-		msg.SetBody("Database connection lost")
-		msg.SetPriority(5)
-		msg.AddMetadata("severity", "critical")
-		msg.AddMetadata("component", "database")
-		msg.AddVariable("error", "connection timeout")
-		msg.AddVariable("retry_count", 3)
+	Alert: func() *core.Message {
+		msg := core.NewMessage()
+		msg.Title = "Critical System Alert"
+		msg.Body = "Database connection lost"
+		msg.Priority = core.Priority(5)
+		if msg.Metadata == nil {
+			msg.Metadata = make(map[string]string)
+		}
+		msg.Metadata["severity"] = "critical"
+		msg.Metadata["component"] = "database"
+		if msg.Variables == nil {
+			msg.Variables = make(map[string]interface{})
+		}
+		msg.Variables["error"] = "connection timeout"
+		msg.Variables["retry_count"] = 3
 		return msg
 	}(),
 
-	Templated: func() *message.Message {
-		msg := message.NewMessage()
-		msg.SetTemplate("alert-template")
-		msg.SetTitle("{{.service}} Alert: {{.status}}")
-		msg.SetBody("Service {{.service}} is {{.status}}. Details: {{.details}}")
-		msg.SetPriority(3)
-		msg.AddVariable("service", "web-api")
-		msg.AddVariable("status", "degraded")
-		msg.AddVariable("details", "high latency detected")
+	Templated: func() *core.Message {
+		msg := core.NewMessage()
+		msg.Template = "alert-template"
+		msg.Title = "{{.service}} Alert: {{.status}}"
+		msg.Body = "Service {{.service}} is {{.status}}. Details: {{.details}}"
+		msg.Priority = core.Priority(3)
+		if msg.Variables == nil {
+			msg.Variables = make(map[string]interface{})
+		}
+		msg.Variables["service"] = "web-api"
+		msg.Variables["status"] = "degraded"
+		msg.Variables["details"] = "high latency detected"
 		return msg
 	}(),
 
-	MultiTarget: func() *message.Message {
-		msg := message.NewMessage()
-		msg.SetTitle("Multi-Target Message")
-		msg.SetBody("This message will be sent to multiple targets")
-		msg.SetPriority(3)
-		msg.AddTarget(message.NewTarget(message.TargetTypeEmail, "user1@example.com", "email"))
-		msg.AddTarget(message.NewTarget(message.TargetTypeEmail, "user2@example.com", "email"))
-		msg.AddTarget(message.NewTarget(message.TargetTypeUser, "user123", "feishu"))
-		msg.AddTarget(message.NewTarget(message.TargetTypeGroup, "dev-team", "slack"))
-		msg.AddTarget(message.NewTarget(message.TargetTypeChannel, "general", "discord"))
+	MultiTarget: func() *core.Message {
+		msg := core.NewMessage()
+		msg.Title = "Multi-Target Message"
+		msg.Body = "This message will be sent to multiple targets"
+		msg.Priority = core.Priority(3)
+		msg.Targets = []core.Target{
+			core.NewTarget(core.TargetTypeEmail, "user1@example.com", "email"),
+			core.NewTarget(core.TargetTypeEmail, "user2@example.com", "email"),
+			core.NewTarget(core.TargetTypeUser, "user123", "feishu"),
+			core.NewTarget(core.TargetTypeGroup, "dev-team", "slack"),
+			core.NewTarget(core.TargetTypeChannel, "general", "discord"),
+		}
 		return msg
 	}(),
 }
 
 // TestTargets 测试目标集合
 var TestTargets = struct {
-	EmailTargets   []sending.Target
-	FeishuTargets  []sending.Target
-	SlackTargets   []sending.Target
-	DiscordTargets []sending.Target
-	MixedTargets   []sending.Target
+	EmailTargets   []core.Target
+	FeishuTargets  []core.Target
+	SlackTargets   []core.Target
+	DiscordTargets []core.Target
+	MixedTargets   []core.Target
 }{
-	EmailTargets: []sending.Target{
-		sending.NewTarget(sending.TargetTypeEmail, "test@example.com", "email"),
-		sending.NewTarget(sending.TargetTypeEmail, "admin@example.com", "email"),
-		sending.NewTarget(sending.TargetTypeEmail, "support@example.com", "email"),
+	EmailTargets: []core.Target{
+		core.NewTarget(core.TargetTypeEmail, "test@example.com", "email"),
+		core.NewTarget(core.TargetTypeEmail, "admin@example.com", "email"),
+		core.NewTarget(core.TargetTypeEmail, "support@example.com", "email"),
 	},
 
-	FeishuTargets: []sending.Target{
-		sending.NewTarget(sending.TargetTypeUser, "user123", "feishu"),
-		sending.NewTarget(sending.TargetTypeUser, "user456", "feishu"),
-		sending.NewTarget(sending.TargetTypeGroup, "dev-team", "feishu"),
-		sending.NewTarget(sending.TargetTypeGroup, "ops-team", "feishu"),
+	FeishuTargets: []core.Target{
+		core.NewTarget(core.TargetTypeUser, "user123", "feishu"),
+		core.NewTarget(core.TargetTypeUser, "user456", "feishu"),
+		core.NewTarget(core.TargetTypeGroup, "dev-team", "feishu"),
+		core.NewTarget(core.TargetTypeGroup, "ops-team", "feishu"),
 	},
 
-	SlackTargets: []sending.Target{
-		sending.NewTarget(sending.TargetTypeChannel, "general", "slack"),
-		sending.NewTarget(sending.TargetTypeChannel, "alerts", "slack"),
-		sending.NewTarget(sending.TargetTypeUser, "john.doe", "slack"),
-		sending.NewTarget(sending.TargetTypeGroup, "engineering", "slack"),
+	SlackTargets: []core.Target{
+		core.NewTarget(core.TargetTypeChannel, "general", "slack"),
+		core.NewTarget(core.TargetTypeChannel, "alerts", "slack"),
+		core.NewTarget(core.TargetTypeUser, "john.doe", "slack"),
+		core.NewTarget(core.TargetTypeGroup, "engineering", "slack"),
 	},
 
-	DiscordTargets: []sending.Target{
-		sending.NewTarget(sending.TargetTypeChannel, "general", "discord"),
-		sending.NewTarget(sending.TargetTypeChannel, "announcements", "discord"),
-		sending.NewTarget(sending.TargetTypeUser, "user#1234", "discord"),
+	DiscordTargets: []core.Target{
+		core.NewTarget(core.TargetTypeChannel, "general", "discord"),
+		core.NewTarget(core.TargetTypeChannel, "announcements", "discord"),
+		core.NewTarget(core.TargetTypeUser, "user#1234", "discord"),
 	},
 
-	MixedTargets: []sending.Target{
-		sending.NewTarget(sending.TargetTypeEmail, "test@example.com", "email"),
-		sending.NewTarget(sending.TargetTypeUser, "user123", "feishu"),
-		sending.NewTarget(sending.TargetTypeChannel, "general", "slack"),
-		sending.NewTarget(sending.TargetTypeChannel, "announcements", "discord"),
+	MixedTargets: []core.Target{
+		core.NewTarget(core.TargetTypeEmail, "test@example.com", "email"),
+		core.NewTarget(core.TargetTypeUser, "user123", "feishu"),
+		core.NewTarget(core.TargetTypeChannel, "general", "slack"),
+		core.NewTarget(core.TargetTypeChannel, "announcements", "discord"),
 	},
 }
 

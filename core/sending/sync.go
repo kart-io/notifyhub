@@ -77,7 +77,7 @@ func (s *SyncSender) Send(ctx context.Context, msg *message.Message, targets []T
 
 // sendToTarget sends a message to a single target
 func (s *SyncSender) sendToTarget(ctx context.Context, msg *message.Message, target Target) *Result {
-	result := NewResult(msg.GetID(), target)
+	result := NewResult(msg.ID, target)
 	result.StartTime = time.Now()
 
 	// Get transport for target platform
@@ -95,18 +95,18 @@ func (s *SyncSender) sendToTarget(ctx context.Context, msg *message.Message, tar
 		result.Error = fmt.Errorf("message validation failed: %w", err)
 		result.Status = StatusFailed
 		result.EndTime = time.Now()
-		s.logger.Error(ctx, "Message validation failed", "platform", target.GetPlatform(), "message", msg.GetID(), "error", err)
+		s.logger.Error(ctx, "Message validation failed", "platform", target.Platform, "message", msg.ID, "error", err)
 		return result
 	}
 
 	// Send through transport
-	s.logger.Debug(ctx, "Sending message", "platform", target.GetPlatform(), "target", target.GetValue(), "message", msg.GetID())
+	s.logger.Debug(ctx, "Sending message", "platform", target.Platform, "target", target.Value, "message", msg.ID)
 
 	transportResult, err := transport.Send(ctx, msg, target)
 	if err != nil {
 		result.Error = err
 		result.Status = StatusFailed
-		s.logger.Error(ctx, "Send failed", "platform", target.GetPlatform(), "target", target.GetValue(), "message", msg.GetID(), "error", err)
+		s.logger.Error(ctx, "Send failed", "platform", target.Platform, "target", target.Value, "message", msg.ID, "error", err)
 	} else {
 		// Use transport result if provided
 		if transportResult != nil {
@@ -115,7 +115,7 @@ func (s *SyncSender) sendToTarget(ctx context.Context, msg *message.Message, tar
 			result.Status = StatusSent
 			result.Success = true
 		}
-		s.logger.Info(ctx, "Message sent successfully", "platform", target.GetPlatform(), "target", target.GetValue(), "message", msg.GetID())
+		s.logger.Info(ctx, "Message sent successfully", "platform", target.Platform, "target", target.Value, "message", msg.ID)
 	}
 
 	result.EndTime = time.Now()

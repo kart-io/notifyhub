@@ -1,5 +1,10 @@
 package sending
 
+import (
+	"fmt"
+	"regexp"
+)
+
 // TargetType represents the type of notification target
 type TargetType string
 
@@ -54,6 +59,9 @@ func (t Target) String() string {
 	return t.Platform + ":" + string(t.Type) + ":" + t.Value
 }
 
+// email validation regex
+var emailRegex = regexp.MustCompile(`^[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}$`)
+
 // Validate checks if the target is valid
 func (t *Target) Validate() error {
 	if t.Type == "" {
@@ -65,6 +73,17 @@ func (t *Target) Validate() error {
 	if t.Platform == "" {
 		return ErrEmptyPlatform
 	}
+
+	// Check value length (maximum 255 characters)
+	if len(t.Value) > 255 {
+		return fmt.Errorf("target value too long: %w", ErrInvalidTargetType)
+	}
+
+	// Validate email format for email targets
+	if t.Type == TargetTypeEmail && !emailRegex.MatchString(t.Value) {
+		return fmt.Errorf("invalid email format: %w", ErrInvalidTargetType)
+	}
+
 	return nil
 }
 

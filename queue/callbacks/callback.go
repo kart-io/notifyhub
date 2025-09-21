@@ -11,8 +11,8 @@ import (
 	"net/http"
 	"time"
 
-	"github.com/kart-io/notifyhub/core/sending"
-	"github.com/kart-io/notifyhub/queue/core"
+	"github.com/kart-io/notifyhub/core"
+	queueCore "github.com/kart-io/notifyhub/queue/core"
 )
 
 // CallbackEvent represents the event type for callbacks
@@ -31,14 +31,14 @@ const (
 
 // CallbackContext contains information about the callback execution
 type CallbackContext struct {
-	MessageID  string                  `json:"message_id"`
-	Event      CallbackEvent           `json:"event"`
-	Message    interface{}             `json:"message"` // Can be *message.Message
-	Results    *sending.SendingResults `json:"results,omitempty"`
-	Error      error                   `json:"error,omitempty"`
-	Attempts   int                     `json:"attempts"`
-	ExecutedAt time.Time               `json:"executed_at"`
-	Duration   time.Duration           `json:"duration,omitempty"`
+	MessageID  string               `json:"message_id"`
+	Event      CallbackEvent        `json:"event"`
+	Message    interface{}          `json:"message"` // Can be *message.Message
+	Results    *core.SendingResults `json:"results,omitempty"`
+	Error      error                `json:"error,omitempty"`
+	Attempts   int                  `json:"attempts"`
+	ExecutedAt time.Time            `json:"executed_at"`
+	Duration   time.Duration        `json:"duration,omitempty"`
 }
 
 // Callback defines the interface for message processing callbacks
@@ -118,7 +118,7 @@ func NewCallbackExecutor() *CallbackExecutor {
 }
 
 // ExecuteCallbacks executes all callbacks for a given event
-func (ce *CallbackExecutor) ExecuteCallbacks(ctx context.Context, event CallbackEvent, queueMsg *core.Message, results *sending.SendingResults, err error, duration time.Duration) {
+func (ce *CallbackExecutor) ExecuteCallbacks(ctx context.Context, event CallbackEvent, queueMsg *queueCore.Message, results *core.SendingResults, err error, duration time.Duration) {
 	// Type assert callbacks to our CallbackOptions type
 	callbacks, ok := queueMsg.Callbacks.(*CallbackOptions)
 	if !ok || callbacks == nil {

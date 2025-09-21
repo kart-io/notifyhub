@@ -2,12 +2,12 @@ package middleware
 
 import (
 	"context"
+	"fmt"
 	"sync"
 	"time"
 
+	"github.com/kart-io/notifyhub/core"
 	"github.com/kart-io/notifyhub/core/hub"
-	"github.com/kart-io/notifyhub/core/message"
-	"github.com/kart-io/notifyhub/core/sending"
 	"github.com/kart-io/notifyhub/logger"
 )
 
@@ -38,12 +38,12 @@ func (m *RateLimitMiddleware) SetLimit(platform string, rate float64, capacity i
 }
 
 // Process processes the message through rate limiting
-func (m *RateLimitMiddleware) Process(ctx context.Context, msg *message.Message, targets []sending.Target, next hub.ProcessFunc) (*sending.SendingResults, error) {
+func (m *RateLimitMiddleware) Process(ctx context.Context, msg *core.Message, targets []core.Target, next hub.ProcessFunc) (*core.SendingResults, error) {
 	// Group targets by platform for rate limiting
 	platformGroups := m.groupTargetsByPlatform(targets)
 
-	var allowedTargets []sending.Target
-	results := sending.NewSendingResults()
+	var allowedTargets []core.Target
+	results := core.NewSendingResults()
 
 	for platform, platformTargets := range platformGroups {
 		limiter := m.getLimiter(platform)
@@ -59,8 +59,8 @@ func (m *RateLimitMiddleware) Process(ctx context.Context, msg *message.Message,
 				allowedTargets = append(allowedTargets, target)
 			} else {
 				// Rate limited, create failed result
-				result := sending.NewResult(msg.ID, target)
-				result.SetError(sending.ErrRateLimited)
+				result := core.NewResult(msg.ID, target)
+				result.Error = fmt.Errorf("rate limited")
 				results.AddResult(result)
 
 				if m.logger != nil {
@@ -94,8 +94,8 @@ func (m *RateLimitMiddleware) getLimiter(platform string) *tokenBucket {
 }
 
 // groupTargetsByPlatform groups targets by platform
-func (m *RateLimitMiddleware) groupTargetsByPlatform(targets []sending.Target) map[string][]sending.Target {
-	groups := make(map[string][]sending.Target)
+func (m *RateLimitMiddleware) groupTargetsByPlatform(targets []core.Target) map[string][]core.Target {
+	groups := make(map[string][]core.Target)
 	for _, target := range targets {
 		groups[target.Platform] = append(groups[target.Platform], target)
 	}

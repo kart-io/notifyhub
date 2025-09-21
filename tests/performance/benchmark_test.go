@@ -11,9 +11,6 @@ import (
 
 	"github.com/kart-io/notifyhub/api"
 	"github.com/kart-io/notifyhub/config"
-	"github.com/kart-io/notifyhub/core/message"
-	"github.com/kart-io/notifyhub/core/sending"
-	"github.com/kart-io/notifyhub/queue"
 	"github.com/kart-io/notifyhub/tests/utils"
 )
 
@@ -25,27 +22,24 @@ func BenchmarkSingleMessageSend(b *testing.B) {
 		config.WithSilentLogger(),
 	)
 
-	hub, err := api.New(cfg, nil)
+	hub, err := api.New(cfg)
 	if err != nil {
 		b.Fatalf("Failed to create hub: %v", err)
 	}
 	defer func() { _ = hub.Shutdown(context.Background()) }()
 
 	ctx := context.Background()
-	msg := hub.NewMessage()
-	msg.SetTitle("Benchmark Test")
-	msg.SetBody("This is a benchmark test message")
-	msg.SetPriority(3)
-
-	targets := []sending.Target{
-		utils.CreateTestTarget(sending.TargetTypeEmail, "test@example.com", "test"),
-	}
 
 	b.ResetTimer()
 	b.ReportAllocs()
 
 	for i := 0; i < b.N; i++ {
-		_, err := hub.Send(ctx, msg, targets)
+		_, err := hub.Send().
+			Title("Benchmark Test").
+			Body("This is a benchmark test message").
+			Priority(3).
+			To("test@example.com").
+			Send(ctx)
 		if err != nil {
 			b.Errorf("Send failed: %v", err)
 		}
@@ -60,33 +54,25 @@ func BenchmarkMultiTargetSend(b *testing.B) {
 		config.WithSilentLogger(),
 	)
 
-	hub, err := api.New(cfg, nil)
+	hub, err := api.New(cfg)
 	if err != nil {
 		b.Fatalf("Failed to create hub: %v", err)
 	}
 	defer func() { _ = hub.Shutdown(context.Background()) }()
 
 	ctx := context.Background()
-	msg := hub.NewMessage()
-	msg.SetTitle("Benchmark Multi-Target")
-	msg.SetBody("Testing multiple targets")
-	msg.SetPriority(3)
-
-	// 创建10个目标
-	targets := make([]sending.Target, 10)
-	for i := 0; i < 10; i++ {
-		targets[i] = utils.CreateTestTarget(
-			sending.TargetTypeEmail,
-			"test@example.com",
-			"test",
-		)
-	}
 
 	b.ResetTimer()
 	b.ReportAllocs()
 
 	for i := 0; i < b.N; i++ {
-		_, err := hub.Send(ctx, msg, targets)
+		_, err := hub.Send().
+			Title("Benchmark Multi-Target").
+			Body("Testing multiple targets").
+			Priority(3).
+			To("test1@example.com", "test2@example.com", "test3@example.com", "test4@example.com", "test5@example.com",
+				"test6@example.com", "test7@example.com", "test8@example.com", "test9@example.com", "test10@example.com").
+			Send(ctx)
 		if err != nil {
 			b.Errorf("Send failed: %v", err)
 		}
@@ -101,7 +87,7 @@ func BenchmarkConcurrentSends(b *testing.B) {
 		config.WithSilentLogger(),
 	)
 
-	hub, err := api.New(cfg, nil)
+	hub, err := api.New(cfg)
 	if err != nil {
 		b.Fatalf("Failed to create hub: %v", err)
 	}
@@ -114,17 +100,13 @@ func BenchmarkConcurrentSends(b *testing.B) {
 	b.ReportAllocs()
 
 	b.RunParallel(func(pb *testing.PB) {
-		msg := hub.NewMessage()
-		msg.SetTitle("Concurrent Test")
-		msg.SetBody("Concurrent message")
-		msg.SetPriority(3)
-
-		targets := []sending.Target{
-			utils.CreateTestTarget(sending.TargetTypeEmail, "test@example.com", "test"),
-		}
-
 		for pb.Next() {
-			_, err := hub.Send(ctx, msg, targets)
+			_, err := hub.Send().
+				Title("Concurrent Test").
+				Body("Concurrent message").
+				Priority(3).
+				To("test@example.com").
+				Send(ctx)
 			if err != nil {
 				b.Errorf("Send failed: %v", err)
 			}
@@ -137,7 +119,7 @@ func BenchmarkConcurrentSends(b *testing.B) {
 // BenchmarkMessageCreation 消息创建性能测试
 func BenchmarkMessageCreation(b *testing.B) {
 	cfg := config.New(config.WithSilentLogger())
-	hub, err := api.New(cfg, nil)
+	hub, err := api.New(cfg)
 	if err != nil {
 		b.Fatalf("Failed to create hub: %v", err)
 	}
@@ -147,13 +129,13 @@ func BenchmarkMessageCreation(b *testing.B) {
 	b.ReportAllocs()
 
 	for i := 0; i < b.N; i++ {
-		msg := hub.NewMessage()
-		msg.SetTitle("Test Title")
-		msg.SetBody("Test Body")
-		msg.SetPriority(3)
-		msg.AddVariable("key1", "value1")
-		msg.AddMetadata("meta1", "data1")
-		msg.AddTarget(message.NewTarget(message.TargetTypeEmail, "test@example.com", "email"))
+		msg := hub.Send()
+		msg.Title("Test Title")
+		msg.Body("Test Body")
+		msg.Priority(3)
+		msg.Vars(map[string]interface{}{"key1": "value1"})
+		msg.Meta("meta1", "data1")
+		msg.To("test@example.com")
 	}
 }
 
@@ -165,7 +147,7 @@ func BenchmarkQueueThroughput(b *testing.B) {
 		config.WithSilentLogger(),
 	)
 
-	hub, err := api.New(cfg, nil)
+	hub, err := api.New(cfg)
 	if err != nil {
 		b.Fatalf("Failed to create hub: %v", err)
 	}
@@ -173,30 +155,19 @@ func BenchmarkQueueThroughput(b *testing.B) {
 
 	ctx := context.Background()
 
-	// 预先创建消息
-	messages := make([]*queue.Message, 1000)
-	for i := 0; i < 1000; i++ {
-		msg := &queue.Message{
-			ID:        fmt.Sprintf("test-msg-%d", i),
-			Message:   message.NewMessage().SetTitle("Queue Test").SetBody("Testing queue throughput").SetPriority(3),
-			Targets:   []sending.Target{},
-			Attempts:  0,
-			CreatedAt: time.Now(),
-		}
-		messages[i] = msg
-	}
-
-	targets := []sending.Target{
-		utils.CreateTestTarget(sending.TargetTypeEmail, "test@example.com", "test"),
-	}
-	_ = targets // Avoid unused variable error
-
 	b.ResetTimer()
 	b.ReportAllocs()
 
 	for i := 0; i < b.N; i++ {
-		msg := messages[i%1000]
-		_, _ = hub.Send(ctx, msg.Message, msg.Targets)
+		_, err := hub.Send().
+			Title("Queue Test").
+			Body("Testing queue throughput").
+			Priority(3).
+			To("test@example.com").
+			Send(ctx)
+		if err != nil {
+			b.Errorf("Send failed: %v", err)
+		}
 	}
 
 	// 等待队列处理完成
@@ -213,15 +184,13 @@ func TestThroughput(t *testing.T) {
 		config.WithSilentLogger(),
 	)
 
-	hub, err := api.New(cfg, nil)
+	hub, err := api.New(cfg)
 	helper.AssertNoError(err, "Failed to create hub")
 	defer func() { _ = hub.Shutdown(context.Background()) }()
 
 	ctx := context.Background()
 	numMessages := 10000
 	var sent int64
-	var received int64
-	_ = received // Avoid unused variable error
 	startTime := time.Now()
 
 	// 发送消息
@@ -231,17 +200,13 @@ func TestThroughput(t *testing.T) {
 		go func(id int) {
 			defer wg.Done()
 
-			msg := hub.NewMessage()
-			msg.SetTitle("Throughput Test")
-			msg.SetBody("Message for throughput testing")
-			msg.SetPriority(3)
-			msg.AddVariable("id", id)
-
-			targets := []sending.Target{
-				utils.CreateTestTarget(sending.TargetTypeEmail, "test@example.com", "test"),
-			}
-
-			_, err := hub.Send(ctx, msg, targets)
+			_, err := hub.Send().
+				Title("Throughput Test").
+				Body("Message for throughput testing").
+				Priority(3).
+				Vars(map[string]interface{}{"id": id}).
+				To("test@example.com").
+				Send(ctx)
 			if err == nil {
 				atomic.AddInt64(&sent, 1)
 			}
@@ -276,7 +241,7 @@ func TestLatency(t *testing.T) {
 		config.WithSilentLogger(),
 	)
 
-	hub, err := api.New(cfg, nil)
+	hub, err := api.New(cfg)
 	helper.AssertNoError(err, "Failed to create hub")
 	defer func() { _ = hub.Shutdown(context.Background()) }()
 
@@ -286,17 +251,13 @@ func TestLatency(t *testing.T) {
 
 	// 测量延迟
 	for i := 0; i < numSamples; i++ {
-		msg := hub.NewMessage()
-		msg.SetTitle("Latency Test")
-		msg.SetBody("Testing latency")
-		msg.SetPriority(3)
-
-		targets := []sending.Target{
-			utils.CreateTestTarget(sending.TargetTypeEmail, "test@example.com", "test"),
-		}
-
 		start := time.Now()
-		_, err := hub.Send(ctx, msg, targets)
+		_, err := hub.Send().
+			Title("Latency Test").
+			Body("Testing latency").
+			Priority(3).
+			To("test@example.com").
+			Send(ctx)
 		latencies[i] = time.Since(start)
 
 		if err != nil {
@@ -350,7 +311,7 @@ func TestMemoryUsage(t *testing.T) {
 		config.WithSilentLogger(),
 	)
 
-	hub, err := api.New(cfg, nil)
+	hub, err := api.New(cfg)
 	helper.AssertNoError(err, "Failed to create hub")
 	defer func() { _ = hub.Shutdown(context.Background()) }()
 
@@ -364,22 +325,20 @@ func TestMemoryUsage(t *testing.T) {
 
 	// 发送大量消息
 	for i := 0; i < numMessages; i++ {
-		msg := hub.NewMessage()
-		msg.SetTitle("Memory Test")
-		msg.SetBody("Testing memory usage with a longer body content to increase memory pressure")
-		msg.SetPriority(3)
-
 		// 添加多个变量和元数据
+		variables := make(map[string]interface{})
 		for j := 0; j < 10; j++ {
-			msg.AddVariable("key", j)
-			msg.AddMetadata("meta", "value")
+			variables[fmt.Sprintf("key%d", j)] = j
 		}
 
-		targets := []sending.Target{
-			utils.CreateTestTarget(sending.TargetTypeEmail, "test@example.com", "test"),
-		}
-
-		_, err := hub.Send(ctx, msg, targets)
+		_, err := hub.Send().
+			Title("Memory Test").
+			Body("Testing memory usage with a longer body content to increase memory pressure").
+			Priority(3).
+			Vars(variables).
+			Meta("meta", "value").
+			To("test@example.com").
+			Send(ctx)
 		if err != nil {
 			// 在性能测试中可以忽略发送错误或记录
 			t.Logf("Send error: %v", err)
@@ -399,18 +358,21 @@ func TestMemoryUsage(t *testing.T) {
 	var m2 runtime.MemStats
 	runtime.ReadMemStats(&m2)
 
-	// 计算内存增长
-	heapGrowth := m2.HeapAlloc - m1.HeapAlloc
-	heapGrowthMB := float64(heapGrowth) / (1024 * 1024)
+	// 计算内存增长 (处理可能的负增长)
+	initialMB := float64(m1.HeapAlloc) / (1024 * 1024)
+	finalMB := float64(m2.HeapAlloc) / (1024 * 1024)
+	heapGrowthMB := finalMB - initialMB
 
 	t.Logf("Memory Usage:")
-	t.Logf("  Initial Heap: %.2f MB", float64(m1.HeapAlloc)/(1024*1024))
-	t.Logf("  Final Heap: %.2f MB", float64(m2.HeapAlloc)/(1024*1024))
+	t.Logf("  Initial Heap: %.2f MB", initialMB)
+	t.Logf("  Final Heap: %.2f MB", finalMB)
 	t.Logf("  Heap Growth: %.2f MB", heapGrowthMB)
 	t.Logf("  Num GC: %d", m2.NumGC-m1.NumGC)
 
-	// 验证内存使用
-	helper.AssertTrue(heapGrowthMB < 100, "Heap growth should be < 100MB, got", heapGrowthMB)
+	// 验证内存使用 (允许负增长，只检查合理的正增长)
+	if heapGrowthMB > 0 {
+		helper.AssertTrue(heapGrowthMB < 100, "Heap growth should be < 100MB, got", heapGrowthMB)
+	}
 }
 
 // BenchmarkWithMiddleware 带中间件的性能测试
@@ -421,32 +383,24 @@ func BenchmarkWithMiddleware(b *testing.B) {
 		config.WithSilentLogger(),
 	)
 
-	hub, err := api.New(cfg, nil)
+	hub, err := api.New(cfg)
 	if err != nil {
 		b.Fatalf("Failed to create hub: %v", err)
 	}
 	defer func() { _ = hub.Shutdown(context.Background()) }()
 
-	// NotifyHub类型没有UseMiddleware方法，跳过中间件测试
-	// for i := 0; i < 5; i++ {
-	//     hub.UseMiddleware(...)
-	// }
-
 	ctx := context.Background()
-	msg := hub.NewMessage()
-	msg.SetTitle("Middleware Test")
-	msg.SetBody("Testing with middleware")
-	msg.SetPriority(3)
-
-	targets := []sending.Target{
-		utils.CreateTestTarget(sending.TargetTypeEmail, "test@example.com", "test"),
-	}
 
 	b.ResetTimer()
 	b.ReportAllocs()
 
 	for i := 0; i < b.N; i++ {
-		_, err := hub.Send(ctx, msg, targets)
+		_, err := hub.Send().
+			Title("Middleware Test").
+			Body("Testing with middleware").
+			Priority(3).
+			To("test@example.com").
+			Send(ctx)
 		if err != nil {
 			b.Errorf("Send failed: %v", err)
 		}
@@ -460,33 +414,30 @@ func BenchmarkTemplateRendering(b *testing.B) {
 		config.WithSilentLogger(),
 	)
 
-	hub, err := api.New(cfg, nil)
+	hub, err := api.New(cfg)
 	if err != nil {
 		b.Fatalf("Failed to create hub: %v", err)
 	}
 	defer func() { _ = hub.Shutdown(context.Background()) }()
 
 	ctx := context.Background()
-	msg := hub.NewMessage()
-	msg.SetTemplate("complex-template")
-	msg.SetTitle("{{.service}} Alert: {{.status}}")
-	msg.SetBody("Service {{.service}} is {{.status}}. Error: {{.error}}. Time: {{.timestamp}}")
-
-	// 添加多个变量
-	msg.AddVariable("service", "api-gateway")
-	msg.AddVariable("status", "down")
-	msg.AddVariable("error", "connection timeout")
-	msg.AddVariable("timestamp", time.Now().Format(time.RFC3339))
-
-	targets := []sending.Target{
-		utils.CreateTestTarget(sending.TargetTypeEmail, "admin@example.com", "test"),
-	}
 
 	b.ResetTimer()
 	b.ReportAllocs()
 
 	for i := 0; i < b.N; i++ {
-		_, err := hub.Send(ctx, msg, targets)
+		_, err := hub.Send().
+			Template("complex-template").
+			Title("{{.service}} Alert: {{.status}}").
+			Body("Service {{.service}} is {{.status}}. Error: {{.error}}. Time: {{.timestamp}}").
+			Vars(map[string]interface{}{
+				"service":   "api-gateway",
+				"status":    "down",
+				"error":     "connection timeout",
+				"timestamp": time.Now().Format(time.RFC3339),
+			}).
+			To("admin@example.com").
+			Send(ctx)
 		if err != nil {
 			b.Errorf("Send failed: %v", err)
 		}

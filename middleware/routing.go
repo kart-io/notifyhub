@@ -4,9 +4,8 @@ import (
 	"context"
 
 	"github.com/kart-io/notifyhub/config/routing"
+	"github.com/kart-io/notifyhub/core"
 	"github.com/kart-io/notifyhub/core/hub"
-	"github.com/kart-io/notifyhub/core/message"
-	"github.com/kart-io/notifyhub/core/sending"
 	"github.com/kart-io/notifyhub/logger"
 )
 
@@ -25,7 +24,7 @@ func NewRoutingMiddleware(rules []routing.Rule, logger logger.Interface) *Routin
 }
 
 // Process processes the message through routing rules
-func (m *RoutingMiddleware) Process(ctx context.Context, msg *message.Message, targets []sending.Target, next hub.ProcessFunc) (*sending.SendingResults, error) {
+func (m *RoutingMiddleware) Process(ctx context.Context, msg *core.Message, targets []core.Target, next hub.ProcessFunc) (*core.SendingResults, error) {
 	// Convert message to map for routing engine
 	msgMap := m.convertToMap(msg, targets)
 
@@ -51,7 +50,7 @@ func (m *RoutingMiddleware) Process(ctx context.Context, msg *message.Message, t
 }
 
 // convertToMap converts message to map for routing engine
-func (m *RoutingMiddleware) convertToMap(msg *message.Message, targets []sending.Target) map[string]interface{} {
+func (m *RoutingMiddleware) convertToMap(msg *core.Message, targets []core.Target) map[string]interface{} {
 	// Convert targets to interfaces
 	targetMaps := make([]interface{}, len(targets))
 	for i, target := range targets {
@@ -77,16 +76,16 @@ func (m *RoutingMiddleware) convertToMap(msg *message.Message, targets []sending
 }
 
 // extractTargets extracts targets from processed map
-func (m *RoutingMiddleware) extractTargets(processedMap map[string]interface{}) []sending.Target {
-	var targets []sending.Target
+func (m *RoutingMiddleware) extractTargets(processedMap map[string]interface{}) []core.Target {
+	var targets []core.Target
 
 	if targetsInterface, ok := processedMap["targets"]; ok {
 		if targetSlice, ok := targetsInterface.([]interface{}); ok {
 			for _, targetInterface := range targetSlice {
 				if targetMap, ok := targetInterface.(map[string]interface{}); ok {
-					target := sending.Target{}
+					target := core.Target{}
 					if typ, ok := targetMap["type"].(string); ok {
-						target.Type = sending.TargetType(typ)
+						target.Type = core.TargetType(typ)
 					}
 					if value, ok := targetMap["value"].(string); ok {
 						target.Value = value
@@ -107,17 +106,20 @@ func (m *RoutingMiddleware) extractTargets(processedMap map[string]interface{}) 
 }
 
 // updateMessageFromMap updates message based on routing results
-func (m *RoutingMiddleware) updateMessageFromMap(msg *message.Message, processedMap map[string]interface{}) {
+func (m *RoutingMiddleware) updateMessageFromMap(msg *core.Message, processedMap map[string]interface{}) {
 	// Update priority if changed by routing
-	if priority, ok := processedMap["priority"].(int); ok && priority != msg.Priority {
-		msg.SetPriority(priority)
+	if priority, ok := processedMap["priority"].(int); ok && core.Priority(priority) != msg.Priority {
+		msg.Priority = core.Priority(priority)
 	}
 
 	// Update metadata if changed by routing
 	if metadata, ok := processedMap["metadata"].(map[string]string); ok {
 		for key, value := range metadata {
 			if existingValue, exists := msg.Metadata[key]; !exists || existingValue != value {
-				msg.AddMetadata(key, value)
+				if msg.Metadata == nil {
+					msg.Metadata = make(map[string]string)
+				}
+				msg.Metadata[key] = value
 			}
 		}
 	}

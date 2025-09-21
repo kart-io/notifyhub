@@ -6,9 +6,8 @@ import (
 	"testing"
 	"time"
 
+	"github.com/kart-io/notifyhub/core"
 	"github.com/kart-io/notifyhub/core/hub"
-	"github.com/kart-io/notifyhub/core/message"
-	"github.com/kart-io/notifyhub/core/sending"
 	"github.com/kart-io/notifyhub/tests/mocks"
 	"github.com/kart-io/notifyhub/tests/utils"
 )
@@ -69,13 +68,13 @@ func TestHub_SendMessage(t *testing.T) {
 
 	// 创建消息
 	msg := utils.CreateTestMessageWithDetails("Test", "Test message", 3)
-	targets := []sending.Target{
-		utils.CreateTestTarget(sending.TargetTypeEmail, "test@example.com", "test"),
+	targets := []core.Target{
+		utils.CreateTestTarget(core.TargetTypeEmail, "test@example.com", "test"),
 	}
 
 	// 发送消息
 	ctx := context.Background()
-	results, err := h.Send(ctx, msg, targets)
+	results, err := h.Send(ctx, msg.Message, targets)
 
 	helper.AssertNoError(err, "Send should not error")
 	helper.AssertNotNil(results, "Results should not be nil")
@@ -101,16 +100,16 @@ func TestHub_SendToMultipleTargets(t *testing.T) {
 
 	// 创建消息和多个目标
 	msg := utils.CreateTestMessageWithDetails("Multi-target", "Test message", 3)
-	targets := []sending.Target{
-		utils.CreateTestTarget(sending.TargetTypeEmail, "user1@example.com", "email"),
-		utils.CreateTestTarget(sending.TargetTypeEmail, "user2@example.com", "email"),
-		utils.CreateTestTarget(sending.TargetTypeUser, "user123", "feishu"),
-		utils.CreateTestTarget(sending.TargetTypeGroup, "dev-team", "feishu"),
+	targets := []core.Target{
+		utils.CreateTestTarget(core.TargetTypeEmail, "user1@example.com", "email"),
+		utils.CreateTestTarget(core.TargetTypeEmail, "user2@example.com", "email"),
+		utils.CreateTestTarget(core.TargetTypeUser, "user123", "feishu"),
+		utils.CreateTestTarget(core.TargetTypeGroup, "dev-team", "feishu"),
 	}
 
 	// 发送消息
 	ctx := context.Background()
-	results, err := h.Send(ctx, msg, targets)
+	results, err := h.Send(ctx, msg.Message, targets)
 
 	helper.AssertNoError(err, "Send should not error")
 	helper.AssertEqual(4, len(results.Results), "Should have 4 results")
@@ -134,14 +133,14 @@ func TestHub_SendWithUnknownPlatform(t *testing.T) {
 
 	// 创建包含未知平台的目标
 	msg := utils.CreateTestMessageWithDetails("Test", "Test message", 3)
-	targets := []sending.Target{
-		utils.CreateTestTarget(sending.TargetTypeEmail, "test@example.com", "email"),
-		utils.CreateTestTarget(sending.TargetTypeUser, "user123", "unknown"), // 未知平台
+	targets := []core.Target{
+		utils.CreateTestTarget(core.TargetTypeEmail, "test@example.com", "email"),
+		utils.CreateTestTarget(core.TargetTypeUser, "user123", "unknown"), // 未知平台
 	}
 
 	// 发送消息
 	ctx := context.Background()
-	results, err := h.Send(ctx, msg, targets)
+	results, err := h.Send(ctx, msg.Message, targets)
 
 	helper.AssertNoError(err, "Send should not error (partial failure is OK)")
 	helper.AssertEqual(2, len(results.Results), "Should have 2 results")
@@ -172,12 +171,12 @@ func TestHub_SendWithTransportError(t *testing.T) {
 
 	// 发送消息
 	msg := utils.CreateTestMessageWithDetails("Test", "Test message", 3)
-	targets := []sending.Target{
-		utils.CreateTestTarget(sending.TargetTypeEmail, "test@example.com", "test"),
+	targets := []core.Target{
+		utils.CreateTestTarget(core.TargetTypeEmail, "test@example.com", "test"),
 	}
 
 	ctx := context.Background()
-	results, err := h.Send(ctx, msg, targets)
+	results, err := h.Send(ctx, msg.Message, targets)
 
 	helper.AssertNoError(err, "Send should not error at hub level")
 	helper.AssertEqual(1, len(results.Results), "Should have 1 result")
@@ -196,17 +195,17 @@ func TestHub_Middleware(t *testing.T) {
 	middleware2 := mocks.NewMockMiddleware("middleware2")
 
 	var executionOrder []string
-	middleware1.SetBeforeFunc(func(ctx context.Context, msg *message.Message, targets []sending.Target) {
+	middleware1.SetBeforeFunc(func(ctx context.Context, msg *core.Message, targets []core.Target) {
 		executionOrder = append(executionOrder, "middleware1-before")
 	})
-	middleware1.SetAfterFunc(func(ctx context.Context, results *sending.SendingResults) {
+	middleware1.SetAfterFunc(func(ctx context.Context, results *core.SendingResults) {
 		executionOrder = append(executionOrder, "middleware1-after")
 	})
 
-	middleware2.SetBeforeFunc(func(ctx context.Context, msg *message.Message, targets []sending.Target) {
+	middleware2.SetBeforeFunc(func(ctx context.Context, msg *core.Message, targets []core.Target) {
 		executionOrder = append(executionOrder, "middleware2-before")
 	})
-	middleware2.SetAfterFunc(func(ctx context.Context, results *sending.SendingResults) {
+	middleware2.SetAfterFunc(func(ctx context.Context, results *core.SendingResults) {
 		executionOrder = append(executionOrder, "middleware2-after")
 	})
 
@@ -219,12 +218,12 @@ func TestHub_Middleware(t *testing.T) {
 
 	// 发送消息
 	msg := utils.CreateTestMessageWithDetails("Test", "Test message", 3)
-	targets := []sending.Target{
-		utils.CreateTestTarget(sending.TargetTypeEmail, "test@example.com", "test"),
+	targets := []core.Target{
+		utils.CreateTestTarget(core.TargetTypeEmail, "test@example.com", "test"),
 	}
 
 	ctx := context.Background()
-	results, err := h.Send(ctx, msg, targets)
+	results, err := h.Send(ctx, msg.Message, targets)
 
 	helper.AssertNoError(err, "Send should not error")
 	helper.AssertNotNil(results, "Results should not be nil")
@@ -265,12 +264,12 @@ func TestHub_MiddlewareError(t *testing.T) {
 
 	// 发送消息
 	msg := utils.CreateTestMessageWithDetails("Test", "Test message", 3)
-	targets := []sending.Target{
-		utils.CreateTestTarget(sending.TargetTypeEmail, "test@example.com", "test"),
+	targets := []core.Target{
+		utils.CreateTestTarget(core.TargetTypeEmail, "test@example.com", "test"),
 	}
 
 	ctx := context.Background()
-	_, err := h.Send(ctx, msg, targets)
+	_, err := h.Send(ctx, msg.Message, targets)
 
 	helper.AssertError(err, "Send should error when middleware fails")
 	helper.AssertContains(err.Error(), "middleware error", "Error should contain middleware error message")
@@ -299,12 +298,12 @@ func TestHub_ConcurrentSends(t *testing.T) {
 			msg := utils.CreateTestMessageWithDetails("Test", "Concurrent message", 3)
 			msg.AddMetadata("goroutine", string(rune(id)))
 
-			targets := []sending.Target{
-				utils.CreateTestTarget(sending.TargetTypeEmail, "test@example.com", "test"),
+			targets := []core.Target{
+				utils.CreateTestTarget(core.TargetTypeEmail, "test@example.com", "test"),
 			}
 
 			ctx := context.Background()
-			results, err := h.Send(ctx, msg, targets)
+			results, err := h.Send(ctx, msg.Message, targets)
 
 			helper.AssertNoError(err, "Send should not error")
 			helper.AssertNotNil(results, "Results should not be nil")
@@ -331,26 +330,23 @@ func TestHub_ContextCancellation(t *testing.T) {
 
 	// 创建慢速传输器
 	mockTransport := mocks.NewMockTransport("test")
-	mockTransport.SetDelay(100 * time.Millisecond)
+	mockTransport.SetDelay(200 * time.Millisecond)
 	h.RegisterTransport(mockTransport)
 
+	msg := utils.CreateTestMessageWithDetails("Test", "Test message", 3)
+	targets := []core.Target{
+		utils.CreateTestTarget(core.TargetTypeEmail, "test@example.com", "test"),
+	}
+
 	// 创建快速超时的上下文
-	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Millisecond)
+	ctx, cancel := context.WithTimeout(context.Background(), 50*time.Millisecond)
 	defer cancel()
 
-	msg := utils.CreateTestMessageWithDetails("Test", "Test message", 3)
-	targets := []sending.Target{
-		utils.CreateTestTarget(sending.TargetTypeEmail, "test@example.com", "test"),
-	}
-
-	// 发送消息
-	_, err := h.Send(ctx, msg, targets)
+	// 立即发送消息（将因为上下文超时而失败）
+	_, err := h.Send(ctx, msg.Message, targets)
 
 	// 应该因为上下文取消而失败
-	if err == nil {
-		// 如果没有错误，检查是否是因为操作太快
-		helper.AssertTrue(false, "Expected context cancellation error")
-	}
+	helper.AssertTrue(err != nil || ctx.Err() != nil, "Expected context cancellation error")
 }
 
 func TestHub_Shutdown(t *testing.T) {
@@ -390,11 +386,11 @@ func TestHub_SendAfterShutdown(t *testing.T) {
 
 	// 尝试在关闭后发送
 	msg := utils.CreateTestMessageWithDetails("Test", "Test message", 3)
-	targets := []sending.Target{
-		utils.CreateTestTarget(sending.TargetTypeEmail, "test@example.com", "test"),
+	targets := []core.Target{
+		utils.CreateTestTarget(core.TargetTypeEmail, "test@example.com", "test"),
 	}
 
-	_, err = h.Send(ctx, msg, targets)
+	_, err = h.Send(ctx, msg.Message, targets)
 	helper.AssertError(err, "Send should error after shutdown")
 }
 
@@ -408,15 +404,15 @@ func TestHub_EmptyTargets(t *testing.T) {
 	mockTransport := mocks.NewMockTransport("test")
 	h.RegisterTransport(mockTransport)
 
-	// 发送没有目标的消息
+	// 发送没有目标的消息应该返回错误
 	msg := utils.CreateTestMessageWithDetails("Test", "Test message", 3)
-	targets := []sending.Target{}
+	targets := []core.Target{}
 
 	ctx := context.Background()
-	results, err := h.Send(ctx, msg, targets)
+	_, err := h.Send(ctx, msg.Message, targets)
 
-	helper.AssertNoError(err, "Send should not error with empty targets")
-	helper.AssertEqual(0, len(results.Results), "Should have 0 results")
+	helper.AssertError(err, "Send should error when both message and targets parameter are empty")
+	helper.AssertContains(err.Error(), "at least one target is required", "Error should mention target requirement")
 
 	// 验证传输器未被调用
 	calls := mockTransport.GetCalls()

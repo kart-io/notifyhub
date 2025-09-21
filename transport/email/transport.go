@@ -8,9 +8,8 @@ import (
 	"strings"
 	"time"
 
+	"github.com/kart-io/notifyhub/core"
 	"github.com/kart-io/notifyhub/core/errors"
-	"github.com/kart-io/notifyhub/core/message"
-	"github.com/kart-io/notifyhub/core/sending"
 )
 
 // Transport implements the Transport interface for Email
@@ -61,12 +60,12 @@ func (t *Transport) Name() string {
 }
 
 // Send sends a message through Email
-func (t *Transport) Send(ctx context.Context, msg *message.Message, target sending.Target) (*sending.Result, error) {
-	result := sending.NewResult(msg.ID, target)
-	result.SetStatus(sending.StatusSending)
+func (t *Transport) Send(ctx context.Context, msg *core.Message, target core.Target) (*core.Result, error) {
+	result := core.NewResult(msg.ID, target)
+	result.SetStatus(core.StatusSending)
 
 	// Validate target is email
-	if target.Type != sending.TargetTypeEmail {
+	if target.Type != core.TargetTypeEmail {
 		err := errors.NewEmailError(errors.CodeInvalidTarget, fmt.Sprintf("invalid target type for email transport: %s", target.Type))
 		result.SetError(err)
 		return result, err
@@ -88,12 +87,12 @@ func (t *Transport) Send(ctx context.Context, msg *message.Message, target sendi
 		return result, smtpErr
 	}
 
-	result.SetStatus(sending.StatusSent)
+	result.Status = core.StatusSent
 	return result, nil
 }
 
 // buildEmailMessage builds the email message content
-func (t *Transport) buildEmailMessage(msg *message.Message, target sending.Target) (string, error) {
+func (t *Transport) buildEmailMessage(msg *core.Message, target core.Target) (string, error) {
 	var emailMsg strings.Builder
 
 	// Headers
@@ -109,9 +108,9 @@ func (t *Transport) buildEmailMessage(msg *message.Message, target sending.Targe
 
 	// Content-Type based on format
 	switch msg.Format {
-	case message.FormatHTML:
+	case core.FormatHTML:
 		emailMsg.WriteString("Content-Type: text/html; charset=UTF-8\r\n")
-	case message.FormatMarkdown:
+	case core.FormatMarkdown:
 		// Convert markdown to HTML if needed, for now treat as plain text
 		emailMsg.WriteString("Content-Type: text/plain; charset=UTF-8\r\n")
 	default:

@@ -9,13 +9,13 @@ import (
 
 // AuthMiddleware provides authentication middleware for HTTP transport
 type AuthMiddleware struct {
-	hub        *api.Client
+	hub        api.Client
 	apiKeys    map[string]bool
 	bearerKeys map[string]bool
 }
 
 // NewAuthMiddleware creates a new authentication middleware
-func NewAuthMiddleware(hub *api.Client) *AuthMiddleware {
+func NewAuthMiddleware(hub api.Client) *AuthMiddleware {
 	return &AuthMiddleware{
 		hub:        hub,
 		apiKeys:    make(map[string]bool),

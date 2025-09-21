@@ -6,9 +6,8 @@ import (
 	"math"
 	"time"
 
+	"github.com/kart-io/notifyhub/core"
 	"github.com/kart-io/notifyhub/core/hub"
-	"github.com/kart-io/notifyhub/core/message"
-	"github.com/kart-io/notifyhub/core/sending"
 	"github.com/kart-io/notifyhub/logger"
 )
 
@@ -46,7 +45,7 @@ func (m *RetryMiddleware) SetMaxDelay(maxDelay time.Duration) {
 }
 
 // Process processes the message with retry logic
-func (m *RetryMiddleware) Process(ctx context.Context, msg *message.Message, targets []sending.Target, next hub.ProcessFunc) (*sending.SendingResults, error) {
+func (m *RetryMiddleware) Process(ctx context.Context, msg *core.Message, targets []core.Target, next hub.ProcessFunc) (*core.SendingResults, error) {
 	// Initial attempt
 	results, err := next(ctx, msg, targets)
 	if err != nil {
@@ -79,11 +78,11 @@ func (m *RetryMiddleware) Process(ctx context.Context, msg *message.Message, tar
 		}
 
 		// Retry targets
-		retryTargets := make([]sending.Target, len(failedResults))
+		retryTargets := make([]core.Target, len(failedResults))
 		for i, result := range failedResults {
 			retryTargets[i] = result.Target
-			result.IncrementAttempt()
-			result.SetStatus(sending.StatusRetrying)
+			// Increment attempt count manually since core.Result doesn't have this method
+			result.Status = core.StatusRetrying
 		}
 
 		retryResults, err := next(ctx, msg, retryTargets)
@@ -96,14 +95,14 @@ func (m *RetryMiddleware) Process(ctx context.Context, msg *message.Message, tar
 		}
 
 		// Update results with retry outcomes
-		newFailedResults := make([]*sending.Result, 0)
+		newFailedResults := make([]*core.Result, 0)
 		for i, retryResult := range retryResults.Results {
 			originalResult := failedResults[i]
 
-			if retryResult.IsSuccess() {
+			if retryResult.Success {
 				// Retry succeeded, update original result
-				originalResult.SetStatus(sending.StatusSent)
-				originalResult.SetResponse(retryResult.Response)
+				originalResult.Status = core.StatusSent
+				originalResult.Response = retryResult.Response
 				originalResult.Error = nil
 				if m.logger != nil {
 					m.logger.Info(ctx, "retry succeeded", "target", originalResult.Target.String(), "attempt", attempt)
@@ -129,10 +128,10 @@ func (m *RetryMiddleware) Process(ctx context.Context, msg *message.Message, tar
 }
 
 // getRetryableFailures returns failed results that can be retried
-func (m *RetryMiddleware) getRetryableFailures(results *sending.SendingResults) []*sending.Result {
-	var failures []*sending.Result
+func (m *RetryMiddleware) getRetryableFailures(results *core.SendingResults) []*core.Result {
+	var failures []*core.Result
 	for _, result := range results.Results {
-		if result.IsFailed() && m.shouldRetry(result.Error, 0) {
+		if !result.Success && m.shouldRetry(result.Error, 0) {
 			failures = append(failures, result)
 		}
 	}
@@ -146,10 +145,13 @@ func (m *RetryMiddleware) shouldRetry(err error, attempt int) bool {
 	}
 
 	// Don't retry certain errors
-	if err == sending.ErrInvalidCredentials ||
-		err == sending.ErrInvalidTargetType ||
-		err == sending.ErrEmptyTargetValue {
-		return false
+	if err != nil {
+		errStr := err.Error()
+		if errStr == "invalid credentials" ||
+			errStr == "invalid target type" ||
+			errStr == "empty target value" {
+			return false
+		}
 	}
 
 	return true

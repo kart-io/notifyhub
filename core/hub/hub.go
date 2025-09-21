@@ -4,26 +4,21 @@ import (
 	"context"
 	"fmt"
 
-	"github.com/kart-io/notifyhub/core/message"
-	"github.com/kart-io/notifyhub/core/sending"
+	"github.com/kart-io/notifyhub/core"
 	"github.com/kart-io/notifyhub/internal"
 	"github.com/kart-io/notifyhub/logger"
 )
 
-// Transport defines the interface for platform transports
-type Transport interface {
-	Send(ctx context.Context, msg *message.Message, target sending.Target) (*sending.Result, error)
-	Name() string
-	Shutdown() error
-}
+// Transport is an alias for core.Transport for backward compatibility
+type Transport = core.Transport
 
 // Middleware defines the interface for middleware
 type Middleware interface {
-	Process(ctx context.Context, msg *message.Message, targets []sending.Target, next ProcessFunc) (*sending.SendingResults, error)
+	Process(ctx context.Context, msg *core.Message, targets []core.Target, next ProcessFunc) (*core.SendingResults, error)
 }
 
 // ProcessFunc is the function signature for processing middleware chain
-type ProcessFunc func(ctx context.Context, msg *message.Message, targets []sending.Target) (*sending.SendingResults, error)
+type ProcessFunc func(ctx context.Context, msg *core.Message, targets []core.Target) (*core.SendingResults, error)
 
 // Hub is the central orchestrator for message sending
 type Hub struct {
@@ -99,7 +94,12 @@ func (h *Hub) AddMiddleware(middleware Middleware) {
 }
 
 // Send sends a message to the specified targets
-func (h *Hub) Send(ctx context.Context, msg *message.Message, targets []sending.Target) (*sending.SendingResults, error) {
+func (h *Hub) Send(ctx context.Context, msg *core.Message, targets []core.Target) (*core.SendingResults, error) {
+	// Check if hub is shutdown
+	if h.IsShutdown() {
+		return nil, fmt.Errorf("hub is shutdown")
+	}
+
 	// Generate message ID if not set
 	if msg.ID == "" {
 		msg.ID = h.idGenerator.Generate()
@@ -107,7 +107,23 @@ func (h *Hub) Send(ctx context.Context, msg *message.Message, targets []sending.
 
 	h.logger.Info(ctx, "sending message", "id", msg.ID, "targets", len(targets))
 
-	// Validate message
+	// Handle empty targets case
+	if len(targets) == 0 {
+		// If both targets parameter and message targets are empty, that's an error
+		if len(msg.Targets) == 0 {
+			return nil, fmt.Errorf("invalid message: at least one target is required")
+		}
+		// If message has targets but targets parameter is empty, return empty results
+		// (This handles cases where someone passes empty slice but message has targets)
+		return core.NewSendingResults(), nil
+	}
+
+	// Sync targets to message if message doesn't have targets but targets parameter is provided
+	if len(msg.Targets) == 0 && len(targets) > 0 {
+		msg.Targets = targets
+	}
+
+	// Validate message (including targets)
 	if err := msg.Validate(); err != nil {
 		return nil, fmt.Errorf("invalid message: %w", err)
 	}
@@ -133,7 +149,7 @@ func (h *Hub) buildProcessChain() ProcessFunc {
 	for i := len(h.middlewares) - 1; i >= 0; i-- {
 		middleware := h.middlewares[i]
 		next := processFunc
-		processFunc = func(ctx context.Context, msg *message.Message, targets []sending.Target) (*sending.SendingResults, error) {
+		processFunc = func(ctx context.Context, msg *core.Message, targets []core.Target) (*core.SendingResults, error) {
 			return middleware.Process(ctx, msg, targets, next)
 		}
 	}
@@ -142,8 +158,8 @@ func (h *Hub) buildProcessChain() ProcessFunc {
 }
 
 // coreSend is the core sending function that actually sends messages
-func (h *Hub) coreSend(ctx context.Context, msg *message.Message, targets []sending.Target) (*sending.SendingResults, error) {
-	results := sending.NewSendingResults()
+func (h *Hub) coreSend(ctx context.Context, msg *core.Message, targets []core.Target) (*core.SendingResults, error) {
+	results := core.NewSendingResults()
 
 	// Group targets by platform
 	targetGroups := h.groupTargetsByPlatform(targets)
@@ -155,7 +171,7 @@ func (h *Hub) coreSend(ctx context.Context, msg *message.Message, targets []send
 			h.logger.Error(ctx, "transport not found", "platform", platform)
 			// Add failed results for all targets in this platform
 			for _, target := range platformTargets {
-				result := sending.NewResult(msg.ID, target)
+				result := core.NewResult(msg.ID, target)
 				result.SetError(fmt.Errorf("transport not found for platform: %s", platform))
 				results.AddResult(result)
 			}
@@ -167,9 +183,9 @@ func (h *Hub) coreSend(ctx context.Context, msg *message.Message, targets []send
 			result, err := h.sendToTarget(ctx, transport, msg, target)
 			results.AddResult(result)
 			if err != nil {
-				h.logger.Error(ctx, "failed to send to target", "target", target.String(), "error", err)
+				h.logger.Error(ctx, "failed to send to target: target=%s, error=%v", target.String(), err)
 			} else {
-				h.logger.Info(ctx, "successfully sent to target", "target", target.String())
+				h.logger.Info(ctx, "successfully sent to target: %s", target.String())
 			}
 		}
 	}
@@ -178,9 +194,9 @@ func (h *Hub) coreSend(ctx context.Context, msg *message.Message, targets []send
 }
 
 // sendToTarget sends a message to a specific target
-func (h *Hub) sendToTarget(ctx context.Context, transport Transport, msg *message.Message, target sending.Target) (*sending.Result, error) {
-	result := sending.NewResult(msg.ID, target)
-	result.SetStatus(sending.StatusSending)
+func (h *Hub) sendToTarget(ctx context.Context, transport Transport, msg *core.Message, target core.Target) (*core.Result, error) {
+	result := core.NewResult(msg.ID, target)
+	result.SetStatus(core.StatusSending)
 
 	// Send through transport
 	transportResult, err := transport.Send(ctx, msg, target)
@@ -195,13 +211,13 @@ func (h *Hub) sendToTarget(ctx context.Context, transport Transport, msg *messag
 	}
 
 	// Otherwise mark as sent
-	result.SetStatus(sending.StatusSent)
+	result.SetStatus(core.StatusSent)
 	return result, nil
 }
 
 // groupTargetsByPlatform groups targets by their platform
-func (h *Hub) groupTargetsByPlatform(targets []sending.Target) map[string][]sending.Target {
-	groups := make(map[string][]sending.Target)
+func (h *Hub) groupTargetsByPlatform(targets []core.Target) map[string][]core.Target {
+	groups := make(map[string][]core.Target)
 	for _, target := range targets {
 		platform := target.Platform
 		groups[platform] = append(groups[platform], target)

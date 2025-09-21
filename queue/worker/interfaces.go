@@ -4,26 +4,26 @@ import (
 	"context"
 	"time"
 
+	coreTypes "github.com/kart-io/notifyhub/core"
 	coreMessage "github.com/kart-io/notifyhub/core/message"
-	"github.com/kart-io/notifyhub/core/sending"
 	"github.com/kart-io/notifyhub/queue/core"
 )
 
 // MessageSender defines interface for sending messages
 type MessageSender interface {
-	SendSync(ctx context.Context, message *coreMessage.Message, targets []sending.Target) (*sending.SendingResults, error)
+	SendSync(ctx context.Context, message *coreMessage.Message, targets []coreTypes.Target) (*coreTypes.SendingResults, error)
 }
 
 // MessageProcessor 定义消息处理接口
 // 负责处理单个消息的发送逻辑
 type MessageProcessor interface {
-	ProcessMessage(ctx context.Context, msg *coreMessage.Message, targets []sending.Target) (*ProcessResult, error)
+	ProcessMessage(ctx context.Context, msg *coreMessage.Message, targets []coreTypes.Target) (*ProcessResult, error)
 }
 
 // ProcessResult 表示消息处理结果
 type ProcessResult struct {
 	Success     bool
-	Results     *sending.SendingResults
+	Results     *coreTypes.SendingResults
 	Error       error
 	Duration    time.Duration
 	ShouldRetry bool

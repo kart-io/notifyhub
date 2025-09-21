@@ -4,10 +4,44 @@ import (
 	"context"
 	"encoding/json"
 
+	"github.com/kart-io/notifyhub"
+	"github.com/kart-io/notifyhub/core"
 	"github.com/kart-io/notifyhub/core/message"
-	"github.com/kart-io/notifyhub/core/sending"
 	"github.com/kart-io/notifyhub/platforms/feishu"
 )
+
+// ValidationError represents a validation error
+type ValidationError struct {
+	Field   string
+	Message string
+}
+
+// ClientHub interface for accessing hub functionality
+type ClientHub interface {
+	Send(ctx context.Context, msg *core.Message, targets []core.Target) (*core.SendingResults, error)
+}
+
+// Client interface for avoiding circular dependencies
+type Client interface {
+	Hub() ClientHub
+	Metrics() interface{}         // Returns metrics interface
+	Send() *notifyhub.SendBuilder // Returns a send builder
+	SendMessage(ctx context.Context, msg *core.Message, targets []core.Target) (*core.SendingResults, error)
+	RegisterTransport(transport interface{}) error
+	Health() interface{}
+	Shutdown(ctx context.Context) error
+}
+
+func (e *ValidationError) Error() string {
+	return e.Field + ": " + e.Message
+}
+
+// DryRunResult represents the result of a dry run
+type DryRunResult struct {
+	Valid   bool
+	Message core.Message
+	Targets []core.Target
+}
 
 // PlatformType represents the platform type
 type PlatformType string
@@ -135,16 +169,18 @@ func (d *SlackPlatformData) Validate() error {
 
 // UnifiedPlatformBuilder provides unified platform-specific functionality
 type UnifiedPlatformBuilder struct {
-	*BaseBuilder
+	*message.CoreMessageBuilder
+	client       Client
 	platform     PlatformType
 	platformData PlatformData
 }
 
 // NewUnifiedPlatformBuilder creates a new unified platform builder
-func NewUnifiedPlatformBuilder(client *Client, platform PlatformType) *UnifiedPlatformBuilder {
+func NewUnifiedPlatformBuilder(client Client, platform PlatformType) *UnifiedPlatformBuilder {
 	builder := &UnifiedPlatformBuilder{
-		BaseBuilder: NewBaseBuilder(client),
-		platform:    platform,
+		CoreMessageBuilder: message.NewBuilder(),
+		client:             client,
+		platform:           platform,
 	}
 
 	// Initialize platform-specific data based on platform type
@@ -162,58 +198,68 @@ func NewUnifiedPlatformBuilder(client *Client, platform PlatformType) *UnifiedPl
 
 // Title sets the message title
 func (b *UnifiedPlatformBuilder) Title(title string) *UnifiedPlatformBuilder {
-	b.BaseBuilder.Title(title)
+	b.CoreMessageBuilder.Title(title)
 	return b
 }
 
 // Body sets the message body
 func (b *UnifiedPlatformBuilder) Body(body string) *UnifiedPlatformBuilder {
-	b.BaseBuilder.Body(body)
+	b.CoreMessageBuilder.Body(body)
 	return b
 }
 
 // Priority sets the message priority
 func (b *UnifiedPlatformBuilder) Priority(priority int) *UnifiedPlatformBuilder {
-	b.BaseBuilder.Priority(priority)
+	b.CoreMessageBuilder.Priority(priority)
 	return b
 }
 
 // Template sets a template
 func (b *UnifiedPlatformBuilder) Template(template string) *UnifiedPlatformBuilder {
-	b.BaseBuilder.Template(template)
+	b.CoreMessageBuilder.Template(template)
 	return b
 }
 
 // Var sets template variables
 func (b *UnifiedPlatformBuilder) Var(key string, value interface{}) *UnifiedPlatformBuilder {
-	b.BaseBuilder.Var(key, value)
+	b.Variable(key, value)
 	return b
 }
 
 // Send sends the message
-func (b *UnifiedPlatformBuilder) Send(ctx context.Context) (*sending.SendingResults, error) {
+func (b *UnifiedPlatformBuilder) Send(ctx context.Context) (*core.SendingResults, error) {
 	if err := b.platformData.Validate(); err != nil {
 		return nil, err
 	}
 
 	// Add platform-specific targets
 	platformTargets := b.platformData.GetTargets()
+	var coreTargets []core.Target
 	for _, target := range platformTargets {
-		b.AddTarget(target)
+		// Convert message.Target to core.Target
+		coreTarget := core.NewTarget(
+			core.TargetType(target.Type),
+			target.Value,
+			target.Platform,
+		)
+		// Copy metadata
+		for k, v := range target.Metadata {
+			coreTarget.Metadata[k] = v
+		}
+		coreTargets = append(coreTargets, coreTarget)
 	}
 
 	// Store platform-specific metadata
-	if b.message.Metadata == nil {
-		b.message.Metadata = make(map[string]string)
-	}
-
 	metadata, err := b.platformData.MarshalMetadata()
 	if err != nil {
 		return nil, err
 	}
-	b.message.Metadata[string(b.platform)+"_data"] = metadata
+	b.Metadata(string(b.platform)+"_data", metadata)
 
-	return b.Execute(ctx)
+	// Build the message and send it through the hub
+	coreMsg := b.Build()
+
+	return b.client.Hub().Send(ctx, coreMsg, coreTargets)
 }
 
 // DryRun validates the message without sending
@@ -223,10 +269,11 @@ func (b *UnifiedPlatformBuilder) DryRun() (*DryRunResult, error) {
 	}
 
 	targets := b.platformData.GetTargets()
+	msg := b.Build()
 
 	return &DryRunResult{
 		Valid:   true,
-		Message: *b.GetMessage(),
+		Message: *msg,
 		Targets: targets,
 	}, nil
 }
@@ -268,7 +315,7 @@ func (b *UnifiedPlatformBuilder) Subject(subject string) *UnifiedPlatformBuilder
 func (b *UnifiedPlatformBuilder) HTMLBody(htmlBody string) *UnifiedPlatformBuilder {
 	if emailData, ok := b.platformData.(*EmailPlatformData); ok {
 		emailData.HTMLBody = htmlBody
-		b.GetMessage().Format = message.FormatHTML
+		b.Format(core.FormatHTML)
 	}
 	return b
 }
@@ -307,7 +354,7 @@ func (b *UnifiedPlatformBuilder) AtUser(users ...string) *UnifiedPlatformBuilder
 func (b *UnifiedPlatformBuilder) Card(card *feishu.FeishuCard) *UnifiedPlatformBuilder {
 	if feishuData, ok := b.platformData.(*FeishuPlatformData); ok {
 		feishuData.Card = card
-		b.GetMessage().Format = message.FormatCard
+		b.Format(core.FormatCard)
 	}
 	return b
 }

@@ -2,6 +2,8 @@ package platforms
 
 import (
 	"context"
+
+	"github.com/kart-io/notifyhub/core"
 )
 
 // Platform defines the unified interface for all notification platforms.
@@ -15,17 +17,17 @@ type Platform interface {
 	Capabilities() Capabilities
 
 	// Configuration management
-	ValidateConfig(config interface{}) error
-	CreateTransport(config interface{}) (Transport, error)
+	ValidateConfig(config map[string]interface{}) error
+	CreateTransport(config map[string]interface{}) (Transport, error)
 
 	// Default configuration for the platform
-	DefaultConfig() interface{}
+	DefaultConfig() map[string]interface{}
 }
 
 // Transport defines the interface for sending messages to a platform
 type Transport interface {
 	// Send sends a message to a target on this platform
-	Send(ctx context.Context, msg interface{}, target interface{}) (interface{}, error)
+	Send(ctx context.Context, msg *core.Message, target core.Target) (*core.Result, error)
 
 	// Name returns the transport name (usually same as platform name)
 	Name() string

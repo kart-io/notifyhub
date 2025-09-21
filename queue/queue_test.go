@@ -5,8 +5,8 @@ import (
 	"testing"
 	"time"
 
+	"github.com/kart-io/notifyhub/core"
 	"github.com/kart-io/notifyhub/core/message"
-	"github.com/kart-io/notifyhub/core/sending"
 	"github.com/kart-io/notifyhub/queue"
 )
 
@@ -22,7 +22,7 @@ func TestSimpleQueue(t *testing.T) {
 	msg := &queue.Message{
 		ID:        "test-msg-001",
 		Message:   message.NewMessage().SetTitle("Test Message").SetBody("Test Body"),
-		Targets:   []sending.Target{},
+		Targets:   []core.Target{},
 		Attempts:  0,
 		CreatedAt: time.Now(),
 	}
@@ -65,8 +65,8 @@ func TestQueueOverflow(t *testing.T) {
 	for i := 0; i < 2; i++ {
 		msg := &queue.Message{
 			ID:        "test-msg-" + string(rune(i)),
-			Message:   message.NewMessage().SetTitle("Test").SetBody("Body").SetPriority(message.PriorityNormal),
-			Targets:   []sending.Target{},
+			Message:   message.NewMessage().SetTitle("Test").SetBody("Body").SetPriority(message.Priority(message.PriorityNormal)),
+			Targets:   []core.Target{},
 			Attempts:  0,
 			CreatedAt: time.Now(),
 		}
@@ -79,8 +79,8 @@ func TestQueueOverflow(t *testing.T) {
 	// Try to enqueue one more (should fail or block)
 	msg := &queue.Message{
 		ID:        "overflow",
-		Message:   message.NewMessage().SetTitle("Overflow").SetBody("Should not fit").SetPriority(message.PriorityNormal),
-		Targets:   []sending.Target{},
+		Message:   message.NewMessage().SetTitle("Overflow").SetBody("Should not fit").SetPriority(message.Priority(message.PriorityNormal)),
+		Targets:   []core.Target{},
 		Attempts:  0,
 		CreatedAt: time.Now(),
 	}
@@ -115,8 +115,8 @@ func TestQueueConcurrency(t *testing.T) {
 			for j := 0; j < messagesPerEnqueuer; j++ {
 				msg := &queue.Message{
 					ID:        "msg-" + string(rune(id)) + "-" + string(rune(j)),
-					Message:   message.NewMessage().SetTitle("Test").SetBody("Body").SetPriority(message.PriorityNormal),
-					Targets:   []sending.Target{},
+					Message:   message.NewMessage().SetTitle("Test").SetBody("Body").SetPriority(message.Priority(message.PriorityNormal)),
+					Targets:   []core.Target{},
 					Attempts:  0,
 					CreatedAt: time.Now(),
 				}

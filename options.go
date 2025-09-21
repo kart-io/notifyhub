@@ -8,16 +8,103 @@ import (
 
 // 平台配置选项
 
-// WithFeishu 配置飞书平台
+// WithFeishu 配置飞书平台（默认使用签名校验）
+// 为了向后兼容，这个函数等同于 WithFeishuSignature
 func WithFeishu(webhook, secret string) Option {
+	return WithFeishuSignature(webhook, secret)
+}
+
+// WithFeishuSignature 配置飞书平台（签名校验）
+func WithFeishuSignature(webhook, secret string) Option {
 	return func(cfg *Config) {
 		platform := PlatformConfig{
 			Type:    PlatformFeishu,
 			Name:    "feishu",
 			Enabled: true,
 			Settings: map[string]interface{}{
-				"webhook": webhook,
-				"secret":  secret,
+				"webhook_url":     webhook,
+				"secret":          secret,
+				"ip_whitelist":    []string{},
+				"custom_keywords": []string{},
+			},
+		}
+		cfg.Platforms = append(cfg.Platforms, platform)
+	}
+}
+
+// WithFeishuIPWhitelistProxy 配置飞书平台（IP白名单 + 指定代理）
+// 通过指定的代理服务器发送请求，代理服务器的IP需要在飞书机器人后台配置
+func WithFeishuIPWhitelistProxy(webhook, proxyURL string) Option {
+	return func(cfg *Config) {
+		platform := PlatformConfig{
+			Type:    PlatformFeishu,
+			Name:    "feishu",
+			Enabled: true,
+			Settings: map[string]interface{}{
+				"webhook_url":      webhook,
+				"secret":           "",
+				"ip_whitelist":     []string{}, // 空数组，IP在飞书后台配置
+				"custom_keywords":  []string{},
+				"use_ip_whitelist": true,     // 标识字段，表示使用IP白名单模式
+				"proxy_url":        proxyURL, // 代理服务器URL
+			},
+		}
+		cfg.Platforms = append(cfg.Platforms, platform)
+	}
+}
+
+// WithFeishuIPWhitelistEnvProxy 配置飞书平台（IP白名单 + 环境变量代理）
+// 通过环境变量（HTTP_PROXY, HTTPS_PROXY等）配置的代理发送请求
+// 支持标准的代理环境变量：HTTP_PROXY, http_proxy, HTTPS_PROXY, https_proxy, NO_PROXY, no_proxy
+func WithFeishuIPWhitelistEnvProxy(webhook string) Option {
+	return func(cfg *Config) {
+		platform := PlatformConfig{
+			Type:    PlatformFeishu,
+			Name:    "feishu",
+			Enabled: true,
+			Settings: map[string]interface{}{
+				"webhook_url":      webhook,
+				"secret":           "",
+				"ip_whitelist":     []string{}, // 空数组，IP在飞书后台配置
+				"custom_keywords":  []string{},
+				"use_ip_whitelist": true, // 标识字段，表示使用IP白名单模式
+				// 不设置proxy_url，将使用环境变量
+			},
+		}
+		cfg.Platforms = append(cfg.Platforms, platform)
+	}
+}
+
+// WithFeishuKeywords 配置飞书平台（自定义关键词）
+func WithFeishuKeywords(webhook string, keywords []string) Option {
+	return func(cfg *Config) {
+		platform := PlatformConfig{
+			Type:    PlatformFeishu,
+			Name:    "feishu",
+			Enabled: true,
+			Settings: map[string]interface{}{
+				"webhook_url":     webhook,
+				"secret":          "",
+				"ip_whitelist":    []string{},
+				"custom_keywords": keywords,
+			},
+		}
+		cfg.Platforms = append(cfg.Platforms, platform)
+	}
+}
+
+// WithFeishuNone 配置飞书平台（无安全验证）
+func WithFeishuNone(webhook string) Option {
+	return func(cfg *Config) {
+		platform := PlatformConfig{
+			Type:    PlatformFeishu,
+			Name:    "feishu",
+			Enabled: true,
+			Settings: map[string]interface{}{
+				"webhook_url":     webhook,
+				"secret":          "",
+				"ip_whitelist":    []string{},
+				"custom_keywords": []string{},
 			},
 		}
 		cfg.Platforms = append(cfg.Platforms, platform)

@@ -5,8 +5,8 @@ import (
 	"fmt"
 	"sync"
 
+	"github.com/kart-io/notifyhub/core"
 	"github.com/kart-io/notifyhub/core/message"
-	"github.com/kart-io/notifyhub/core/sending"
 	"github.com/kart-io/notifyhub/logger"
 )
 
@@ -21,7 +21,7 @@ type Coordinator struct {
 // Platform represents a messaging platform
 type Platform interface {
 	Name() string
-	Send(ctx context.Context, msg *message.Message, targets []sending.Target) (*sending.Result, error)
+	Send(ctx context.Context, msg *message.Message, targets []core.Target) (*core.Result, error)
 	Validate(msg *message.Message) error
 	IsAvailable() bool
 }
@@ -50,7 +50,7 @@ func (c *Coordinator) RegisterPlatform(platform Platform) error {
 }
 
 // Send coordinates sending a message to targets
-func (c *Coordinator) Send(ctx context.Context, msg *message.Message, targets []sending.Target) (*sending.SendingResults, error) {
+func (c *Coordinator) Send(ctx context.Context, msg *message.Message, targets []core.Target) (*core.SendingResults, error) {
 	c.mutex.RLock()
 	defer c.mutex.RUnlock()
 
@@ -59,15 +59,15 @@ func (c *Coordinator) Send(ctx context.Context, msg *message.Message, targets []
 	}
 
 	// Group targets by platform
-	targetsByPlatform := make(map[string][]sending.Target)
+	targetsByPlatform := make(map[string][]core.Target)
 	for _, target := range targets {
-		platform := target.GetPlatform()
+		platform := target.Platform
 		targetsByPlatform[platform] = append(targetsByPlatform[platform], target)
 	}
 
 	// Send to each platform
-	results := &sending.SendingResults{
-		Results: make([]*sending.Result, 0, len(targets)),
+	results := &core.SendingResults{
+		Results: make([]*core.Result, 0, len(targets)),
 	}
 
 	var wg sync.WaitGroup
@@ -81,15 +81,15 @@ func (c *Coordinator) Send(ctx context.Context, msg *message.Message, targets []
 		}
 
 		wg.Add(1)
-		go func(p Platform, targets []sending.Target) {
+		go func(p Platform, targets []core.Target) {
 			defer wg.Done()
 
 			result, err := p.Send(ctx, msg, targets)
 			if err != nil {
 				c.logger.Error(ctx, "Failed to send message", "platform", p.Name(), "error", err)
-				result = &sending.Result{
-					Success: false,
-					Error:   err,
+				result = &core.Result{
+					Status: core.StatusFailed,
+					Error:  err,
 				}
 			}
 
@@ -103,13 +103,13 @@ func (c *Coordinator) Send(ctx context.Context, msg *message.Message, targets []
 
 	// Calculate summary
 	for _, result := range results.Results {
-		if result.Success {
-			results.SuccessCount++
+		if result.Status == core.StatusSent {
+			results.Success++
 		} else {
-			results.FailedCount++
+			results.Failed++
 		}
-		results.TotalCount++
 	}
+	results.Total = len(results.Results)
 
 	return results, nil
 }

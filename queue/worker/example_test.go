@@ -5,8 +5,8 @@ import (
 	"testing"
 	"time"
 
+	coreTypes "github.com/kart-io/notifyhub/core"
 	coreMessage "github.com/kart-io/notifyhub/core/message"
-	"github.com/kart-io/notifyhub/core/sending"
 	"github.com/kart-io/notifyhub/queue/core"
 	"github.com/kart-io/notifyhub/queue/retry"
 )
@@ -16,11 +16,11 @@ type MockSender struct {
 	shouldFail bool
 }
 
-func (m *MockSender) SendSync(ctx context.Context, message *coreMessage.Message, targets []sending.Target) (*sending.SendingResults, error) {
+func (m *MockSender) SendSync(ctx context.Context, message *coreMessage.Message, targets []coreTypes.Target) (*coreTypes.SendingResults, error) {
 	if m.shouldFail {
-		return &sending.SendingResults{Failed: 1}, nil
+		return &coreTypes.SendingResults{Failed: 1}, nil
 	}
-	return &sending.SendingResults{Success: 1}, nil
+	return &coreTypes.SendingResults{Success: 1}, nil
 }
 
 // MockQueue 模拟队列

@@ -8,7 +8,7 @@ import (
 	"time"
 
 	"github.com/kart-io/notifyhub/api"
-	"github.com/kart-io/notifyhub/api/config"
+	"github.com/kart-io/notifyhub/config"
 	"github.com/kart-io/notifyhub/queue"
 	"github.com/redis/go-redis/v9"
 )
@@ -177,13 +177,9 @@ func main() {
 	fmt.Println("\n1. 使用Redis队列")
 	factory := &RedisQueueFactory{}
 
-	cfg1 := config.NewConfig()
-	cfg1.Queue = &config.QueueConfig{
-		Type:     "redis",
-		Size:     2000,
-		Workers:  8,
-		RedisURL: "redis://localhost:6379",
-	}
+	cfg1 := config.New(
+		config.WithQueue("redis", 2000, 8),
+	)
 	_, err := api.New(cfg1)
 	if err != nil {
 		log.Printf("创建Redis配置失败: %v", err)
@@ -196,15 +192,11 @@ func main() {
 	redisClient := redis.NewClient(&redis.Options{
 		Addr: "localhost:6379",
 	})
-	defer redisClient.Close()
+	defer func() { _ = redisClient.Close() }()
 
-	cfg2 := config.NewConfig()
-	cfg2.Queue = &config.QueueConfig{
-		Type:     "redis",
-		Size:     1000,
-		Workers:  4,
-		RedisURL: "redis://localhost:6379",
-	}
+	cfg2 := config.New(
+		config.WithQueue("redis", 1000, 4),
+	)
 	_, err = api.New(cfg2)
 	if err != nil {
 		log.Printf("创建Redis配置失败: %v", err)
@@ -221,13 +213,9 @@ func main() {
 	} else {
 		fmt.Printf("✓ Redis工厂注册成功\n")
 
-		cfg3 := config.NewConfig()
-		cfg3.Queue = &config.QueueConfig{
-			Type:     "redis",
-			Size:     3000,
-			Workers:  12,
-			RedisURL: "redis://localhost:6379",
-		}
+		cfg3 := config.New(
+			config.WithQueue("redis", 3000, 12),
+		)
 		_, err := api.New(cfg3)
 		if err != nil {
 			log.Printf("创建高容量配置失败: %v", err)
@@ -242,12 +230,9 @@ func main() {
 	// 方式4：内存队列示例
 	fmt.Println("\n4. 内存队列示例")
 
-	cfg4 := config.NewConfig()
-	cfg4.Queue = &config.QueueConfig{
-		Type:    "memory",
-		Size:    100,
-		Workers: 2,
-	}
+	cfg4 := config.New(
+		config.WithQueue("memory", 100, 2),
+	)
 	_, err = api.New(cfg4)
 	if err != nil {
 		log.Printf("创建内存队列失败: %v", err)

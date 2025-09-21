@@ -148,7 +148,7 @@ func (b *BatchSender) SendBatch(ctx context.Context, messages []*message.Message
 
 // sendToTarget sends a message to a single target
 func (b *BatchSender) sendToTarget(ctx context.Context, msg *message.Message, target Target) *Result {
-	result := NewResult(msg.GetID(), target)
+	result := NewResult(msg.ID, target)
 	result.StartTime = time.Now()
 
 	// Get transport for target platform

@@ -5,17 +5,17 @@ import (
 	"net/http"
 
 	"github.com/kart-io/notifyhub/api"
+	"github.com/kart-io/notifyhub/core"
 	"github.com/kart-io/notifyhub/core/message"
-	"github.com/kart-io/notifyhub/core/sending"
 )
 
 // SendHandler handles individual message sending
 type SendHandler struct {
-	hub *api.Client
+	hub api.Client
 }
 
 // NewSendHandler creates a new send handler
-func NewSendHandler(hub *api.Client) *SendHandler {
+func NewSendHandler(hub api.Client) *SendHandler {
 	return &SendHandler{hub: hub}
 }
 
@@ -41,10 +41,10 @@ type TargetRequest struct {
 
 // SendResponse represents a send response
 type SendResponse struct {
-	MessageID string           `json:"message_id"`
-	Status    string           `json:"status"`
-	Results   []sending.Result `json:"results"`
-	Summary   ResultSummary    `json:"summary"`
+	MessageID string        `json:"message_id"`
+	Status    string        `json:"status"`
+	Results   []core.Result `json:"results"`
+	Summary   ResultSummary `json:"summary"`
 }
 
 // ResultSummary provides a summary of sending results
@@ -82,7 +82,7 @@ func (h *SendHandler) Handle(w http.ResponseWriter, r *http.Request) {
 		msg.SetFormat(message.Format(req.Format))
 	}
 	if req.Priority > 0 {
-		msg.SetPriority(req.Priority)
+		msg.SetPriority(message.Priority(req.Priority))
 	}
 	if req.Template != "" {
 		msg.SetTemplate(req.Template)
@@ -99,43 +99,47 @@ func (h *SendHandler) Handle(w http.ResponseWriter, r *http.Request) {
 	}
 
 	// Build targets
-	targets := make([]sending.Target, len(req.Targets))
+	targets := make([]core.Target, len(req.Targets))
 	for i, t := range req.Targets {
-		targets[i] = sending.NewTarget(sending.TargetType(t.Type), t.Value, t.Platform)
+		targets[i] = core.NewTarget(core.TargetType(t.Type), t.Value, t.Platform)
 		for k, v := range t.Metadata {
 			targets[i].AddMetadata(k, v)
 		}
 	}
 
-	// Send message using V2 API
+	// Send message using updated API
 	ctx := r.Context()
-	// V2 API uses builder pattern - this is a simplified HTTP adapter
-	result, err := h.hub.Send().
-		Title(msg.Title).
-		Body(msg.Body).
-		Priority(msg.Priority).
-		Send(ctx)
+
+	result, err := h.hub.SendMessage(ctx, msg.Message, targets)
 	if err != nil {
 		http.Error(w, "Send failed: "+err.Error(), http.StatusInternalServerError)
 		return
 	}
 
-	// Build response for V2 API
+	// Build response using actual results
 	response := SendResponse{
 		MessageID: msg.ID,
 		Status:    "completed",
-		Results:   []sending.Result{}, // V2 API has different result structure
+		Results:   make([]core.Result, 0),
 		Summary: ResultSummary{
-			Total:   1,
-			Success: 1,
+			Total:   len(targets),
+			Success: 0,
 			Failed:  0,
 			Pending: 0,
 		},
 	}
 
 	// Add result information if available
-	if result != nil {
-		response.Summary.Success = 1
+	if result != nil && result.Results != nil {
+		// Use results directly and calculate summary
+		for _, res := range result.Results {
+			response.Results = append(response.Results, *res)
+			if res.Status == core.StatusSent {
+				response.Summary.Success++
+			} else {
+				response.Summary.Failed++
+			}
+		}
 	}
 
 	// Send response

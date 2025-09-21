@@ -5,9 +5,8 @@ import (
 	"sync"
 	"time"
 
+	"github.com/kart-io/notifyhub/core"
 	"github.com/kart-io/notifyhub/core/hub"
-	"github.com/kart-io/notifyhub/core/message"
-	"github.com/kart-io/notifyhub/core/sending"
 )
 
 // MockTransport 模拟传输层实现
@@ -15,7 +14,7 @@ type MockTransport struct {
 	mu        sync.Mutex
 	name      string
 	calls     []SendCall
-	responses map[string]*sending.Result
+	responses map[string]*core.Result
 	errors    map[string]error
 	delay     time.Duration
 	failRate  float32 //nolint:unused // 保留供未来使用
@@ -23,8 +22,8 @@ type MockTransport struct {
 
 // SendCall 记录发送调用
 type SendCall struct {
-	Message   *message.Message
-	Target    sending.Target
+	Message   *core.Message
+	Target    core.Target
 	Timestamp time.Time
 }
 
@@ -33,7 +32,7 @@ func NewMockTransport(name string) *MockTransport {
 	return &MockTransport{
 		name:      name,
 		calls:     make([]SendCall, 0),
-		responses: make(map[string]*sending.Result),
+		responses: make(map[string]*core.Result),
 		errors:    make(map[string]error),
 	}
 }
@@ -44,7 +43,7 @@ func (m *MockTransport) Name() string {
 }
 
 // Send 模拟发送消息
-func (m *MockTransport) Send(ctx context.Context, msg *message.Message, target sending.Target) (*sending.Result, error) {
+func (m *MockTransport) Send(ctx context.Context, msg *core.Message, target core.Target) (*core.Result, error) {
 	m.mu.Lock()
 	defer m.mu.Unlock()
 
@@ -69,8 +68,8 @@ func (m *MockTransport) Send(ctx context.Context, msg *message.Message, target s
 
 	// 检查是否有预设错误
 	if err, ok := m.errors[key]; ok {
-		result := sending.NewResult(msg.ID, target)
-		result.Status = sending.StatusFailed
+		result := core.NewResult(msg.ID, target)
+		result.Status = core.StatusFailed
 		result.Error = err
 		return result, err
 	}
@@ -81,14 +80,19 @@ func (m *MockTransport) Send(ctx context.Context, msg *message.Message, target s
 	}
 
 	// 生成默认成功结果
-	result := sending.NewResult(msg.ID, target)
-	result.Status = sending.StatusSent
+	result := core.NewResult(msg.ID, target)
+	result.Status = core.StatusSent
 	result.Success = true
 	now := time.Now()
 	result.SentAt = &now
-	result.EndTime = now
+	result.UpdatedAt = now
 
 	return result, nil
+}
+
+// Health checks if the transport is healthy
+func (m *MockTransport) Health(ctx context.Context) error {
+	return nil
 }
 
 // Shutdown 关闭传输器
@@ -97,7 +101,7 @@ func (m *MockTransport) Shutdown() error {
 }
 
 // SetResponse 设置特定目标的响应
-func (m *MockTransport) SetResponse(targetValue string, result *sending.Result) {
+func (m *MockTransport) SetResponse(targetValue string, result *core.Result) {
 	m.mu.Lock()
 	defer m.mu.Unlock()
 	m.responses[targetValue] = result
@@ -131,7 +135,7 @@ func (m *MockTransport) Reset() {
 	m.mu.Lock()
 	defer m.mu.Unlock()
 	m.calls = make([]SendCall, 0)
-	m.responses = make(map[string]*sending.Result)
+	m.responses = make(map[string]*core.Result)
 	m.errors = make(map[string]error)
 }
 
@@ -142,14 +146,14 @@ type MockMiddleware struct {
 	calls       []MiddlewareCall
 	shouldError bool
 	errorMsg    string
-	beforeFunc  func(ctx context.Context, msg *message.Message, targets []sending.Target)
-	afterFunc   func(ctx context.Context, results *sending.SendingResults)
+	beforeFunc  func(ctx context.Context, msg *core.Message, targets []core.Target)
+	afterFunc   func(ctx context.Context, results *core.SendingResults)
 }
 
 // MiddlewareCall 记录中间件调用
 type MiddlewareCall struct {
-	Message   *message.Message
-	Targets   []sending.Target
+	Message   *core.Message
+	Targets   []core.Target
 	Timestamp time.Time
 }
 
@@ -162,7 +166,7 @@ func NewMockMiddleware(name string) *MockMiddleware {
 }
 
 // Process 处理中间件逻辑
-func (m *MockMiddleware) Process(ctx context.Context, msg *message.Message, targets []sending.Target, next hub.ProcessFunc) (*sending.SendingResults, error) {
+func (m *MockMiddleware) Process(ctx context.Context, msg *core.Message, targets []core.Target, next hub.ProcessFunc) (*core.SendingResults, error) {
 	m.mu.Lock()
 	m.calls = append(m.calls, MiddlewareCall{
 		Message:   msg,
@@ -201,14 +205,14 @@ func (m *MockMiddleware) GetCalls() []MiddlewareCall {
 }
 
 // SetBeforeFunc 设置前置处理函数
-func (m *MockMiddleware) SetBeforeFunc(fn func(ctx context.Context, msg *message.Message, targets []sending.Target)) {
+func (m *MockMiddleware) SetBeforeFunc(fn func(ctx context.Context, msg *core.Message, targets []core.Target)) {
 	m.mu.Lock()
 	defer m.mu.Unlock()
 	m.beforeFunc = fn
 }
 
 // SetAfterFunc 设置后置处理函数
-func (m *MockMiddleware) SetAfterFunc(fn func(ctx context.Context, results *sending.SendingResults)) {
+func (m *MockMiddleware) SetAfterFunc(fn func(ctx context.Context, results *core.SendingResults)) {
 	m.mu.Lock()
 	defer m.mu.Unlock()
 	m.afterFunc = fn

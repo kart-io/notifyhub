@@ -5,8 +5,8 @@ import (
 	"testing"
 	"time"
 
+	coreTypes "github.com/kart-io/notifyhub/core"
 	coreMessage "github.com/kart-io/notifyhub/core/message"
-	"github.com/kart-io/notifyhub/core/sending"
 	"github.com/kart-io/notifyhub/queue/core"
 )
 
@@ -20,7 +20,7 @@ func TestRefactorBenefits(t *testing.T) {
 		processor := NewDefaultMessageProcessor(mockSender, 10*time.Second)
 
 		msg := coreMessage.NewMessage()
-		targets := []sending.Target{{Platform: "test"}}
+		targets := []coreTypes.Target{{Platform: "test"}}
 
 		result, err := processor.ProcessMessage(context.Background(), msg, targets)
 		if err != nil {
@@ -56,7 +56,7 @@ func TestRefactorBenefits(t *testing.T) {
 		var processor MessageProcessor = customProcessor
 
 		msg := coreMessage.NewMessage()
-		targets := []sending.Target{{Platform: "custom"}}
+		targets := []coreTypes.Target{{Platform: "custom"}}
 
 		result, err := processor.ProcessMessage(context.Background(), msg, targets)
 		if err != nil {
@@ -127,11 +127,11 @@ func TestRefactorBenefits(t *testing.T) {
 // CustomMessageProcessor 自定义处理器实现，用于测试接口替换
 type CustomMessageProcessor struct{}
 
-func (c *CustomMessageProcessor) ProcessMessage(ctx context.Context, msg *coreMessage.Message, targets []sending.Target) (*ProcessResult, error) {
+func (c *CustomMessageProcessor) ProcessMessage(ctx context.Context, msg *coreMessage.Message, targets []coreTypes.Target) (*ProcessResult, error) {
 	// 模拟自定义处理逻辑
 	return &ProcessResult{
 		Success:     false, // 模拟失败
-		Results:     &sending.SendingResults{Failed: 1},
+		Results:     &coreTypes.SendingResults{Failed: 1},
 		Error:       nil,
 		Duration:    time.Millisecond * 100,
 		ShouldRetry: true,

@@ -4,7 +4,7 @@ import (
 	"fmt"
 	"strings"
 
-	"github.com/kart-io/notifyhub/core/sending"
+	"github.com/kart-io/notifyhub/core"
 )
 
 // TypedTarget 类型安全的目标定义
@@ -19,23 +19,23 @@ func (t TypedTarget[T]) String() string {
 	return fmt.Sprintf("%s:%s", string(t.Type), t.Value)
 }
 
-// ToSendingTarget 转换为发送目标
-func (t TypedTarget[T]) ToSendingTarget() sending.Target {
-	var targetType sending.TargetType
+// ToTarget 转换为核心目标
+func (t TypedTarget[T]) ToTarget() core.Target {
+	var targetType core.TargetType
 	switch string(t.Type) {
 	case string(PlatformEmail):
-		targetType = sending.TargetTypeEmail
+		targetType = core.TargetTypeEmail
 	case string(PlatformFeishu):
-		targetType = sending.TargetTypeGroup
+		targetType = core.TargetTypeGroup
 	case string(PlatformSMS):
-		targetType = sending.TargetTypeSMS
+		targetType = core.TargetTypeSMS
 	case string(PlatformSlack):
-		targetType = sending.TargetTypeGroup
+		targetType = core.TargetTypeGroup
 	default:
-		targetType = sending.TargetTypeOther
+		targetType = core.TargetTypeOther
 	}
 
-	target := sending.NewTarget(targetType, t.Value, string(t.Type))
+	target := core.NewTarget(targetType, t.Value, string(t.Type))
 	if t.Metadata != nil {
 		for k, v := range t.Metadata {
 			target.Metadata[k] = v
@@ -234,7 +234,7 @@ var PredefinedGroups = map[string]TargetGroup{
 // ToTargets 添加类型安全目标
 func (b *SendBuilder) ToTargets(targets ...TypedTarget[PlatformType]) *SendBuilder {
 	for _, target := range targets {
-		b.targets = append(b.targets, target.ToSendingTarget())
+		b.targets = append(b.targets, target.ToTarget())
 	}
 	return b
 }
@@ -251,7 +251,7 @@ func (b *SendBuilder) ToGroup(groupName string) *SendBuilder {
 func (b *SendBuilder) ToExpressions(expressions ...string) *SendBuilder {
 	for _, expr := range expressions {
 		if target, err := ParseTargetExpression(TargetExpression(expr)); err == nil {
-			b.targets = append(b.targets, target.ToSendingTarget())
+			b.targets = append(b.targets, target.ToTarget())
 		}
 	}
 	return b
@@ -282,7 +282,7 @@ func SmartTarget(input string) TypedTarget[PlatformType] {
 func (b *SendBuilder) ToSmart(inputs ...string) *SendBuilder {
 	for _, input := range inputs {
 		target := SmartTarget(input)
-		b.targets = append(b.targets, target.ToSendingTarget())
+		b.targets = append(b.targets, target.ToTarget())
 	}
 	return b
 }

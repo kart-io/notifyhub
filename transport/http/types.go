@@ -8,7 +8,7 @@ import (
 
 // sendHandler handles individual message sending
 type sendHandler struct {
-	hub *api.Client
+	hub api.Client
 }
 
 // Handle handles the send request
@@ -21,7 +21,7 @@ func (h *sendHandler) Handle(w http.ResponseWriter, r *http.Request) {
 
 // batchHandler handles batch message sending
 type batchHandler struct {
-	hub *api.Client
+	hub api.Client
 }
 
 // Handle handles the batch send request
@@ -34,7 +34,7 @@ func (h *batchHandler) Handle(w http.ResponseWriter, r *http.Request) {
 
 // healthHandler handles health check requests
 type healthHandler struct {
-	hub *api.Client
+	hub api.Client
 }
 
 // Handle handles the health check request

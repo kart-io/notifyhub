@@ -12,12 +12,19 @@ func TestPlatformIntegration(t *testing.T) {
 	hub := utils.CreateTestHub(t)
 	defer func() { _ = hub.Shutdown(context.TODO()) }()
 
-	// Get available transports
-	transports := hub.GetTransports()
-	utils.AssertTrue(t, transports != nil, "transports should not be nil")
-
+	// Note: GetTransports method not available in new API
 	// The actual platform tests would depend on the specific platform implementations
 	// For now, just verify the hub can be created and basic operations work
+
+	results, err := hub.Send().
+		Title("Platform Test").
+		Body("Test platform integration").
+		Priority(3).
+		To("test@example.com").
+		Send(context.Background())
+
+	utils.AssertNoError(t, err)
+	utils.AssertTrue(t, results != nil, "results should not be nil")
 }
 
 // TestPlatformConfiguration tests platform configuration
@@ -28,12 +35,13 @@ func TestPlatformConfiguration(t *testing.T) {
 	hub := utils.CreateTestHub(t)
 	defer func() { _ = hub.Shutdown(context.TODO()) }()
 
-	msg := utils.CreateTestMessage()
-	targets := utils.CreateTestTargets()
-
 	// Send message (should work with mock setup)
-	ctx := context.Background()
-	results, err := hub.Send(ctx, msg, targets)
+	results, err := hub.Send().
+		Title("Configuration Test").
+		Body("Test platform configuration").
+		Priority(3).
+		To("test@example.com").
+		Send(context.Background())
 	utils.AssertNoError(t, err)
 	utils.AssertTrue(t, results != nil, "results should not be nil")
 }

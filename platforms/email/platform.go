@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"time"
 
+	"github.com/kart-io/notifyhub/core"
 	"github.com/kart-io/notifyhub/platforms"
 )
 
@@ -48,62 +49,46 @@ func NewEmailPlatform() *EmailPlatform {
 }
 
 // ValidateConfig validates Email configuration
-func (p *EmailPlatform) ValidateConfig(config interface{}) error {
-	switch cfg := config.(type) {
-	case map[string]interface{}:
-		if host, ok := cfg["host"].(string); !ok || host == "" {
-			return fmt.Errorf("host is required")
-		}
-		if port, ok := cfg["port"].(int); !ok || port == 0 {
-			return fmt.Errorf("valid port is required")
-		}
-		if from, ok := cfg["from"].(string); !ok || from == "" {
-			return fmt.Errorf("from address is required")
-		}
-		return nil
-	default:
-		// Accept any config type for now
-		return nil
+func (p *EmailPlatform) ValidateConfig(config map[string]interface{}) error {
+	if host, ok := config["host"].(string); !ok || host == "" {
+		return fmt.Errorf("host is required")
 	}
+	if port, ok := config["port"].(int); !ok || port == 0 {
+		return fmt.Errorf("valid port is required")
+	}
+	if from, ok := config["from"].(string); !ok || from == "" {
+		return fmt.Errorf("from address is required")
+	}
+	return nil
 }
 
 // CreateTransport creates an Email transport instance
-func (p *EmailPlatform) CreateTransport(config interface{}) (platforms.Transport, error) {
-	var emailConfig map[string]interface{}
-
-	switch cfg := config.(type) {
-	case map[string]interface{}:
-		emailConfig = cfg
-	default:
-		// If it's already a specific config type, try to use it as-is
-		emailConfig = map[string]interface{}{
-			"config": cfg,
-		}
-	}
+func (p *EmailPlatform) CreateTransport(config map[string]interface{}) (platforms.Transport, error) {
+	emailConfig := config
 
 	return &EmailTransportAdapter{config: emailConfig}, nil
 }
 
-// DefaultConfig returns default configuration for Email
-func (p *EmailPlatform) DefaultConfig() interface{} {
+// DefaultConfig returns the default configuration for Email platform
+func (p *EmailPlatform) DefaultConfig() map[string]interface{} {
 	return map[string]interface{}{
-		"host":     "",
+		"host":     "localhost",
 		"port":     587,
 		"username": "",
 		"password": "",
-		"from":     "",
+		"from":     "noreply@example.com",
 		"use_tls":  true,
-		"timeout":  30 * time.Second,
+		"timeout":  30,
 	}
 }
 
 // EmailTransportAdapter adapts the email transport to the Platform Transport interface
 type EmailTransportAdapter struct {
-	config interface{}
+	config map[string]interface{}
 }
 
 // Send sends a message through Email
-func (t *EmailTransportAdapter) Send(ctx context.Context, msg interface{}, target interface{}) (interface{}, error) {
+func (t *EmailTransportAdapter) Send(ctx context.Context, msg *core.Message, target core.Target) (*core.Result, error) {
 	// This would be implemented by the actual transport layer
 	// For now, return a placeholder
 	return nil, fmt.Errorf("email transport not fully implemented")

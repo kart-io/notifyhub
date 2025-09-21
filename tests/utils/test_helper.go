@@ -6,9 +6,9 @@ import (
 	"time"
 
 	"github.com/kart-io/notifyhub/api"
-	apiconfig "github.com/kart-io/notifyhub/api/config"
+	"github.com/kart-io/notifyhub/config"
+	"github.com/kart-io/notifyhub/core"
 	"github.com/kart-io/notifyhub/core/message"
-	"github.com/kart-io/notifyhub/core/sending"
 	"github.com/kart-io/notifyhub/tests/mocks"
 )
 
@@ -175,25 +175,20 @@ func CreateTestMessageWithParams(title, body string, priority int) *message.Mess
 	msg := message.NewMessage()
 	msg.SetTitle(title)
 	msg.SetBody(body)
-	msg.SetPriority(priority)
+	msg.SetPriority(message.Priority(priority))
 	return msg
 }
 
 // CreateTestTarget 创建测试目标
-func CreateTestTarget(targetType sending.TargetType, value, platform string) sending.Target {
-	return sending.NewTarget(targetType, value, platform)
+func CreateTestTarget(targetType core.TargetType, value, platform string) core.Target {
+	return core.NewTarget(targetType, value, platform)
 }
 
 // CreateTestConfig 创建测试配置
-func CreateTestConfig() *apiconfig.Config {
-	cfg := apiconfig.NewConfig()
-	cfg.Queue = &apiconfig.QueueConfig{
-		Type:    "memory",
-		Size:    100,
-		Workers: 2,
-	}
-	cfg.Debug = false
-	return cfg
+func CreateTestConfig() *config.Config {
+	return config.New(
+		config.WithQueue("memory", 100, 2),
+	)
 }
 
 // WaitForCondition 等待条件满足
@@ -277,7 +272,7 @@ func NewMockLogger() *mocks.MockLogger {
 }
 
 // CreateTestHub creates a test client (V2 API)
-func CreateTestHub(t *testing.T) *api.Client {
+func CreateTestHub(t *testing.T) api.Client {
 	config := CreateTestConfig()
 	// Note: V2 API doesn't use separate Options, logger is configured in config
 	client, err := api.New(config)
@@ -295,14 +290,14 @@ func CreateTestMessageWithDetails(title, body string, priority int) *message.Mes
 	msg := message.NewMessage()
 	msg.SetTitle(title)
 	msg.SetBody(body)
-	msg.SetPriority(priority)
+	msg.SetPriority(message.Priority(priority))
 	return msg
 }
 
 // CreateTestTargets creates test targets
-func CreateTestTargets() []sending.Target {
-	return []sending.Target{
-		sending.NewTarget(sending.TargetTypeEmail, "test@example.com", "email"),
-		sending.NewTarget(sending.TargetTypeUser, "user123", "feishu"),
+func CreateTestTargets() []core.Target {
+	return []core.Target{
+		core.NewTarget(core.TargetTypeEmail, "test@example.com", "email"),
+		core.NewTarget(core.TargetTypeUser, "user123", "feishu"),
 	}
 }

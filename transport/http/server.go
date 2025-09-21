@@ -7,11 +7,12 @@ import (
 	"time"
 
 	"github.com/kart-io/notifyhub/api"
+	"github.com/kart-io/notifyhub/monitoring"
 )
 
 // HTTPServer implements HTTP transport layer as specified in the proposal
 type HTTPServer struct {
-	hub        *api.Client
+	hub        api.Client
 	server     *http.Server
 	port       string
 	middleware []Middleware
@@ -50,7 +51,7 @@ type Context interface {
 type Middleware func(HandlerFunc) HandlerFunc
 
 // NewHTTPServer creates a new HTTP server
-func NewHTTPServer(hub *api.Client, config *Config) *HTTPServer {
+func NewHTTPServer(hub api.Client, config *Config) *HTTPServer {
 	if config.Port == "" {
 		config.Port = ":8080"
 	}
@@ -120,24 +121,39 @@ func (s *HTTPServer) handleMetrics(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	metrics := s.hub.Metrics()
+	metricsInterface := s.hub.Metrics()
+
+	// Type assert to get actual metrics
+	metrics, ok := metricsInterface.(*monitoring.Metrics)
+	if !ok {
+		// Fallback response if metrics are unavailable
+		response := map[string]interface{}{
+			"error": "metrics unavailable",
+		}
+		w.Header().Set("Content-Type", "application/json")
+		w.WriteHeader(http.StatusServiceUnavailable)
+		_ = json.NewEncoder(w).Encode(response)
+		return
+	}
 
 	// Calculate success rate
-	totalMessages := metrics.MessagesSent + metrics.MessagesFailed
+	totalMessages := metrics.TotalSent + metrics.TotalFailed
 	var successRate float64
 	if totalMessages > 0 {
-		successRate = float64(metrics.MessagesSent) / float64(totalMessages)
+		successRate = float64(metrics.TotalSent) / float64(totalMessages)
 	}
 
 	// Build metrics response
 	response := map[string]interface{}{
-		"messages_sent":    metrics.MessagesSent,
-		"messages_queued":  metrics.MessagesQueued,
-		"messages_failed":  metrics.MessagesFailed,
+		"messages_sent":    metrics.TotalSent,
+		"messages_failed":  metrics.TotalFailed,
 		"success_rate":     successRate,
-		"average_latency":  metrics.AverageLatency.String(),
-		"platform_metrics": metrics.PlatformMetrics,
-		"timestamp":        metrics.Timestamp,
+		"average_latency":  metrics.AvgDuration.String(),
+		"max_latency":      metrics.MaxDuration.String(),
+		"platform_metrics": metrics.SendsByPlatform,
+		"platform_health":  metrics.PlatformHealth,
+		"start_time":       metrics.StartTime,
+		"timestamp":        time.Now(),
 	}
 
 	w.Header().Set("Content-Type", "application/json")

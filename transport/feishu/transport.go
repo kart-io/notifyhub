@@ -10,27 +10,47 @@ import (
 	"fmt"
 	"io"
 	"net/http"
+	"net/url"
 	"strconv"
 	"time"
 
+	"github.com/kart-io/notifyhub/core"
 	"github.com/kart-io/notifyhub/core/errors"
-	"github.com/kart-io/notifyhub/core/message"
-	"github.com/kart-io/notifyhub/core/sending"
 )
 
 // Transport implements the Transport interface for Feishu
 type Transport struct {
 	webhookURL string
-	secret     string
 	timeout    time.Duration
 	client     *http.Client
+
+	// 安全设置 - 四选一
+	securityType   SecurityType
+	secret         string   // 签名校验
+	customKeywords []string // 自定义关键词
+	proxyURL       string   // 代理服务器URL
 }
+
+// SecurityType represents the type of security setting for Feishu webhook
+type SecurityType string
+
+const (
+	SecurityTypeNone        SecurityType = "none"         // 无安全设置
+	SecurityTypeSignature   SecurityType = "signature"    // 签名校验
+	SecurityTypeIPWhitelist SecurityType = "ip_whitelist" // IP白名单
+	SecurityTypeKeywords    SecurityType = "keywords"     // 自定义关键词
+)
 
 // Config holds the configuration for Feishu transport
 type Config struct {
 	WebhookURL string
-	Secret     string
 	Timeout    time.Duration
+
+	// 安全设置 - 四选一
+	SecurityType   SecurityType
+	Secret         string   // 用于签名校验
+	CustomKeywords []string // 自定义关键词
+	ProxyURL       string   // 代理服务器URL（可选）
 }
 
 // NewTransport creates a new Feishu transport
@@ -39,12 +59,41 @@ func NewTransport(config *Config) *Transport {
 		config.Timeout = 30 * time.Second
 	}
 
+	// 设置默认安全类型
+	if config.SecurityType == "" {
+		if config.Secret != "" {
+			config.SecurityType = SecurityTypeSignature
+		} else if len(config.CustomKeywords) > 0 {
+			config.SecurityType = SecurityTypeKeywords
+		} else {
+			config.SecurityType = SecurityTypeNone
+		}
+	}
+
+	// 创建HTTP客户端，支持代理
+	transport := &http.Transport{}
+	if config.ProxyURL != "" {
+		// 使用指定的代理URL
+		proxyURL, err := url.Parse(config.ProxyURL)
+		if err == nil {
+			transport.Proxy = http.ProxyURL(proxyURL)
+		}
+	} else {
+		// 使用系统环境变量代理（HTTP_PROXY, HTTPS_PROXY, NO_PROXY等）
+		// Go标准库会自动处理大小写变体
+		transport.Proxy = http.ProxyFromEnvironment
+	}
+
 	return &Transport{
-		webhookURL: config.WebhookURL,
-		secret:     config.Secret,
-		timeout:    config.Timeout,
+		webhookURL:     config.WebhookURL,
+		timeout:        config.Timeout,
+		securityType:   config.SecurityType,
+		secret:         config.Secret,
+		customKeywords: config.CustomKeywords,
+		proxyURL:       config.ProxyURL,
 		client: &http.Client{
-			Timeout: config.Timeout,
+			Timeout:   config.Timeout,
+			Transport: transport,
 		},
 	}
 }
@@ -55,9 +104,9 @@ func (t *Transport) Name() string {
 }
 
 // Send sends a message through Feishu
-func (t *Transport) Send(ctx context.Context, msg *message.Message, target sending.Target) (*sending.Result, error) {
-	result := sending.NewResult(msg.ID, target)
-	result.SetStatus(sending.StatusSending)
+func (t *Transport) Send(ctx context.Context, msg *core.Message, target core.Target) (*core.Result, error) {
+	result := core.NewResult(msg.ID, target)
+	result.SetStatus(core.StatusSending)
 
 	// Convert message to Feishu format
 	payload, err := t.buildPayload(msg, target)
@@ -93,39 +142,48 @@ func (t *Transport) Send(ctx context.Context, msg *message.Message, target sendi
 		return result, notifyErr
 	}
 
-	result.SetStatus(sending.StatusSent)
-	result.SetResponse(response)
+	result.Status = core.StatusSent
+	result.Response = response
 	return result, nil
 }
 
 // buildPayload builds the Feishu webhook payload
-func (t *Transport) buildPayload(msg *message.Message, target sending.Target) (*FeishuPayload, error) {
+func (t *Transport) buildPayload(msg *core.Message, target core.Target) (*FeishuPayload, error) {
 	payload := &FeishuPayload{
-		Timestamp: strconv.FormatInt(time.Now().Unix(), 10),
-		MsgType:   "text", // Default to text
+		Timestamp: strconv.FormatInt(time.Now().Unix(), 10), // 使用秒级时间戳
+		MsgType:   "text",                                   // Default to text
 	}
 
-	// Add signature if secret is configured
-	if t.secret != "" {
-		signature, err := t.generateSignature(payload.Timestamp)
-		if err != nil {
-			return nil, fmt.Errorf("failed to generate signature: %w", err)
+	// 根据安全类型添加相应的验证信息
+	switch t.securityType {
+	case SecurityTypeSignature:
+		if t.secret != "" {
+			signature, err := t.generateSignature(payload.Timestamp)
+			if err != nil {
+				return nil, fmt.Errorf("failed to generate signature: %w", err)
+			}
+			payload.Sign = signature
 		}
-		payload.Sign = signature
+	case SecurityTypeIPWhitelist:
+		// IP白名单验证在网络层处理，这里不需要额外处理
+	case SecurityTypeKeywords:
+		// 自定义关键词会在消息内容中体现
+	case SecurityTypeNone:
+		// 无安全验证
 	}
 
 	// Build content based on message format
 	switch msg.Format {
-	case message.FormatText:
+	case core.FormatText:
 		payload.Content = &FeishuContent{
 			Text: t.buildTextContent(msg),
 		}
-	case message.FormatMarkdown:
+	case core.FormatMarkdown:
 		payload.MsgType = "post"
 		payload.Content = &FeishuContent{
 			Post: t.buildPostContent(msg),
 		}
-	case message.FormatCard:
+	case core.FormatCard:
 		payload.MsgType = "interactive"
 		if msg.CardData != nil {
 			payload.Card = msg.CardData
@@ -143,17 +201,41 @@ func (t *Transport) buildPayload(msg *message.Message, target sending.Target) (*
 }
 
 // buildTextContent builds text content
-func (t *Transport) buildTextContent(msg *message.Message) string {
+func (t *Transport) buildTextContent(msg *core.Message) string {
 	content := ""
 	if msg.Title != "" {
 		content += msg.Title + "\n"
 	}
 	content += msg.Body
+
+	// 只有在使用关键词安全模式时才添加关键词标签
+	if t.securityType == SecurityTypeKeywords && len(t.customKeywords) > 0 {
+		content = t.enhanceContentWithKeywords(content)
+	}
+
+	return content
+}
+
+// enhanceContentWithKeywords 在消息内容中应用自定义关键词增强
+func (t *Transport) enhanceContentWithKeywords(content string) string {
+	if len(t.customKeywords) == 0 {
+		return content
+	}
+
+	// 在消息末尾添加关键词标签
+	content += "\n\n🏷️ 标签: "
+	for i, keyword := range t.customKeywords {
+		if i > 0 {
+			content += " | "
+		}
+		content += "#" + keyword
+	}
+
 	return content
 }
 
 // buildPostContent builds post (markdown) content
-func (t *Transport) buildPostContent(msg *message.Message) *FeishuPost {
+func (t *Transport) buildPostContent(msg *core.Message) *FeishuPost {
 	post := &FeishuPost{
 		ZhCn: &FeishuPostContent{
 			Title: msg.Title,
@@ -171,7 +253,7 @@ func (t *Transport) buildPostContent(msg *message.Message) *FeishuPost {
 }
 
 // buildDefaultCard builds a default card
-func (t *Transport) buildDefaultCard(msg *message.Message) interface{} {
+func (t *Transport) buildDefaultCard(msg *core.Message) interface{} {
 	card := map[string]interface{}{
 		"config": map[string]interface{}{
 			"wide_screen_mode": true,
@@ -207,10 +289,12 @@ func (t *Transport) buildDefaultCard(msg *message.Message) interface{} {
 }
 
 // generateSignature generates HMAC-SHA256 signature
+// 根据飞书官方算法：使用timestamp+"\n"+secret作为密钥，空字符串作为数据
 func (t *Transport) generateSignature(timestamp string) (string, error) {
-	stringToSign := timestamp + "\n" + t.secret
-	h := hmac.New(sha256.New, []byte(stringToSign))
-	h.Write([]byte(stringToSign))
+	// 正确的飞书签名算法：timestamp + "\n" + secret作为密钥，空字符串作为数据
+	key := timestamp + "\n" + t.secret
+	h := hmac.New(sha256.New, []byte(key))
+	h.Write([]byte("")) // 空字符串作为数据
 	signature := base64.StdEncoding.EncodeToString(h.Sum(nil))
 	return signature, nil
 }

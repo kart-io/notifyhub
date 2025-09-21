@@ -5,8 +5,8 @@ import (
 	"testing"
 	"time"
 
+	"github.com/kart-io/notifyhub/core"
 	"github.com/kart-io/notifyhub/core/message"
-	"github.com/kart-io/notifyhub/core/sending"
 	"github.com/kart-io/notifyhub/tests/utils"
 )
 
@@ -38,8 +38,8 @@ func TestMessage_Properties(t *testing.T) {
 
 	// 设置并验证优先级
 	priority := 4
-	msg.SetPriority(priority)
-	helper.AssertEqual(priority, msg.GetPriority(), "Priority should match")
+	msg.SetPriority(message.Priority(priority))
+	helper.AssertEqual(message.Priority(priority), msg.GetPriority(), "Priority should match")
 
 	// 设置并验证格式
 	format := message.FormatMarkdown
@@ -97,10 +97,8 @@ func TestMessage_Metadata(t *testing.T) {
 		"app":     "notifyhub",
 		"version": "1.0.0",
 	}
-	// 逐个设置元数据，因为SetMetadata方法只接受key-value对
-	for key, value := range newMeta {
-		msg.SetMetadata(key, value)
-	}
+	// 使用SetMetadataMap方法替换所有元数据
+	msg.SetMetadataMap(newMeta)
 
 	meta = msg.GetMetadata()
 	helper.AssertEqual(2, len(meta), "Should have 2 metadata entries after reset")
@@ -181,47 +179,47 @@ func TestMessage_Validation(t *testing.T) {
 
 	tests := []struct {
 		name          string
-		target        sending.Target
+		target        core.Target
 		shouldBeValid bool
 	}{
 		{
 			name:          "Valid email target",
-			target:        sending.NewTarget(sending.TargetTypeEmail, "test@example.com", "email"),
+			target:        core.NewTarget(core.TargetTypeEmail, "test@example.com", "email"),
 			shouldBeValid: true,
 		},
 		{
 			name:          "Invalid email format",
-			target:        sending.NewTarget(sending.TargetTypeEmail, "invalid-email", "email"),
+			target:        core.NewTarget(core.TargetTypeEmail, "invalid-email", "email"),
 			shouldBeValid: false,
 		},
 		{
 			name:          "Empty email",
-			target:        sending.NewTarget(sending.TargetTypeEmail, "", "email"),
+			target:        core.NewTarget(core.TargetTypeEmail, "", "email"),
 			shouldBeValid: false,
 		},
 		{
 			name:          "Valid user target",
-			target:        sending.NewTarget(sending.TargetTypeUser, "user123", "feishu"),
+			target:        core.NewTarget(core.TargetTypeUser, "user123", "feishu"),
 			shouldBeValid: true,
 		},
 		{
 			name:          "Empty user ID",
-			target:        sending.NewTarget(sending.TargetTypeUser, "", "feishu"),
+			target:        core.NewTarget(core.TargetTypeUser, "", "feishu"),
 			shouldBeValid: false,
 		},
 		{
 			name:          "Valid group target",
-			target:        sending.NewTarget(sending.TargetTypeGroup, "dev-team", "slack"),
+			target:        core.NewTarget(core.TargetTypeGroup, "dev-team", "slack"),
 			shouldBeValid: true,
 		},
 		{
 			name:          "Valid channel target",
-			target:        sending.NewTarget(sending.TargetTypeChannel, "general", "discord"),
+			target:        core.NewTarget(core.TargetTypeChannel, "general", "discord"),
 			shouldBeValid: true,
 		},
 		{
 			name:          "Very long value",
-			target:        sending.NewTarget(sending.TargetTypeUser, string(make([]byte, 256)), "platform"),
+			target:        core.NewTarget(core.TargetTypeUser, string(make([]byte, 256)), "platform"),
 			shouldBeValid: false,
 		},
 	}
@@ -242,50 +240,46 @@ func TestMessage_Validation(t *testing.T) {
 func TestSendingResult_Creation(t *testing.T) {
 	helper := utils.NewTestHelper(t)
 
-	target := sending.NewTarget(sending.TargetTypeEmail, "test@example.com", "email")
-	result := sending.NewResult("msg-123", target)
+	target := core.NewTarget(core.TargetTypeEmail, "test@example.com", "email")
+	result := core.NewResult("msg-123", target)
 
 	helper.AssertNotNil(result, "Result should not be nil")
 	helper.AssertEqual("msg-123", result.MessageID, "Message ID should match")
 	helper.AssertEqual(target.Value, result.Target.Value, "Target value should match")
-	helper.AssertEqual(sending.StatusPending, result.Status, "Initial status should be pending")
-	helper.AssertEqual(0, result.AttemptCount, "Initial attempt count should be 0")
-	helper.AssertNotNil(result.Metadata, "Metadata should be initialized")
+	helper.AssertEqual(core.StatusPending, result.Status, "Initial status should be pending")
+	helper.AssertEqual(false, result.Success, "Initial success should be false")
 	helper.AssertFalse(result.CreatedAt.IsZero(), "CreatedAt should be set")
 }
 
 func TestSendingResult_UpdateStatus(t *testing.T) {
 	helper := utils.NewTestHelper(t)
 
-	target := sending.NewTarget(sending.TargetTypeEmail, "test@example.com", "email")
-	result := sending.NewResult("msg-123", target)
+	target := core.NewTarget(core.TargetTypeEmail, "test@example.com", "email")
+	result := core.NewResult("msg-123", target)
 
 	// 更新为发送中
-	result.Status = sending.StatusSending
-	result.AttemptCount = 1
-	result.StartTime = time.Now()
-	helper.AssertEqual(sending.StatusSending, result.Status, "Status should be sending")
-	helper.AssertEqual(1, result.AttemptCount, "Attempt count should be 1")
+	result.Status = core.StatusSending
+	result.UpdatedAt = time.Now()
+	helper.AssertEqual(core.StatusSending, result.Status, "Status should be sending")
 
 	// 更新为发送成功
 	now := time.Now()
-	result.Status = sending.StatusSent
+	result.Status = core.StatusSent
 	result.Success = true
 	result.SentAt = &now
-	result.EndTime = now
-	helper.AssertEqual(sending.StatusSent, result.Status, "Status should be sent")
+	result.UpdatedAt = now
+	helper.AssertEqual(core.StatusSent, result.Status, "Status should be sent")
 	helper.AssertTrue(result.Success, "Should be successful")
 	helper.AssertNotNil(result.SentAt, "SentAt should be set")
 
 	// 测试失败情况
-	failedResult := sending.NewResult("msg-456", target)
-	failedResult.Status = sending.StatusFailed
+	failedResult := core.NewResult("msg-456", target)
+	failedResult.Status = core.StatusFailed
 	failedResult.Success = false
 	failedResult.Error = context.DeadlineExceeded
-	failedResult.AttemptCount = 3
+	failedResult.UpdatedAt = time.Now()
 
-	helper.AssertEqual(sending.StatusFailed, failedResult.Status, "Status should be failed")
+	helper.AssertEqual(core.StatusFailed, failedResult.Status, "Status should be failed")
 	helper.AssertFalse(failedResult.Success, "Should not be successful")
 	helper.AssertNotNil(failedResult.Error, "Error should be set")
-	helper.AssertEqual(3, failedResult.AttemptCount, "Attempt count should be 3")
 }

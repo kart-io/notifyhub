@@ -4,6 +4,7 @@ import (
 	"testing"
 
 	"github.com/kart-io/notifyhub/config"
+	"github.com/kart-io/notifyhub/core"
 	"github.com/kart-io/notifyhub/core/message"
 	"github.com/kart-io/notifyhub/platforms/feishu"
 )
@@ -52,8 +53,9 @@ func TestUnifiedPlatformBuilder_Email(t *testing.T) {
 		t.Errorf("Expected HTML body to be set")
 	}
 
-	// Test message format
-	if builder.GetMessage().Format != message.FormatHTML {
+	// Test message format - build message to check format
+	msg := builder.Build()
+	if msg.Format != core.FormatHTML {
 		t.Error("Expected message format to be HTML")
 	}
 
@@ -126,8 +128,9 @@ func TestUnifiedPlatformBuilder_Feishu(t *testing.T) {
 		t.Errorf("Expected secret, got '%s'", feishuData.Secret)
 	}
 
-	// Test message format
-	if builder.GetMessage().Format != message.FormatCard {
+	// Test message format - build message to check format
+	msg := builder.Build()
+	if msg.Format != core.FormatCard {
 		t.Error("Expected message format to be Card")
 	}
 }
@@ -243,15 +246,18 @@ func TestUnifiedPlatformBuilder_FluentInterface(t *testing.T) {
 		Var("key", "value").
 		To("user@example.com")
 
-	if builder.GetMessage().Title != "Chained Title" {
+	// Build message to check the chained values
+	msg := builder.Build()
+
+	if msg.Title != "Chained Title" {
 		t.Error("Expected chained title to be set")
 	}
 
-	if builder.GetMessage().Body != "Chained Body" {
+	if msg.Body != "Chained Body" {
 		t.Error("Expected chained body to be set")
 	}
 
-	if builder.GetMessage().Priority != message.PriorityHigh {
+	if msg.Priority != core.PriorityHigh {
 		t.Error("Expected chained priority to be set")
 	}
 }
@@ -316,6 +322,6 @@ func BenchmarkUnifiedPlatformBuilder_DryRun(b *testing.B) {
 
 	b.ResetTimer()
 	for i := 0; i < b.N; i++ {
-		builder.DryRun()
+		_, _ = builder.DryRun()
 	}
 }

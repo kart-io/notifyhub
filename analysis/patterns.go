@@ -3,7 +3,7 @@ package analysis
 import (
 	"strings"
 
-	"github.com/kart-io/notifyhub/core/sending"
+	"github.com/kart-io/notifyhub/core"
 )
 
 // PatternDetector detects patterns in sending results
@@ -37,7 +37,7 @@ func NewPatternDetector() *PatternDetector {
 }
 
 // DetectPatterns detects patterns in sending results
-func (pd *PatternDetector) DetectPatterns(results *sending.SendingResults) []Pattern {
+func (pd *PatternDetector) DetectPatterns(results *core.SendingResults) []Pattern {
 	var patterns []Pattern
 
 	// Detect timeout patterns
@@ -69,12 +69,12 @@ func (pd *PatternDetector) DetectPatterns(results *sending.SendingResults) []Pat
 }
 
 // detectTimeoutPattern detects timeout-related failures
-func (pd *PatternDetector) detectTimeoutPattern(results *sending.SendingResults) *Pattern {
+func (pd *PatternDetector) detectTimeoutPattern(results *core.SendingResults) *Pattern {
 	timeoutCount := 0
 	totalFailed := 0
 
 	for _, result := range results.Results {
-		if result.IsFailed() {
+		if result.Status == core.StatusFailed {
 			totalFailed++
 			if result.Error != nil && strings.Contains(result.Error.Error(), "timeout") {
 				timeoutCount++
@@ -100,11 +100,11 @@ func (pd *PatternDetector) detectTimeoutPattern(results *sending.SendingResults)
 }
 
 // detectRateLimitPattern detects rate limiting failures
-func (pd *PatternDetector) detectRateLimitPattern(results *sending.SendingResults) *Pattern {
+func (pd *PatternDetector) detectRateLimitPattern(results *core.SendingResults) *Pattern {
 	rateLimitCount := 0
 
 	for _, result := range results.Results {
-		if result.IsFailed() && result.Error == sending.ErrRateLimited {
+		if result.Status == core.StatusFailed && result.Error != nil && strings.Contains(result.Error.Error(), "rate limited") {
 			rateLimitCount++
 		}
 	}
@@ -126,11 +126,11 @@ func (pd *PatternDetector) detectRateLimitPattern(results *sending.SendingResult
 }
 
 // detectAuthPattern detects authentication-related failures
-func (pd *PatternDetector) detectAuthPattern(results *sending.SendingResults) *Pattern {
+func (pd *PatternDetector) detectAuthPattern(results *core.SendingResults) *Pattern {
 	authFailureCount := 0
 
 	for _, result := range results.Results {
-		if result.IsFailed() && result.Error == sending.ErrInvalidCredentials {
+		if result.Status == core.StatusFailed && result.Error != nil && strings.Contains(result.Error.Error(), "invalid credentials") {
 			authFailureCount++
 		}
 	}
@@ -152,11 +152,11 @@ func (pd *PatternDetector) detectAuthPattern(results *sending.SendingResults) *P
 }
 
 // detectNetworkPattern detects network-related failures
-func (pd *PatternDetector) detectNetworkPattern(results *sending.SendingResults) *Pattern {
+func (pd *PatternDetector) detectNetworkPattern(results *core.SendingResults) *Pattern {
 	networkFailureCount := 0
 
 	for _, result := range results.Results {
-		if result.IsFailed() && result.Error == sending.ErrNetworkError {
+		if result.Status == core.StatusFailed && result.Error != nil && strings.Contains(result.Error.Error(), "network") {
 			networkFailureCount++
 		}
 	}
@@ -178,7 +178,7 @@ func (pd *PatternDetector) detectNetworkPattern(results *sending.SendingResults)
 }
 
 // detectPlatformPatterns detects platform-specific patterns
-func (pd *PatternDetector) detectPlatformPatterns(results *sending.SendingResults) []Pattern {
+func (pd *PatternDetector) detectPlatformPatterns(results *core.SendingResults) []Pattern {
 	var patterns []Pattern
 
 	platformStatsMap := make(map[string]*platformStats)
@@ -196,11 +196,12 @@ func (pd *PatternDetector) detectPlatformPatterns(results *sending.SendingResult
 		stats := platformStatsMap[platform]
 		stats.total++
 
-		if result.IsSuccess() {
+		switch result.Status {
+		case core.StatusSent:
 			stats.success++
-		} else if result.IsFailed() {
+		case core.StatusFailed:
 			stats.failed++
-		} else {
+		default:
 			stats.pending++
 		}
 
@@ -209,8 +210,7 @@ func (pd *PatternDetector) detectPlatformPatterns(results *sending.SendingResult
 			if stats.errors == nil {
 				stats.errors = make(map[string]int)
 			}
-			errorType := result.Error.Error()
-			stats.errors[errorType]++
+			stats.errors[result.Error.Error()]++
 		}
 	}
 

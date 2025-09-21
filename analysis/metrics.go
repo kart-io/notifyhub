@@ -4,7 +4,7 @@ import (
 	"sync"
 	"time"
 
-	"github.com/kart-io/notifyhub/core/sending"
+	"github.com/kart-io/notifyhub/core"
 )
 
 // Metrics tracks sending metrics over time
@@ -46,7 +46,7 @@ func NewMetrics() *Metrics {
 }
 
 // UpdateFromResults updates metrics from sending results
-func (m *Metrics) UpdateFromResults(results *sending.SendingResults) {
+func (m *Metrics) UpdateFromResults(results *core.SendingResults) {
 	m.mutex.Lock()
 	defer m.mutex.Unlock()
 
@@ -67,15 +67,15 @@ func (m *Metrics) UpdateFromResults(results *sending.SendingResults) {
 
 		// Count results by status
 		switch result.Status {
-		case sending.StatusSent:
+		case core.StatusSent:
 			m.totalSent++
 			m.platformMetrics[platform].Sent++
 			platformCounts[platform].Sent++
-		case sending.StatusFailed:
+		case core.StatusFailed:
 			m.totalFailed++
 			m.platformMetrics[platform].Failed++
 			platformCounts[platform].Failed++
-		case sending.StatusPending, sending.StatusSending, sending.StatusRetrying:
+		case core.StatusPending:
 			m.totalPending++
 			m.platformMetrics[platform].Pending++
 			platformCounts[platform].Pending++
@@ -87,13 +87,13 @@ func (m *Metrics) UpdateFromResults(results *sending.SendingResults) {
 }
 
 // CalculateMetrics calculates metrics from current results
-func (m *Metrics) CalculateMetrics(results *sending.SendingResults) *MetricsSnapshot {
+func (m *Metrics) CalculateMetrics(results *core.SendingResults) *MetricsSnapshot {
 	snapshot := m.GetSnapshot()
 
 	// Add current batch metrics
 	snapshot.TotalSent += int64(results.Success)
 	snapshot.TotalFailed += int64(results.Failed)
-	snapshot.TotalPending += int64(results.Pending)
+	snapshot.TotalPending += int64(results.Total - results.Success - results.Failed)
 
 	// Recalculate rates
 	total := snapshot.TotalSent + snapshot.TotalFailed + snapshot.TotalPending

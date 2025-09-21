@@ -3,17 +3,19 @@ package handlers
 import (
 	"encoding/json"
 	"net/http"
+	"time"
 
 	"github.com/kart-io/notifyhub/api"
+	"github.com/kart-io/notifyhub/monitoring"
 )
 
 // HealthHandler handles health check requests
 type HealthHandler struct {
-	hub *api.Client
+	hub api.Client
 }
 
 // NewHealthHandler creates a new health handler
-func NewHealthHandler(hub *api.Client) *HealthHandler {
+func NewHealthHandler(hub api.Client) *HealthHandler {
 	return &HealthHandler{hub: hub}
 }
 
@@ -44,27 +46,55 @@ func (h *HealthHandler) Handle(w http.ResponseWriter, r *http.Request) {
 	}
 
 	// Get metrics from hub
-	metrics := h.hub.Metrics()
+	metricsInterface := h.hub.Metrics()
 	// Note: Transport details are now internal to the client
 	transports := []string{"unified"} // V2 API uses unified interface
 
+	// Type assert to get actual metrics
+	metrics, ok := metricsInterface.(*monitoring.Metrics)
+	if !ok {
+		// Fallback if metrics interface changes
+		response := HealthResponse{
+			Status:     "degraded",
+			Timestamp:  time.Now().Format("2006-01-02T15:04:05Z"),
+			Transports: transports,
+			Metrics: HealthMetrics{
+				TotalSent:   0,
+				TotalFailed: 0,
+				SuccessRate: 0,
+				FailureRate: 0,
+			},
+			Details: map[string]interface{}{
+				"error": "metrics unavailable",
+			},
+		}
+
+		w.Header().Set("Content-Type", "application/json")
+		w.WriteHeader(http.StatusServiceUnavailable)
+		_ = json.NewEncoder(w).Encode(response)
+		return
+	}
+
 	// Calculate success/failure rates
-	totalMessages := metrics.MessagesSent + metrics.MessagesFailed
+	totalMessages := metrics.TotalSent + metrics.TotalFailed
 	var successRate, failureRate float64
 	if totalMessages > 0 {
-		successRate = float64(metrics.MessagesSent) / float64(totalMessages)
-		failureRate = float64(metrics.MessagesFailed) / float64(totalMessages)
+		successRate = float64(metrics.TotalSent) / float64(totalMessages)
+		failureRate = float64(metrics.TotalFailed) / float64(totalMessages)
 	}
+
+	// Calculate uptime
+	uptime := time.Since(metrics.StartTime)
 
 	// Build health response
 	response := HealthResponse{
 		Status:     "healthy",
-		Timestamp:  metrics.Timestamp.Format("2006-01-02T15:04:05Z"),
-		Uptime:     0, // This would need to be calculated from start time
+		Timestamp:  time.Now().Format("2006-01-02T15:04:05Z"),
+		Uptime:     int64(uptime.Seconds()),
 		Transports: transports,
 		Metrics: HealthMetrics{
-			TotalSent:   metrics.MessagesSent,
-			TotalFailed: metrics.MessagesFailed,
+			TotalSent:   metrics.TotalSent,
+			TotalFailed: metrics.TotalFailed,
 			SuccessRate: successRate,
 			FailureRate: failureRate,
 		},

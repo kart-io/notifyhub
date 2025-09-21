@@ -121,7 +121,7 @@ func (a *AsyncSender) SendAsync(ctx context.Context, msg *message.Message, targe
 	item := QueueItem{
 		Message:   msg,
 		Targets:   targets,
-		Priority:  msg.GetPriority(),
+		Priority:  int(msg.Priority),
 		Timestamp: time.Now(),
 		Retries:   0,
 	}
@@ -131,9 +131,9 @@ func (a *AsyncSender) SendAsync(ctx context.Context, msg *message.Message, targe
 		return "", fmt.Errorf("failed to enqueue message: %w", err)
 	}
 
-	a.logger.Info(ctx, "Message queued", "message_id", msg.GetID(), "target_count", len(targets), "queue_size", a.queue.Size())
+	a.logger.Info(ctx, "Message queued", "message_id", msg.ID, "target_count", len(targets), "queue_size", a.queue.Size())
 
-	return msg.GetID(), nil
+	return msg.ID, nil
 }
 
 // worker processes queued messages
@@ -166,7 +166,7 @@ func (a *AsyncSender) processQueueItem(workerID int) {
 		return
 	}
 
-	a.logger.Debug(ctx, "Processing queue item", "worker_id", workerID, "message_id", item.Message.GetID(), "targets", len(item.Targets))
+	a.logger.Debug(ctx, "Processing queue item", "worker_id", workerID, "message_id", item.Message.ID, "targets", len(item.Targets))
 
 	// Process each target
 	for _, target := range item.Targets {
@@ -186,9 +186,9 @@ func (a *AsyncSender) sendToTarget(ctx context.Context, msg *message.Message, ta
 	// Send through transport
 	_, err := transport.Send(ctx, msg, target)
 	if err != nil {
-		a.logger.Error(ctx, "Async send failed", "platform", target.GetPlatform(), "target", target.GetValue(), "message", msg.GetID(), "error", err)
+		a.logger.Error(ctx, "Async send failed", "platform", target.Platform, "target", target.Value, "message", msg.ID, "error", err)
 	} else {
-		a.logger.Info(ctx, "Async message sent", "platform", target.GetPlatform(), "target", target.GetValue(), "message", msg.GetID())
+		a.logger.Info(ctx, "Async message sent", "platform", target.Platform, "target", target.Value, "message", msg.ID)
 	}
 }
 

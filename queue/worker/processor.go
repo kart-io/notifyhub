@@ -4,8 +4,8 @@ import (
 	"context"
 	"time"
 
+	coreTypes "github.com/kart-io/notifyhub/core"
 	coreMessage "github.com/kart-io/notifyhub/core/message"
-	"github.com/kart-io/notifyhub/core/sending"
 )
 
 // DefaultMessageProcessor 默认消息处理器实现
@@ -27,7 +27,7 @@ func NewDefaultMessageProcessor(sender MessageSender, timeout time.Duration) *De
 }
 
 // ProcessMessage 处理消息发送
-func (p *DefaultMessageProcessor) ProcessMessage(ctx context.Context, msg *coreMessage.Message, targets []sending.Target) (*ProcessResult, error) {
+func (p *DefaultMessageProcessor) ProcessMessage(ctx context.Context, msg *coreMessage.Message, targets []coreTypes.Target) (*ProcessResult, error) {
 	start := time.Now()
 
 	// 创建带超时的context
@@ -51,7 +51,7 @@ func (p *DefaultMessageProcessor) ProcessMessage(ctx context.Context, msg *coreM
 }
 
 // isSuccessful 检查发送结果是否成功
-func (p *DefaultMessageProcessor) isSuccessful(results *sending.SendingResults) bool {
+func (p *DefaultMessageProcessor) isSuccessful(results *coreTypes.SendingResults) bool {
 	if results == nil {
 		return false
 	}
@@ -59,7 +59,7 @@ func (p *DefaultMessageProcessor) isSuccessful(results *sending.SendingResults) 
 }
 
 // shouldRetry 判断是否应该重试
-func (p *DefaultMessageProcessor) shouldRetry(err error, results *sending.SendingResults) bool {
+func (p *DefaultMessageProcessor) shouldRetry(err error, results *coreTypes.SendingResults) bool {
 	// 如果有发送错误，需要重试
 	if err != nil {
 		return true

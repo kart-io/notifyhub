@@ -5,7 +5,7 @@ import (
 	"sync"
 	"time"
 
-	"github.com/kart-io/notifyhub/core/sending"
+	"github.com/kart-io/notifyhub/core"
 )
 
 // Analyzer provides analysis of sending results and patterns
@@ -18,7 +18,7 @@ type Analyzer struct {
 
 // Rule defines an analysis rule
 type Rule interface {
-	Analyze(ctx context.Context, results *sending.SendingResults) (*Finding, error)
+	Analyze(ctx context.Context, results *core.SendingResults) (*Finding, error)
 	Name() string
 	Enabled() bool
 }
@@ -62,7 +62,7 @@ func (a *Analyzer) AddRule(rule Rule) {
 }
 
 // AnalyzeResults analyzes sending results
-func (a *Analyzer) AnalyzeResults(ctx context.Context, results *sending.SendingResults) (*AnalysisReport, error) {
+func (a *Analyzer) AnalyzeResults(ctx context.Context, results *core.SendingResults) (*AnalysisReport, error) {
 	report := &AnalysisReport{
 		Timestamp: time.Now(),
 		Findings:  make([]*Finding, 0),
@@ -129,7 +129,7 @@ func NewHighFailureRateRule(threshold float64) *HighFailureRateRule {
 }
 
 // Analyze analyzes for high failure rates
-func (r *HighFailureRateRule) Analyze(ctx context.Context, results *sending.SendingResults) (*Finding, error) {
+func (r *HighFailureRateRule) Analyze(ctx context.Context, results *core.SendingResults) (*Finding, error) {
 	if results.Total == 0 {
 		return nil, nil
 	}
@@ -173,14 +173,14 @@ func NewPlatformFailureRule() *PlatformFailureRule {
 }
 
 // Analyze analyzes for platform-specific failures
-func (r *PlatformFailureRule) Analyze(ctx context.Context, results *sending.SendingResults) (*Finding, error) {
+func (r *PlatformFailureRule) Analyze(ctx context.Context, results *core.SendingResults) (*Finding, error) {
 	platformFailures := make(map[string]int)
 	platformTotals := make(map[string]int)
 
 	for _, result := range results.Results {
 		platform := result.Target.Platform
 		platformTotals[platform]++
-		if result.IsFailed() {
+		if result.Status == core.StatusFailed {
 			platformFailures[platform]++
 		}
 	}

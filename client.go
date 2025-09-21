@@ -2,12 +2,11 @@ package notifyhub
 
 import (
 	"context"
-	"fmt"
 	"time"
 
+	"github.com/kart-io/notifyhub/core"
+	"github.com/kart-io/notifyhub/core/errors"
 	"github.com/kart-io/notifyhub/core/hub"
-	"github.com/kart-io/notifyhub/core/message"
-	"github.com/kart-io/notifyhub/core/sending"
 	"github.com/kart-io/notifyhub/logger"
 	"github.com/kart-io/notifyhub/platforms"
 	"github.com/kart-io/notifyhub/platforms/registry"
@@ -211,8 +210,8 @@ func (c *Client) Send(ctx context.Context) *SendBuilder {
 	return &SendBuilder{
 		client:  c,
 		ctx:     ctx,
-		message: message.NewMessage(),
-		targets: make([]sending.Target, 0),
+		message: core.NewMessage(),
+		targets: make([]core.Target, 0),
 	}
 }
 
@@ -242,7 +241,7 @@ func (c *Client) Send(ctx context.Context) *SendBuilder {
 func (c *Client) Alert(ctx context.Context) *AlertBuilder {
 	return &AlertBuilder{
 		SendBuilder: c.Send(ctx),
-		priority:    message.PriorityHigh,
+		priority:    int(core.PriorityHigh),
 	}
 }
 
@@ -272,7 +271,7 @@ func (c *Client) Alert(ctx context.Context) *AlertBuilder {
 func (c *Client) Notification(ctx context.Context) *NotificationBuilder {
 	return &NotificationBuilder{
 		SendBuilder: c.Send(ctx),
-		priority:    message.PriorityNormal,
+		priority:    int(core.PriorityNormal),
 	}
 }
 
@@ -370,7 +369,8 @@ type HealthStatus struct {
 func (c *Client) GetPlatformCapabilities(platformName string) (platforms.Capabilities, error) {
 	platform, err := registry.GlobalRegistry.Get(platformName)
 	if err != nil {
-		return nil, fmt.Errorf("platform %s not found: %w", platformName, err)
+		return nil, errors.WrapWithPlatform(errors.CodeInvalidPlatform, errors.CategoryConfig,
+			"platform "+platformName+" not found", platformName, err)
 	}
 	return platform.Capabilities(), nil
 }
@@ -398,18 +398,21 @@ func registerPlatformTransports(h *hub.Hub, platformConfigs []PlatformConfig) er
 		// Find the platform implementation
 		platform, exists := registeredPlatforms[cfg.Name]
 		if !exists {
-			return fmt.Errorf("platform %s not registered", cfg.Name)
+			return errors.New(errors.CodeInvalidPlatform, errors.CategoryConfig,
+				"platform "+cfg.Name+" not registered")
 		}
 
 		// Validate configuration
 		if err := platform.ValidateConfig(cfg.Settings); err != nil {
-			return fmt.Errorf("invalid config for platform %s: %w", cfg.Name, err)
+			return errors.WrapWithPlatform(errors.CodeInvalidConfig, errors.CategoryConfig,
+				"invalid config for platform "+cfg.Name, cfg.Name, err)
 		}
 
 		// Create transport
 		transport, err := platform.CreateTransport(cfg.Settings)
 		if err != nil {
-			return fmt.Errorf("failed to create transport for %s: %w", cfg.Name, err)
+			return errors.WrapWithPlatform(errors.CodeProcessingFailed, errors.CategoryPlatform,
+				"failed to create transport for "+cfg.Name, cfg.Name, err)
 		}
 
 		// Register transport with hub
@@ -428,7 +431,7 @@ type transportAdapter struct {
 	platform  platforms.Platform
 }
 
-func (t *transportAdapter) Send(ctx context.Context, msg *message.Message, target sending.Target) (*sending.Result, error) {
+func (t *transportAdapter) Send(ctx context.Context, msg *core.Message, target core.Target) (*core.Result, error) {
 	// Check platform capabilities before sending
 	caps := t.platform.Capabilities()
 
@@ -437,15 +440,18 @@ func (t *transportAdapter) Send(ctx context.Context, msg *message.Message, targe
 
 	// Validate message format
 	if !caps.SupportsFormat(platformFormat) {
-		return nil, fmt.Errorf("platform %s does not support format %s", t.platform.Name(), msg.Format)
+		return nil, errors.NewWithPlatform(errors.CodeInvalidFormat, errors.CategoryValidation,
+			"platform "+t.platform.Name()+" does not support format "+string(msg.Format), t.platform.Name())
 	}
 
 	// Check message size limits
 	if len(msg.Title) > caps.MaxTitleLength() {
-		return nil, fmt.Errorf("title exceeds maximum length of %d", caps.MaxTitleLength())
+		return nil, errors.NewWithPlatform(errors.CodeInvalidFormat, errors.CategoryValidation,
+			"title exceeds maximum length", t.platform.Name())
 	}
 	if len(msg.Body) > caps.MaxBodyLength() {
-		return nil, fmt.Errorf("body exceeds maximum length of %d", caps.MaxBodyLength())
+		return nil, errors.NewWithPlatform(errors.CodeInvalidFormat, errors.CategoryValidation,
+			"body exceeds maximum length", t.platform.Name())
 	}
 
 	// Call transport and convert result
@@ -454,25 +460,8 @@ func (t *transportAdapter) Send(ctx context.Context, msg *message.Message, targe
 		return nil, err
 	}
 
-	// Convert interface{} result to *sending.Result
-	if sendingResult, ok := result.(*sending.Result); ok {
-		return sendingResult, nil
-	}
-
-	// Create a new result if conversion failed
-	now := time.Now()
-	return &sending.Result{
-		MessageID: "",
-		Status:    sending.StatusSent,
-		Platform:  t.platform.Name(),
-		Target:    target,
-		Response:  result,
-		SentAt:    &now,
-		CreatedAt: now,
-		UpdatedAt: now,
-		Timestamp: now,
-		Success:   true,
-	}, nil
+	// Result is already *core.Result from transport
+	return result, nil
 }
 
 func (t *transportAdapter) Name() string {
@@ -481,4 +470,8 @@ func (t *transportAdapter) Name() string {
 
 func (t *transportAdapter) Shutdown() error {
 	return t.transport.Shutdown()
+}
+
+func (t *transportAdapter) Health(ctx context.Context) error {
+	return t.transport.Health(ctx)
 }
