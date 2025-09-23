@@ -225,7 +225,7 @@ hub, err := notifyhub.NewHub(
 
     // 自定义平台
     notifyhub.WithPlatformConfig("slack", map[string]interface{}{
-        "webhook_url": "https://hooks.slack.com/services/...",
+        "webhook_url": "https://example.com/slack/webhook/your-id",
         "channel":     "#alerts",
     }),
 
@@ -743,7 +743,7 @@ func init() {
 // 使用自定义 Slack 平台
 hub, err := notifyhub.NewHub(
     notifyhub.WithPlatformConfig("slack", map[string]interface{}{
-        "webhook_url": "https://hooks.slack.com/services/WORKSPACE/CHANNEL/TOKEN",
+        "webhook_url": "https://example.com/slack/webhook/your-token",
         "channel":     "#alerts",
     }),
 )

@@ -518,7 +518,7 @@ func NewWebhookTarget(url string) Target
 **示例:**
 
 ```go
-target := NewWebhookTarget("https://hooks.slack.com/services/...")
+target := NewWebhookTarget("https://example.com/webhook/your-id")
 ```
 
 #### AutoDetectTarget

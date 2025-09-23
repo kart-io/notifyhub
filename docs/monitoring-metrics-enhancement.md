@@ -678,7 +678,7 @@ client, err := notifyhub.New(
                 smtpConfig: SMTPConfig{/*...*/},
             },
             &SlackAlertNotifier{
-                webhookURL: "https://hooks.slack.com/...",
+                webhookURL: "https://example.com/slack/webhook/id",
                 channel:    "#alerts",
             },
         },
