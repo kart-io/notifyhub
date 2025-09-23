@@ -61,8 +61,21 @@ fmt-check: ## Check if code is properly formatted
 	fi
 
 .PHONY: lint
-lint: ## Run golangci-lint
-	@echo "$(YELLOW)Running linter...$(NC)"
+lint: ## Run golangci-lint on refactored packages
+	@echo "$(YELLOW)Running linter on refactored packages...$(NC)"
+	@if command -v $(GOLANGCI_LINT) >/dev/null 2>&1; then \
+		$(GOLANGCI_LINT) run ./pkg/notifyhub ./internal/platform ./examples/elegant_api --timeout=5m; \
+		echo "$(GREEN)✓ Linting completed$(NC)"; \
+	else \
+		echo "$(RED)golangci-lint not found. Installing...$(NC)"; \
+		$(MAKE) install-lint; \
+		$(GOLANGCI_LINT) run ./pkg/notifyhub ./internal/platform ./examples/elegant_api --timeout=5m; \
+		echo "$(GREEN)✓ Linting completed$(NC)"; \
+	fi
+
+.PHONY: lint-all
+lint-all: ## Run golangci-lint on all packages (including legacy)
+	@echo "$(YELLOW)Running linter on all packages...$(NC)"
 	@if command -v $(GOLANGCI_LINT) >/dev/null 2>&1; then \
 		$(GOLANGCI_LINT) run --timeout=5m; \
 		echo "$(GREEN)✓ Linting completed$(NC)"; \
@@ -80,8 +93,14 @@ lint-fix: ## Run golangci-lint with autofix
 	@echo "$(GREEN)✓ Linting with autofix completed$(NC)"
 
 .PHONY: vet
-vet: ## Run go vet
-	@echo "$(YELLOW)Running go vet...$(NC)"
+vet: ## Run go vet on refactored packages
+	@echo "$(YELLOW)Running go vet on refactored packages...$(NC)"
+	@$(GOVET) ./pkg/notifyhub ./internal/platform ./examples/elegant_api
+	@echo "$(GREEN)✓ go vet completed$(NC)"
+
+.PHONY: vet-all
+vet-all: ## Run go vet on all packages (including legacy)
+	@echo "$(YELLOW)Running go vet on all packages...$(NC)"
 	@$(GOVET) ./...
 	@echo "$(GREEN)✓ go vet completed$(NC)"
 
@@ -99,8 +118,14 @@ staticcheck: ## Run staticcheck
 	fi
 
 .PHONY: test
-test: ## Run tests
-	@echo "$(YELLOW)Running tests...$(NC)"
+test: ## Run tests on refactored packages
+	@echo "$(YELLOW)Running tests on refactored packages...$(NC)"
+	@$(GOTEST) -v ./pkg/notifyhub ./internal/platform ./examples/elegant_api
+	@echo "$(GREEN)✓ Tests completed$(NC)"
+
+.PHONY: test-all
+test-all: ## Run tests on all packages (including legacy)
+	@echo "$(YELLOW)Running tests on all packages...$(NC)"
 	@$(GOTEST) -v ./...
 	@echo "$(GREEN)✓ Tests completed$(NC)"
 
@@ -153,7 +178,13 @@ bench: ## Run benchmarks
 	@echo "$(GREEN)✓ Benchmarks completed$(NC)"
 
 .PHONY: build
-build: ## Build all packages
+build: ## Build refactored packages
+	@echo "$(YELLOW)Building refactored packages...$(NC)"
+	@$(GOBUILD) -v ./pkg/notifyhub ./internal/platform ./examples/elegant_api
+	@echo "$(GREEN)✓ Build completed$(NC)"
+
+.PHONY: build-all
+build-all: ## Build all packages (including legacy)
 	@echo "$(YELLOW)Building all packages...$(NC)"
 	@$(GOBUILD) -v ./...
 	@echo "$(GREEN)✓ Build completed$(NC)"
@@ -273,7 +304,10 @@ version: ## Show Go version and environment info
 	@$(GOCMD) env
 
 .PHONY: check
-check: fmt-check vet lint staticcheck ## Run all checks without fixing
+check: fmt-check vet lint ## Run all checks without fixing on refactored packages
+
+.PHONY: check-all
+check-all: fmt-check vet-all lint-all staticcheck ## Run all checks without fixing on all packages
 
 .PHONY: pre-commit
 pre-commit: fmt lint test ## Run pre-commit checks

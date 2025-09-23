@@ -8,21 +8,39 @@ A modern, type-safe, and unified notification system for Go applications with su
 ## ✨ Features
 
 - **🚀 Unified API**: Single entry point with fluent builders
-- **🔒 Type Safety**: Platform-specific builders with compile-time validation  
+- **🔒 Type Safety**: Platform-specific builders with compile-time validation
 - **🎯 Smart Targets**: Automatic target type detection from string patterns
 - **⚡ High Performance**: Asynchronous processing with worker pools
 - **🔄 Rate Limiting**: Built-in token bucket rate limiting
 - **📊 Monitoring**: Real-time health checks and metrics
 - **🔧 Configuration**: Environment-based config with validation
-- **🔄 Backward Compatible**: V1 API compatibility layer
+- **🔄 Backward Compatible**: Full backward compatibility with existing APIs
 - **🎨 Rich Formatting**: Platform-specific rich content (cards, blocks, HTML)
+- **🛡️ Internal Encapsulation**: Core logic protected in internal packages
+
+## 🏗️ Architecture
+
+NotifyHub follows a clean, modular architecture:
+
+```
+notifyhub/
+├── notifyhub/          # 🎯 Unified SDK Entry Point
+├── platforms/          # 🔌 Platform Implementations
+├── internal/           # 🔒 Protected Core Logic
+│   ├── model/         # 📋 Core Data Types
+│   ├── hub/           # ⚙️ Message Coordination
+│   ├── queue/         # 📬 Async Processing
+│   └── transport/     # 🚀 Delivery Layer
+├── logger/            # 📝 Logging Interface
+└── examples/          # 📚 Usage Examples
+```
 
 ## 🚀 Quick Start
 
 ### Installation
 
 ```bash
-go get github.com/kart-io/notifyhub
+go get github.com/kart-io/notifyhub/notifyhub
 ```
 
 ### Basic Usage
@@ -33,105 +51,113 @@ package main
 import (
     "context"
     "log"
-    
-    "github.com/kart-io/notifyhub"
-    "github.com/kart-io/notifyhub/api/v2/types"
+
+    "github.com/kart-io/notifyhub/notifyhub"
 )
 
 func main() {
-    // Create configuration
-    cfg := notifyhub.NewConfig().
-        WithEmail("smtp.gmail.com", 587, "user@gmail.com", "password", "notifications@company.com").
-        WithFeishu("https://open.feishu.cn/open-apis/bot/v2/hook/xxx", "secret").
-        WithSlack("xoxb-123456789").
-        LoadFromEnv()
-
-    // Create client
-    client, err := notifyhub.New(cfg.Config)
+    // Create client with the new unified API
+    client, err := notifyhub.New(
+        notifyhub.WithFeishu("https://open.feishu.cn/open-apis/bot/v2/hook/xxx", "secret"),
+        notifyhub.WithEmailSimple("smtp.gmail.com", 587, "user@gmail.com", "password", "notifications@company.com"),
+        notifyhub.WithMemoryQueue(1000, 4),
+    )
     if err != nil {
         log.Fatal(err)
     }
     defer client.Shutdown(context.Background())
 
-    // Send notification with smart targets
-    result, err := client.Send().
+    // Send notification with the new chain builder API
+    ctx := context.Background()
+    err = client.Send(ctx).
         Title("System Alert").
         Body("Database backup completed successfully").
-        To("admin@company.com", "#alerts", "@john.doe").
-        Priority(types.PriorityHigh).
-        Execute(context.Background())
+        ToAuto("admin@company.com").   // Smart target detection
+        ToAuto("#alerts").             // Channel target
+        ToAuto("@john.doe").           // User mention
+        Execute()
 
     if err != nil {
         log.Printf("Send failed: %v", err)
     } else {
-        log.Printf("Message sent: %s", result.MessageID)
+        log.Println("Message sent successfully")
     }
 }
 ```
 
 ## 📚 Documentation
 
-- [Migration Guide](MIGRATION.md) - Migrate from v1/v2 APIs
-- [API Reference](api/v2/README.md) - Complete API documentation
+- [Migration Guide](MIGRATION_GUIDE.md) - Complete migration guide from old API
+- [Architecture Refactor](ARCHITECTURE_REFACTOR.md) - Technical details of the refactor
 - [Examples](examples/) - Usage examples and demos
+- [Refactor Completion](REFACTOR_COMPLETION.md) - Refactor completion report
 
 ## 🎯 Smart Target Detection
 
 NotifyHub automatically detects target types from string patterns:
 
 ```go
-client.Send().
-    To(
-        "user@example.com",    // → Email target
-        "@john",               // → User mention  
-        "#alerts",             // → Channel target
-        "+1234567890",         // → SMS target
-        "https://webhook.com", // → Webhook target
-    ).
-    Execute(ctx)
+client.Send(ctx).
+    Title("Multi-platform Notification").
+    Body("This message will be sent to multiple platforms").
+    ToAuto("user@example.com").      // → Email target
+    ToAuto("@john").                 // → User mention
+    ToAuto("#alerts").               // → Channel target
+    ToAuto("+1234567890").           // → SMS target
+    ToAuto("https://webhook.com").   // → Webhook target
+    Execute()
 ```
 
-## 🔧 Platform-Specific Features
+## 🔧 Advanced Features
 
-### 📧 Email with Rich Features
+### 🚨 Alert Messages
 
 ```go
-client.Email().
-    Title("Monthly Report").
-    Body("Please find the report attached").
-    HTMLBody("<h1>Report</h1><p>Content here</p>").
-    To("manager@company.com").
-    CC("team@company.com").
-    Priority(types.PriorityHigh).
-    EnableTracking().
-    Attach("report.pdf", pdfContent).
-    Send(ctx)
+// High-priority alerts with automatic routing
+err := client.Alert(ctx).
+    Title("CRITICAL: Database Down").
+    Body("Primary database cluster is unreachable").
+    Severity("critical").
+    Source("database-monitor").
+    ToOnCall().                      // Routes to on-call team
+    Execute()
 ```
 
-### 🚀 Feishu Cards
+### 📬 Notification Messages
 
 ```go
-client.Feishu().
-    AlertCard("Production Issue", "Database timeout detected", types.AlertLevelError).
-    ToGroup("operations").
-    AtUser("oncall", "admin").
-    AddButton("View Dashboard", "https://dashboard.company.com").
-    AddImage("chart.png", "Performance chart").
-    Send(ctx)
+// Regular notifications
+err := client.Notification(ctx).
+    Title("Daily Report").
+    Body("System processed 1,234 requests today").
+    Category("daily-report").
+    ToChannel("general").
+    Execute()
 ```
 
-### 💬 Slack Blocks
+### 🎨 Template Messages
 
 ```go
-client.Slack().
-    HeaderBlock("Deployment Status").
-    SimpleBlock("✅ Application v2.1.0 deployed successfully").
-    DividerBlock().
-    AddField("Environment", "Production", true).
-    AddField("Duration", "2m 34s", true).
-    AddButton("View Logs", "logs", "https://logs.company.com").
-    ToChannel("deployments").
-    Send(ctx)
+// Using templates with variables
+err := client.Send(ctx).
+    Template("deployment_template").
+    Variable("service", "user-service").
+    Variable("version", "v2.1.0").
+    Variable("environment", "production").
+    ToEmail("devops@company.com").
+    Execute()
+```
+
+### ⏰ Scheduled Messages
+
+```go
+// Schedule messages for later delivery
+err := client.Send(ctx).
+    Title("Maintenance Notice").
+    Body("Scheduled maintenance in 1 hour").
+    Schedule(time.Now().Add(time.Hour)).
+    ToAuto("#maintenance").
+    Execute()
 ```
 
 ## ⚙️ Configuration

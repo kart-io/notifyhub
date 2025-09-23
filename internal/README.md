@@ -7,16 +7,19 @@ Internal包提供NotifyHub内部使用的核心工具和辅助功能，包括速
 ## 核心组件
 
 ### 1. 速率限制器 (Rate Limiter)
+
 - **文件**: `ratelimiter.go`
 - **算法**: 令牌桶算法 (Token Bucket)
 - **功能**: 防止API限流，保护外部服务
 
 ### 2. ID生成器 (ID Generator)
+
 - **文件**: `id.go`
 - **算法**: 基于时间戳的唯一ID
 - **功能**: 生成消息ID、任务ID等唯一标识
 
 ### 3. 工具函数 (Utilities)
+
 - **文件**: `utils.go`
 - **功能**: 通用工具函数和辅助方法
 
@@ -25,6 +28,7 @@ Internal包提供NotifyHub内部使用的核心工具和辅助功能，包括速
 ### 核心结构
 
 #### RateLimiter接口
+
 ```go
 type RateLimiter interface {
     Consume() error
@@ -35,6 +39,7 @@ type RateLimiter interface {
 ```
 
 #### RateLimitConfig配置
+
 ```go
 type RateLimitConfig struct {
     Limit    int           // 令牌数量（容量）
@@ -45,6 +50,7 @@ type RateLimitConfig struct {
 ### 令牌桶实现
 
 #### TokenBucket结构
+
 ```go
 type TokenBucket struct {
     capacity   int           // 桶容量
@@ -59,6 +65,7 @@ type TokenBucket struct {
 ### 使用示例
 
 #### 基本使用
+
 ```go
 // 创建速率限制配置
 config := &internal.RateLimitConfig{
@@ -78,6 +85,7 @@ if err != nil {
 ```
 
 #### 带超时的速率限制
+
 ```go
 // 带超时的令牌消费
 ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
@@ -95,6 +103,7 @@ case internal.ErrRateLimitExceeded:
 ```
 
 #### 集成到Notifier
+
 ```go
 // 在Email notifier中使用速率限制
 type EmailNotifier struct {
@@ -116,6 +125,7 @@ func (e *EmailNotifier) Send(ctx context.Context, message *Message) ([]*SendResu
 ### 高级配置
 
 #### 自适应速率限制
+
 ```go
 type AdaptiveRateLimiter struct {
     baseLimiter *TokenBucket
@@ -137,6 +147,7 @@ func (a *AdaptiveRateLimiter) AdjustRate(errorRate float64) {
 ```
 
 #### 分层速率限制
+
 ```go
 type HierarchicalRateLimiter struct {
     globalLimiter   *TokenBucket  // 全局限制
@@ -163,6 +174,7 @@ func (h *HierarchicalRateLimiter) Consume(platform string) error {
 ### 生成策略
 
 #### 基于时间戳的ID
+
 ```go
 // 生成基于纳秒时间戳的ID
 func GenerateID() string {
@@ -177,6 +189,7 @@ func GenerateIDWithPrefix(prefix string) string {
 ```
 
 #### UUID风格ID
+
 ```go
 // 生成类似UUID的ID
 func GenerateUUID() string {
@@ -192,6 +205,7 @@ func GenerateUUID() string {
 ```
 
 #### 短ID生成
+
 ```go
 // 生成短ID（用于任务ID等）
 func GenerateShortID() string {
@@ -209,6 +223,7 @@ func GenerateShortID() string {
 ### 使用示例
 
 #### 消息ID生成
+
 ```go
 // 在创建消息时生成ID
 message := &notifiers.Message{
@@ -226,6 +241,7 @@ queueMessage := &queue.Message{
 ```
 
 #### 追踪ID生成
+
 ```go
 // 生成分布式追踪ID
 traceID := internal.GenerateUUID()
@@ -237,6 +253,7 @@ span.SetAttributes(
 ## 工具函数
 
 ### 字符串处理
+
 ```go
 // 安全截断字符串
 func TruncateString(s string, maxLen int) string {
@@ -256,6 +273,7 @@ func MaskString(s string, visibleChars int) string {
 ```
 
 ### 时间处理
+
 ```go
 // 计算重试延迟（包含抖动）
 func CalculateRetryDelay(attempt int, baseDelay time.Duration, maxJitter time.Duration) time.Duration {
@@ -282,6 +300,7 @@ func FormatDuration(d time.Duration) string {
 ```
 
 ### 错误处理
+
 ```go
 // 错误类型检查
 func IsRetriableError(err error) bool {
@@ -312,6 +331,7 @@ func WrapError(err error, operation string) error {
 ```
 
 ### 并发控制
+
 ```go
 // 信号量实现
 type Semaphore struct {
@@ -345,6 +365,7 @@ func (s *Semaphore) TryAcquire() bool {
 ## 性能优化
 
 ### 对象池
+
 ```go
 // 使用sync.Pool优化内存分配
 var messagePool = sync.Pool{
@@ -364,6 +385,7 @@ func PutMessage(msg *Message) {
 ```
 
 ### 缓存机制
+
 ```go
 // LRU缓存实现
 type LRUCache struct {
@@ -409,6 +431,7 @@ func (c *LRUCache) Put(key string, value interface{}) {
 ## 监控与调试
 
 ### 速率限制监控
+
 ```go
 // 速率限制统计
 type RateLimitStats struct {
@@ -427,6 +450,7 @@ func (r *TokenBucket) GetStats() RateLimitStats {
 ```
 
 ### 性能指标
+
 ```go
 // 记录ID生成性能
 func BenchmarkIDGeneration() {
@@ -442,6 +466,7 @@ func BenchmarkIDGeneration() {
 ## 最佳实践
 
 ### 1. 速率限制配置
+
 ```go
 // 根据外部服务的限制配置合适的速率
 var platformLimits = map[string]*internal.RateLimitConfig{
@@ -457,6 +482,7 @@ var platformLimits = map[string]*internal.RateLimitConfig{
 ```
 
 ### 2. 错误处理
+
 ```go
 // 提供降级机制
 func sendWithRateLimit(ctx context.Context, msg *Message) error {
@@ -470,6 +496,7 @@ func sendWithRateLimit(ctx context.Context, msg *Message) error {
 ```
 
 ### 3. 资源管理
+
 ```go
 // 及时释放资源
 func processWithSemaphore(sem *internal.Semaphore, task func()) {
@@ -483,6 +510,7 @@ func processWithSemaphore(sem *internal.Semaphore, task func()) {
 ## 测试辅助
 
 ### Mock实现
+
 ```go
 // No-op速率限制器（用于测试）
 type NoOpRateLimiter struct{}
@@ -494,6 +522,7 @@ func (n *NoOpRateLimiter) Reset()                                               
 ```
 
 ### 测试工具
+
 ```go
 // 测试ID唯一性
 func TestIDUniqueness(t *testing.T) {
