@@ -3,6 +3,7 @@
 ## 一、当前问题分析
 
 ### 1.1 入口不统一
+
 - **问题**: `pkg/notifyhub` 对外暴露了过多的构建方式
   - `simple_adapter.go`: 示例代码，不应对外暴露
   - `api_adapter.go`: 已废弃的适配器
@@ -10,6 +11,7 @@
 - **影响**: 增加用户选择和理解成本，API 不清晰
 
 ### 1.2 核心职责分散
+
 - **问题**: 核心领域模型散落在多处
   - `pkg/notifyhub/core/`: Hub 实现
   - `internal/platform/`: Platform 接口定义
@@ -18,7 +20,9 @@
 - **影响**: 违反单一职责和高内聚原则，难以维护
 
 ### 1.3 配置耦合
+
 - **问题**: 调用方需要导入具体平台包
+
 ```go
 import "github.com/kart-io/notifyhub/pkg/platforms/feishu"
 import "github.com/kart-io/notifyhub/pkg/platforms/email"
@@ -28,9 +32,11 @@ hub, err := NewHub(
     email.WithEmail(...),
 )
 ```
+
 - **影响**: 上层业务与底层实现耦合，难以动态配置
 
 ### 1.4 包结构混乱
+
 - **问题**: pkg 和 internal 职责不清
   - Platform 接口在 `internal/`，实现在 `pkg/`
   - `pkg/utils/logger/`: 更像核心服务而非工具
@@ -40,6 +46,7 @@ hub, err := NewHub(
 ## 二、目标架构设计
 
 ### 2.1 包结构重组
+
 ```
 notifyhub/
 ├── pkg/
@@ -83,6 +90,7 @@ notifyhub/
 ### 2.2 统一 API 入口
 
 #### 公开 API（pkg/notifyhub/client.go）
+
 ```go
 package notifyhub
 
@@ -107,6 +115,7 @@ func NewFromConfig(config Config) (Client, error) {
 ```
 
 #### 配置解耦（pkg/notifyhub/options.go）
+
 ```go
 // Option 配置选项
 type Option func(*Config)
@@ -136,6 +145,7 @@ func WithJSON(data []byte) Option {
 ### 2.3 工厂模式解耦
 
 #### 平台工厂（internal/factory/platform.go）
+
 ```go
 type PlatformFactory struct {
     registry map[string]PlatformCreator
@@ -164,6 +174,7 @@ func (f *PlatformFactory) tryDynamicLoad(name string, config map[string]interfac
 ### 2.4 配置驱动示例
 
 #### YAML 配置文件
+
 ```yaml
 platforms:
   feishu:
@@ -194,6 +205,7 @@ retry:
 ```
 
 #### 使用示例
+
 ```go
 // 方式 1: 配置文件
 client, err := notifyhub.NewFromConfig(notifyhub.Config{
@@ -222,6 +234,7 @@ client, err := notifyhub.New(
 ## 三、实施步骤
 
 ### Phase 1: 准备阶段（不破坏现有 API）
+
 1. **创建新的内部结构**
    - [ ] 创建 `internal/core/` 目录
    - [ ] 复制并整合核心领域模型到 `internal/core/`
@@ -234,6 +247,7 @@ client, err := notifyhub.New(
    - [ ] 将 logger, ratelimit 移至 `internal/services/`
 
 ### Phase 2: 创建新 API（并存阶段）
+
 1. **实现新的客户端接口**
    - [ ] 创建 `pkg/notifyhub/client.go`
    - [ ] 实现统一的 `New()` 函数
@@ -245,6 +259,7 @@ client, err := notifyhub.New(
    - [ ] 添加迁移提示
 
 ### Phase 3: 平台迁移
+
 1. **重组平台包**
    - [ ] 创建顶层 `platforms/` 目录
    - [ ] 逐个迁移平台实现
@@ -256,6 +271,7 @@ client, err := notifyhub.New(
    - [ ] 更新 README 和文档
 
 ### Phase 4: 清理阶段
+
 1. **移除废弃代码**
    - [ ] 删除 `simple_adapter.go`
    - [ ] 删除 `api_adapter.go`
@@ -269,6 +285,7 @@ client, err := notifyhub.New(
 ## 四、向后兼容策略
 
 ### 4.1 废弃通知
+
 ```go
 // Deprecated: Use notifyhub.New() instead
 // Will be removed in v3.0.0
@@ -279,6 +296,7 @@ func NewHub(opts ...HubOption) (Hub, error) {
 ```
 
 ### 4.2 迁移助手
+
 ```go
 // MigrateConfig 将旧配置转换为新配置
 func MigrateConfig(old OldConfig) Config {
@@ -287,6 +305,7 @@ func MigrateConfig(old OldConfig) Config {
 ```
 
 ### 4.3 兼容性测试
+
 ```go
 // 确保所有旧测试仍然通过
 func TestBackwardCompatibility(t *testing.T) {
@@ -297,18 +316,21 @@ func TestBackwardCompatibility(t *testing.T) {
 ## 五、收益分析
 
 ### 5.1 架构改进
+
 - ✅ **统一入口**: 单一清晰的 API
 - ✅ **高内聚**: 核心领域模型集中管理
 - ✅ **低耦合**: 配置与实现完全解耦
 - ✅ **清晰边界**: pkg/internal 职责明确
 
 ### 5.2 开发体验
+
 - ✅ **简化使用**: 不需要导入具体平台包
 - ✅ **灵活配置**: 支持多种配置方式
 - ✅ **易于扩展**: 插件式平台架构
 - ✅ **更好的 IDE 支持**: 清晰的包结构
 
 ### 5.3 维护性
+
 - ✅ **模块化**: 各模块独立演进
 - ✅ **可测试性**: 依赖注入，易于测试
 - ✅ **文档友好**: 结构清晰，易于理解
@@ -317,11 +339,13 @@ func TestBackwardCompatibility(t *testing.T) {
 ## 六、风险和缓解
 
 ### 6.1 风险
+
 1. **破坏性变更**: 影响现有用户
 2. **迁移成本**: 用户需要更新代码
 3. **学习曲线**: 新的 API 需要学习
 
 ### 6.2 缓解措施
+
 1. **渐进式迁移**: 保持向后兼容
 2. **自动化工具**: 提供迁移脚本
 3. **详细文档**: 完整的迁移指南
