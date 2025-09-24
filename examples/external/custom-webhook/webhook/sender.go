@@ -12,6 +12,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/kart-io/notifyhub/pkg/logger"
 	"github.com/kart-io/notifyhub/pkg/notifyhub/platform"
 )
 
@@ -24,10 +25,11 @@ type WebhookSender struct {
 	payloadTemplate map[string]interface{}
 	timeout         time.Duration
 	client          *http.Client
+	logger          logger.Logger
 }
 
 // NewWebhookSender creates a new webhook sender
-func NewWebhookSender(config map[string]interface{}) (platform.ExternalSender, error) {
+func NewWebhookSender(config map[string]interface{}, logger logger.Logger) (platform.ExternalSender, error) {
 	webhookURL, ok := config["webhook_url"].(string)
 	if !ok || webhookURL == "" {
 		return nil, fmt.Errorf("webhook_url is required for Webhook platform")
@@ -39,6 +41,7 @@ func NewWebhookSender(config map[string]interface{}) (platform.ExternalSender, e
 		contentType: "application/json",
 		headers:     make(map[string]string),
 		timeout:     30 * time.Second,
+		logger:      logger,
 	}
 
 	// Configure optional settings
@@ -77,6 +80,9 @@ func (w *WebhookSender) Name() string {
 
 // Send sends a message to the webhook
 func (w *WebhookSender) Send(ctx context.Context, msg *platform.Message, targets []platform.Target) ([]*platform.SendResult, error) {
+	if w.logger == nil {
+		w.logger = logger.Discard
+	}
 	results := make([]*platform.SendResult, len(targets))
 
 	for i, target := range targets {

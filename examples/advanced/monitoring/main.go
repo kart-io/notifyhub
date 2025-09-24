@@ -6,546 +6,108 @@ import (
 	"context"
 	"fmt"
 	"log"
+	"os"
 	"time"
 
 	"github.com/kart-io/notifyhub/pkg/notifyhub"
-	"github.com/kart-io/notifyhub/pkg/platforms/email"
 	"github.com/kart-io/notifyhub/pkg/platforms/feishu"
-	"github.com/kart-io/notifyhub/pkg/platforms/sms"
 )
 
 func main() {
 	fmt.Println("📊 Monitoring and Observability Demo")
-	fmt.Println("===================================")
+	fmt.Println("====================================")
 	fmt.Println()
 
-	// Part 1: Health Check Monitoring
-	fmt.Println("🏥 Part 1: Health Check Monitoring")
-	fmt.Println("---------------------------------")
-
-	hub, err := notifyhub.NewHub(
-		feishu.WithFeishu("https://example.com/feishu/webhook",
-			feishu.WithFeishuSecret("demo-secret"),
-			feishu.WithFeishuTimeout(30*time.Second),
-		),
-		email.WithEmail("smtp.example.com", 587, "health@company.com",
-			email.WithEmailAuth("health-user", "health-pass"),
-			email.WithEmailTLS(true),
-		),
-		sms.WithSMSTwilio("health-api-key", "+1234567890",
-			sms.WithSMSTimeout(20*time.Second),
-		),
+	// Create a hub with monitoring enabled (conceptual)
+	hub, err := notifyhub.New(
+		feishu.WithFeishu(os.Getenv("FEISHU_WEBHOOK_URL")),
+		// Add monitoring middleware
+		// notifyhub.WithMiddleware(metrics.NewPrometheusMiddleware()),
 	)
 	if err != nil {
 		log.Fatalf("Failed to create hub: %v", err)
 	}
-	defer func() { _ = hub.Close(context.Background()) }()
+	defer func() { _ = hub.Close() }()
 
-	// Perform health checks
-	healthStatus := performHealthChecks(hub)
-	displayHealthStatus(healthStatus)
-	fmt.Println()
+	// Demonstrate monitoring patterns
+	performHealthChecks(hub)
+	collectPerformanceMetrics(hub)
+	monitorErrorRates(hub)
+	collectPlatformMetrics(hub)
+	alertingDemo(hub)
+	createMonitoringDashboard(hub)
+	demonstrateLogAggregation(hub)
 
-	// Part 2: Performance Monitoring
-	fmt.Println("⚡ Part 2: Performance Monitoring")
-	fmt.Println("-------------------------------")
-
-	ctx := context.Background()
-	performanceMetrics := collectPerformanceMetrics(hub, ctx)
-	displayPerformanceMetrics(performanceMetrics)
-	fmt.Println()
-
-	// Part 3: Error Rate Monitoring
-	fmt.Println("📈 Part 3: Error Rate Monitoring")
-	fmt.Println("------------------------------")
-
-	errorMetrics := monitorErrorRates(hub, ctx)
-	displayErrorMetrics(errorMetrics)
-	fmt.Println()
-
-	// Part 4: Platform-Specific Monitoring
-	fmt.Println("🎯 Part 4: Platform-Specific Monitoring")
-	fmt.Println("-------------------------------------")
-
-	platformMetrics := collectPlatformMetrics(hub, ctx)
-	displayPlatformMetrics(platformMetrics)
-	fmt.Println()
-
-	// Part 5: Real-time Alerting
-	fmt.Println("🚨 Part 5: Real-time Alerting")
-	fmt.Println("---------------------------")
-
-	alertingDemo(hub, ctx)
-	fmt.Println()
-
-	// Part 6: Monitoring Dashboard
-	fmt.Println("📋 Part 6: Monitoring Dashboard")
-	fmt.Println("-----------------------------")
-
-	dashboard := createMonitoringDashboard(hub)
-	displayDashboard(dashboard)
-	fmt.Println()
-
-	// Part 7: Log Aggregation
-	fmt.Println("📝 Part 7: Log Aggregation")
-	fmt.Println("------------------------")
-
-	logMetrics := demonstrateLogAggregation(hub, ctx)
-	displayLogMetrics(logMetrics)
-	fmt.Println()
-
-	// Summary
-	fmt.Println("📊 Monitoring Best Practices")
-	fmt.Println("===========================")
-	fmt.Println("✅ HEALTH MONITORING:")
-	fmt.Println("   • Continuous health checks for all platforms")
-	fmt.Println("   • Early detection of service degradation")
-	fmt.Println("   • Automatic failover capabilities")
-	fmt.Println()
-	fmt.Println("✅ PERFORMANCE TRACKING:")
-	fmt.Println("   • Message delivery latency monitoring")
-	fmt.Println("   • Platform-specific performance metrics")
-	fmt.Println("   • Throughput and capacity planning")
-	fmt.Println()
-	fmt.Println("✅ ERROR ANALYSIS:")
-	fmt.Println("   • Real-time error rate tracking")
-	fmt.Println("   • Error classification and trending")
-	fmt.Println("   • Root cause analysis support")
-	fmt.Println()
-	fmt.Println("✅ PROACTIVE ALERTING:")
-	fmt.Println("   • SLA breach notifications")
-	fmt.Println("   • Anomaly detection alerts")
-	fmt.Println("   • Escalation procedures")
-	fmt.Println()
-
-	fmt.Println("📊 Monitoring and Observability Demo Complete!")
+	fmt.Println("\n✅ Monitoring and Observability Demo Complete!")
 }
 
-// Health check implementation
-type HealthStatus struct {
-	Overall   string                    `json:"overall"`
-	Platforms map[string]PlatformHealth `json:"platforms"`
-	Timestamp time.Time                 `json:"timestamp"`
-}
+// Monitoring examples
 
-type PlatformHealth struct {
-	Status       string        `json:"status"`
-	Latency      time.Duration `json:"latency"`
-	LastCheck    time.Time     `json:"last_check"`
-	ErrorRate    float64       `json:"error_rate"`
-	Availability float64       `json:"availability"`
-}
-
-func performHealthChecks(hub notifyhub.Hub) *HealthStatus {
-	fmt.Println("🔍 Performing health checks...")
-
-	health := &HealthStatus{
-		Platforms: make(map[string]PlatformHealth),
-		Timestamp: time.Now(),
+func performHealthChecks(hub notifyhub.Client) {
+	fmt.Println("\n--- Health Checks ---")
+	health, err := hub.Health(context.Background())
+	if err != nil {
+		fmt.Printf("Health check failed: %v\n", err)
+		return
 	}
-
-	// Simulate health checks for each platform
-	platforms := []string{"feishu", "email", "sms"}
-	overallHealthy := true
-
-	for _, platform := range platforms {
-		start := time.Now()
-
-		// Simulate platform health check
-		platformHealth := checkPlatformHealth(platform)
-		platformHealth.Latency = time.Since(start)
-		platformHealth.LastCheck = time.Now()
-
-		health.Platforms[platform] = platformHealth
-
-		if platformHealth.Status != "healthy" {
-			overallHealthy = false
-		}
-
-		fmt.Printf("   📱 %s: %s (latency: %dms)\n",
-			platform, platformHealth.Status, platformHealth.Latency.Milliseconds())
-	}
-
-	if overallHealthy {
-		health.Overall = "healthy"
-	} else {
-		health.Overall = "degraded"
-	}
-
-	return health
-}
-
-func checkPlatformHealth(platform string) PlatformHealth {
-	// Simulate different health statuses
-	switch platform {
-	case "feishu":
-		return PlatformHealth{
-			Status:       "healthy",
-			ErrorRate:    0.01,
-			Availability: 99.9,
-		}
-	case "email":
-		return PlatformHealth{
-			Status:       "healthy",
-			ErrorRate:    0.005,
-			Availability: 99.95,
-		}
-	case "sms":
-		return PlatformHealth{
-			Status:       "degraded", // Simulate degraded SMS
-			ErrorRate:    0.05,
-			Availability: 98.5,
-		}
-	default:
-		return PlatformHealth{
-			Status:       "unknown",
-			ErrorRate:    0.0,
-			Availability: 0.0,
-		}
+	fmt.Printf("Overall status: %s\n", health.Status)
+	for name, status := range health.Platforms {
+		fmt.Printf("  - %s: %s\n", name, status.Status)
 	}
 }
 
-func displayHealthStatus(health *HealthStatus) {
-	fmt.Printf("🏥 OVERALL HEALTH: %s\n", health.Overall)
-	fmt.Printf("📊 PLATFORM STATUS:\n")
-
-	for platform, status := range health.Platforms {
-		statusEmoji := "✅"
-		if status.Status != "healthy" {
-			statusEmoji = "⚠️"
-		}
-
-		fmt.Printf("   %s %s: %s (%.1f%% uptime, %.2f%% error rate)\n",
-			statusEmoji, platform, status.Status, status.Availability, status.ErrorRate*100)
-	}
-}
-
-// Performance monitoring
-type PerformanceMetrics struct {
-	AverageLatency  time.Duration
-	P95Latency      time.Duration
-	P99Latency      time.Duration
-	Throughput      float64
-	MessagesSent    int
-	SuccessRate     float64
-	PlatformMetrics map[string]PlatformPerformance
-	CollectionTime  time.Duration
-}
-
-type PlatformPerformance struct {
-	AverageLatency time.Duration
-	SuccessRate    float64
-	MessageCount   int
-}
-
-func collectPerformanceMetrics(hub notifyhub.Hub, ctx context.Context) *PerformanceMetrics {
-	fmt.Println("⚡ Collecting performance metrics...")
-
+func collectPerformanceMetrics(hub notifyhub.Client) {
+	fmt.Println("\n--- Performance Metrics ---")
+	msg := notifyhub.NewMessage("Performance Test").WithBody("Measuring send duration.").ToTarget(notifyhub.NewTarget("webhook", "", "feishu")).Build()
 	start := time.Now()
-
-	metrics := &PerformanceMetrics{
-		PlatformMetrics: make(map[string]PlatformPerformance),
-	}
-
-	// Send test messages to collect metrics
-	testMessages := 10
-	latencies := make([]time.Duration, 0, testMessages)
-	successCount := 0
-
-	for i := 0; i < testMessages; i++ {
-		msg := notifyhub.NewMessage(fmt.Sprintf("Perf Test %d", i+1)).
-			WithBody("Performance monitoring test message").
-			ToTarget(notifyhub.NewTarget("webhook", "", "feishu")).
-			Build()
-
-		msgStart := time.Now()
-		receipt, err := hub.Send(ctx, msg)
-		msgDuration := time.Since(msgStart)
-
-		latencies = append(latencies, msgDuration)
-
-		if err == nil && receipt.Successful > 0 {
-			successCount++
-		}
-	}
-
-	// Calculate metrics
-	metrics.MessagesSent = testMessages
-	metrics.SuccessRate = float64(successCount) / float64(testMessages)
-	metrics.CollectionTime = time.Since(start)
-
-	// Calculate latency percentiles
-	if len(latencies) > 0 {
-		metrics.AverageLatency = calculateAverage(latencies)
-		metrics.P95Latency = calculatePercentile(latencies, 95)
-		metrics.P99Latency = calculatePercentile(latencies, 99)
-	}
-
-	metrics.Throughput = float64(testMessages) / metrics.CollectionTime.Seconds()
-
-	// Platform-specific metrics (simulated)
-	metrics.PlatformMetrics["feishu"] = PlatformPerformance{
-		AverageLatency: 150 * time.Millisecond,
-		SuccessRate:    0.99,
-		MessageCount:   testMessages,
-	}
-
-	return metrics
-}
-
-func displayPerformanceMetrics(metrics *PerformanceMetrics) {
-	fmt.Printf("⚡ PERFORMANCE METRICS:\n")
-	fmt.Printf("   📊 Messages sent: %d\n", metrics.MessagesSent)
-	fmt.Printf("   ✅ Success rate: %.1f%%\n", metrics.SuccessRate*100)
-	fmt.Printf("   ⏱️  Average latency: %dms\n", metrics.AverageLatency.Milliseconds())
-	fmt.Printf("   📈 P95 latency: %dms\n", metrics.P95Latency.Milliseconds())
-	fmt.Printf("   📈 P99 latency: %dms\n", metrics.P99Latency.Milliseconds())
-	fmt.Printf("   🚀 Throughput: %.1f msg/sec\n", metrics.Throughput)
-	fmt.Printf("   ⏰ Collection time: %dms\n", metrics.CollectionTime.Milliseconds())
-}
-
-// Error rate monitoring
-type ErrorMetrics struct {
-	TotalErrors      int
-	ErrorRate        float64
-	ErrorsByType     map[string]int
-	ErrorsByPlatform map[string]int
-	RecentErrors     []ErrorEvent
-}
-
-type ErrorEvent struct {
-	Timestamp time.Time
-	Platform  string
-	ErrorType string
-	Message   string
-}
-
-func monitorErrorRates(hub notifyhub.Hub, ctx context.Context) *ErrorMetrics {
-	fmt.Println("📈 Monitoring error rates...")
-
-	metrics := &ErrorMetrics{
-		ErrorsByType:     make(map[string]int),
-		ErrorsByPlatform: make(map[string]int),
-		RecentErrors:     make([]ErrorEvent, 0),
-	}
-
-	// Simulate error monitoring
-	totalRequests := 100
-	errorCount := 5
-
-	// Simulate different error types
-	errorTypes := []string{"timeout", "auth_failed", "rate_limited", "network_error"}
-	platforms := []string{"feishu", "email", "sms"}
-
-	for i := 0; i < errorCount; i++ {
-		errorType := errorTypes[i%len(errorTypes)]
-		platform := platforms[i%len(platforms)]
-
-		metrics.ErrorsByType[errorType]++
-		metrics.ErrorsByPlatform[platform]++
-
-		metrics.RecentErrors = append(metrics.RecentErrors, ErrorEvent{
-			Timestamp: time.Now().Add(-time.Duration(i) * time.Minute),
-			Platform:  platform,
-			ErrorType: errorType,
-			Message:   fmt.Sprintf("Simulated %s error on %s", errorType, platform),
-		})
-	}
-
-	metrics.TotalErrors = errorCount
-	metrics.ErrorRate = float64(errorCount) / float64(totalRequests)
-
-	return metrics
-}
-
-func displayErrorMetrics(metrics *ErrorMetrics) {
-	fmt.Printf("📈 ERROR METRICS:\n")
-	fmt.Printf("   🚨 Total errors: %d\n", metrics.TotalErrors)
-	fmt.Printf("   📊 Error rate: %.2f%%\n", metrics.ErrorRate*100)
-
-	fmt.Printf("   📋 Errors by type:\n")
-	for errorType, count := range metrics.ErrorsByType {
-		fmt.Printf("      • %s: %d\n", errorType, count)
-	}
-
-	fmt.Printf("   📋 Errors by platform:\n")
-	for platform, count := range metrics.ErrorsByPlatform {
-		fmt.Printf("      • %s: %d\n", platform, count)
-	}
-
-	fmt.Printf("   🕐 Recent errors:\n")
-	for _, event := range metrics.RecentErrors {
-		fmt.Printf("      • %s [%s/%s]: %s\n",
-			event.Timestamp.Format("15:04:05"), event.Platform, event.ErrorType, event.Message)
+	receipt, _ := hub.Send(context.Background(), msg)
+	duration := time.Since(start)
+	fmt.Printf("Message send duration: %dms\n", duration.Milliseconds())
+	if receipt != nil && len(receipt.Results) > 0 {
+		fmt.Printf("Platform-reported duration: %dms\n", receipt.Results[0].Duration.Milliseconds())
 	}
 }
 
-// Platform-specific monitoring
-func collectPlatformMetrics(hub notifyhub.Hub, ctx context.Context) map[string]interface{} {
-	fmt.Println("🎯 Collecting platform-specific metrics...")
-
-	metrics := make(map[string]interface{})
-
-	// Feishu metrics
-	metrics["feishu"] = map[string]interface{}{
-		"webhook_responses": 98,
-		"card_renders":      45,
-		"mentions":          12,
-		"avg_latency":       150,
+func monitorErrorRates(hub notifyhub.Client) {
+	fmt.Println("\n--- Error Rate Monitoring ---")
+	// Simulate sending some messages that will fail
+	for i := 0; i < 3; i++ {
+		msg := notifyhub.NewMessage("Error Rate Test").WithBody("This message will fail.").ToTarget(notifyhub.NewTarget("invalid-type", "", "feishu")).Build()
+		_, _ = hub.Send(context.Background(), msg)
 	}
-
-	// Email metrics
-	metrics["email"] = map[string]interface{}{
-		"smtp_connections": 25,
-		"html_renders":     18,
-		"attachments":      3,
-		"bounces":          1,
-		"avg_latency":      250,
-	}
-
-	// SMS metrics
-	metrics["sms"] = map[string]interface{}{
-		"messages_sent": 30,
-		"delivery_rate": 0.95,
-		"cost_per_msg":  0.05,
-		"avg_latency":   800,
-	}
-
-	return metrics
+	fmt.Println("Simulated 3 failed messages to track error rate.")
 }
 
-func displayPlatformMetrics(metrics map[string]interface{}) {
-	fmt.Printf("🎯 PLATFORM-SPECIFIC METRICS:\n")
-
-	for platform, data := range metrics {
-		fmt.Printf("   📱 %s:\n", platform)
-		if platformData, ok := data.(map[string]interface{}); ok {
-			for key, value := range platformData {
-				fmt.Printf("      • %s: %v\n", key, value)
-			}
-		}
+func collectPlatformMetrics(hub notifyhub.Client) {
+	fmt.Println("\n--- Platform-Specific Metrics ---")
+	status, err := hub.GetPlatformStatus(context.Background(), "feishu")
+	if err != nil {
+		fmt.Printf("Failed to get platform status: %v\n", err)
+	} else {
+		fmt.Printf("Feishu platform status: %s, Available: %v\n", status.Status, status.Available)
 	}
 }
 
-// Alerting demo
-func alertingDemo(hub notifyhub.Hub, ctx context.Context) {
-	fmt.Println("🚨 Demonstrating real-time alerting...")
-
-	// Simulate alert conditions
-	alerts := []struct {
-		condition string
-		severity  string
-		message   string
-	}{
-		{"high_error_rate", "critical", "Error rate exceeded 5% threshold"},
-		{"slow_response", "warning", "Average latency above 1000ms"},
-		{"platform_down", "critical", "Email platform unavailable"},
-		{"capacity_warning", "info", "Approaching rate limit on SMS"},
-	}
-
-	for _, alert := range alerts {
-		fmt.Printf("   🚨 ALERT: %s [%s] - %s\n",
-			alert.condition, alert.severity, alert.message)
-
-		// Send alert notification
-		alertMsg := notifyhub.NewUrgent(fmt.Sprintf("ALERT: %s", alert.condition)).
-			WithBody(alert.message).
-			WithMetadata("severity", alert.severity).
-			WithMetadata("alert_type", alert.condition).
-			ToTarget(notifyhub.NewTarget("webhook", "", "feishu")).
-			Build()
-
-		if _, err := hub.Send(ctx, alertMsg); err != nil {
-			fmt.Printf("      ❌ Failed to send alert: %v\n", err)
-		} else {
-			fmt.Printf("      ✅ Alert sent successfully\n")
-		}
-
-		time.Sleep(500 * time.Millisecond) // Rate limit alerts
+func alertingDemo(hub notifyhub.Client) {
+	fmt.Println("\n--- Alerting on Failures ---")
+	msg := notifyhub.NewMessage("Alerting Test").WithBody("This is a critical alert.").ToTarget(notifyhub.NewTarget("webhook", "", "feishu")).Build()
+	receipt, err := hub.Send(context.Background(), msg)
+	if err != nil || (receipt != nil && receipt.Failed > 0) {
+		fmt.Println("ALERT: Message delivery failed! Triggering alert to on-call engineer.")
+		// Here you would integrate with PagerDuty, Opsgenie, etc.
 	}
 }
 
-// Dashboard implementation
-type MonitoringDashboard struct {
-	Health      *HealthStatus
-	Performance *PerformanceMetrics
-	Errors      *ErrorMetrics
-	Uptime      map[string]float64
-	LastUpdate  time.Time
+func createMonitoringDashboard(hub notifyhub.Client) {
+	fmt.Println("\n--- Monitoring Dashboard (Conceptual) ---")
+	fmt.Println("  - [Gauge] notifyhub_up: 1")
+	fmt.Println("  - [Counter] notifyhub_messages_sent_total{platform='feishu'}: 10")
+	fmt.Println("  - [Counter] notifyhub_messages_failed_total{platform='feishu'}: 2")
+	fmt.Println("  - [Histogram] notifyhub_message_duration_seconds{platform='feishu'}: ...")
 }
 
-func createMonitoringDashboard(hub notifyhub.Hub) *MonitoringDashboard {
-	fmt.Println("📋 Creating monitoring dashboard...")
-
-	return &MonitoringDashboard{
-		Uptime: map[string]float64{
-			"feishu": 99.9,
-			"email":  99.95,
-			"sms":    98.5,
-		},
-		LastUpdate: time.Now(),
-	}
-}
-
-func displayDashboard(dashboard *MonitoringDashboard) {
-	fmt.Printf("📋 MONITORING DASHBOARD:\n")
-	fmt.Printf("   🕐 Last updated: %s\n", dashboard.LastUpdate.Format("15:04:05"))
-	fmt.Printf("   📊 Platform uptime:\n")
-
-	for platform, uptime := range dashboard.Uptime {
-		statusEmoji := "✅"
-		if uptime < 99.0 {
-			statusEmoji = "⚠️"
-		}
-		fmt.Printf("      %s %s: %.2f%%\n", statusEmoji, platform, uptime)
-	}
-}
-
-// Log aggregation
-func demonstrateLogAggregation(hub notifyhub.Hub, ctx context.Context) map[string]int {
-	fmt.Println("📝 Demonstrating log aggregation...")
-
-	// Simulate log analysis
-	logMetrics := map[string]int{
-		"total_messages":   500,
-		"success_messages": 485,
-		"failed_messages":  15,
-		"retry_attempts":   25,
-		"circuit_trips":    2,
-	}
-
-	return logMetrics
-}
-
-func displayLogMetrics(metrics map[string]int) {
-	fmt.Printf("📝 LOG AGGREGATION METRICS:\n")
-	for metric, count := range metrics {
-		fmt.Printf("   📊 %s: %d\n", metric, count)
-	}
-}
-
-// Utility functions
-func calculateAverage(durations []time.Duration) time.Duration {
-	if len(durations) == 0 {
-		return 0
-	}
-
-	var sum time.Duration
-	for _, d := range durations {
-		sum += d
-	}
-	return sum / time.Duration(len(durations))
-}
-
-func calculatePercentile(durations []time.Duration, percentile int) time.Duration {
-	if len(durations) == 0 {
-		return 0
-	}
-
-	// Simple percentile calculation (would use proper sorting in production)
-	index := (len(durations) * percentile) / 100
-	if index >= len(durations) {
-		index = len(durations) - 1
-	}
-	return durations[index]
+func demonstrateLogAggregation(hub notifyhub.Client) {
+	fmt.Println("\n--- Log Aggregation ---")
+	fmt.Println("Logs are being sent to a central logging system (e.g., ELK, Splunk, Datadog).")
+	fmt.Println(`  Example log entry: {"level":"info", "time":"...", "msg":"Message sent", "message_id":"...", "platform":"feishu"}`)
 }

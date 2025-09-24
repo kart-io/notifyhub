@@ -3,6 +3,8 @@ package platform
 import (
 	"context"
 	"time"
+
+	"github.com/kart-io/notifyhub/pkg/logger"
 )
 
 // MockSender is a mock implementation of the Sender interface for testing
@@ -120,7 +122,7 @@ func NewMockSenderFactory() *MockSenderFactory {
 }
 
 // CreateSender creates a mock sender or returns an error
-func (f *MockSenderFactory) CreateSender(platform string, config map[string]interface{}) (Sender, error) {
+func (f *MockSenderFactory) CreateSender(platform string, config map[string]interface{}, logger logger.Logger) (Sender, error) {
 	if err, exists := f.errors[platform]; exists {
 		return nil, err
 	}

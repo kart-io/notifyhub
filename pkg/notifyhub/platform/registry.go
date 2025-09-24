@@ -3,6 +3,18 @@ package platform
 
 import (
 	"context"
+
+	"github.com/kart-io/notifyhub/pkg/logger"
+)
+
+const (
+	NameEmail   = "email"
+	NameFeishu  = "feishu"
+	NameSMS     = "sms"
+	NameSlack   = "slack"
+	NameDiscord = "discord"
+	NameTeams   = "teams"
+	NameWebhook = "webhook"
 )
 
 // ExternalSender represents a platform notification sender (public interface for external implementations)
@@ -69,7 +81,7 @@ type Capabilities struct {
 }
 
 // ExternalSenderCreator is a function that creates an external sender with given configuration
-type ExternalSenderCreator func(config map[string]interface{}) (ExternalSender, error)
+type ExternalSenderCreator func(config map[string]interface{}, logger logger.Logger) (ExternalSender, error)
 
 // RegisterPlatform registers an external platform sender creator
 // This is the public API for external packages to register their platforms
@@ -93,7 +105,7 @@ func GetRegisteredCreators() map[string]ExternalSenderCreator {
 func GetRegisteredPlatforms() []string {
 	// This would need to be implemented in the internal package
 	// For now, return common platforms
-	return []string{"feishu", "email", "sms"}
+	return []string{NameFeishu, NameEmail, NameSMS}
 }
 
 // IsRegistered checks if a platform is registered

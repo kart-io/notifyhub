@@ -10,6 +10,7 @@ import (
 	"net/http"
 	"time"
 
+	"github.com/kart-io/notifyhub/pkg/logger"
 	"github.com/kart-io/notifyhub/pkg/notifyhub/platform"
 )
 
@@ -20,6 +21,7 @@ type DiscordSender struct {
 	defaultAvatar   string
 	timeout         time.Duration
 	client          *http.Client
+	logger          logger.Logger
 }
 
 // DiscordMessage represents a Discord webhook message
@@ -31,7 +33,7 @@ type DiscordMessage struct {
 }
 
 // NewDiscordSender creates a new Discord sender
-func NewDiscordSender(config map[string]interface{}) (platform.ExternalSender, error) {
+func NewDiscordSender(config map[string]interface{}, logger logger.Logger) (platform.ExternalSender, error) {
 	webhookURL, ok := config["webhook_url"].(string)
 	if !ok || webhookURL == "" {
 		return nil, fmt.Errorf("webhook_url is required for Discord platform")
@@ -40,6 +42,7 @@ func NewDiscordSender(config map[string]interface{}) (platform.ExternalSender, e
 	sender := &DiscordSender{
 		webhookURL: webhookURL,
 		timeout:    30 * time.Second,
+		logger:     logger,
 	}
 
 	// Configure optional settings
@@ -70,6 +73,9 @@ func (d *DiscordSender) Name() string {
 
 // Send sends a message to Discord
 func (d *DiscordSender) Send(ctx context.Context, msg *platform.Message, targets []platform.Target) ([]*platform.SendResult, error) {
+	if d.logger == nil {
+		d.logger = logger.Discard
+	}
 	results := make([]*platform.SendResult, len(targets))
 
 	for i, target := range targets {

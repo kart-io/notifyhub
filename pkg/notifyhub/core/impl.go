@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"time"
 
+	"github.com/kart-io/notifyhub/pkg/logger"
 	"github.com/kart-io/notifyhub/pkg/notifyhub/config"
 	"github.com/kart-io/notifyhub/pkg/notifyhub/message"
 	"github.com/kart-io/notifyhub/pkg/notifyhub/platform"
@@ -21,60 +22,80 @@ import (
 type hubImpl struct {
 	config  *config.HubConfig
 	manager *PublicPlatformManager
+	logger  logger.Logger
 }
 
 // NewHub creates a new Hub implementation with the given configuration
 func NewHub(cfg *config.HubConfig) (Hub, error) {
+	cfg.Logger.Debug("Creating new hub", "platformCount", len(cfg.Platforms))
+
 	// Ensure internal platforms are registered
 	ensureInternalPlatformsRegistered()
 
 	// Create public platform manager
 	manager := NewPlatformManager()
+	manager.SetLogger(cfg.Logger)
 
 	// Register senders for each configured platform
 	for platformName, platformConfig := range cfg.Platforms {
-		sender, err := manager.CreateSender(platformName, map[string]interface{}(platformConfig))
+		cfg.Logger.Debug("Creating sender", "platform", platformName)
+		sender, err := manager.CreateSender(platformName, map[string]interface{}(platformConfig), cfg.Logger)
 		if err != nil {
+			cfg.Logger.Error("Failed to create sender", "platform", platformName, "error", err)
 			return nil, fmt.Errorf("failed to create %s sender: %w", platformName, err)
 		}
 
 		if err := manager.RegisterSender(sender); err != nil {
+			cfg.Logger.Error("Failed to register sender", "platform", platformName, "error", err)
 			return nil, fmt.Errorf("failed to register %s sender: %w", platformName, err)
 		}
 	}
 
+	cfg.Logger.Info("Hub created successfully", "platformCount", len(cfg.Platforms))
 	return &hubImpl{
 		config:  cfg,
 		manager: manager,
+		logger:  cfg.Logger,
 	}, nil
 }
 
 // Send sends a message synchronously
 func (h *hubImpl) Send(ctx context.Context, msg *message.Message) (*receipt.Receipt, error) {
+	h.logger.Debug("Sending message", "messageID", msg.ID, "title", msg.Title, "targetCount", len(msg.Targets))
+
 	// Convert public message to platform message format
 	platformMsg := h.convertToPlatformMessage(msg)
+	h.logger.Debug("Converted message to platform format", "messageID", msg.ID)
 
 	// Convert targets to platform target format
 	platformTargets := h.convertToPlatformTargets(msg.Targets)
+	h.logger.Debug("Converted targets to platform format", "messageID", msg.ID, "platformTargetCount", len(platformTargets))
 
 	// Send through platform manager
+	h.logger.Debug("Dispatching message to platform manager", "messageID", msg.ID)
 	results, err := h.manager.SendToAll(ctx, platformMsg, platformTargets)
+	h.logger.Debug("Received results from platform manager", "messageID", msg.ID, "resultCount", len(results), "error", err)
 
 	// Convert results to receipt
 	receipt := h.convertToReceipt(msg.ID, results)
+	h.logger.Debug("Converted results to receipt", "messageID", msg.ID, "status", receipt.Status)
 
 	return receipt, err
 }
 
 // SendAsync sends a message asynchronously
 func (h *hubImpl) SendAsync(ctx context.Context, msg *message.Message) (*receipt.AsyncReceipt, error) {
+	h.logger.Debug("SendAsync called", "messageID", msg.ID, "title", msg.Title)
+
 	// For now, implement async as sync and return immediately
 	// In a real implementation, this would queue the message
 	_, err := h.Send(ctx, msg)
 	if err != nil {
+		h.logger.Error("Failed to send message async", "messageID", msg.ID, "error", err)
 		return nil, err
 	}
 
+	h.logger.Info("Message queued for async sending", "messageID", msg.ID)
 	return &receipt.AsyncReceipt{
 		MessageID: msg.ID,
 		Status:    "queued",
@@ -84,9 +105,12 @@ func (h *hubImpl) SendAsync(ctx context.Context, msg *message.Message) (*receipt
 
 // Health checks the health of all platforms
 func (h *hubImpl) Health(ctx context.Context) (*HealthStatus, error) {
+	h.logger.Debug("Performing health check")
+
 	healthMap := h.manager.HealthCheck(ctx)
 
 	platforms := make(map[string]PlatformHealth)
+	unhealthyPlatforms := []string{}
 	for platformName, err := range healthMap {
 		health := PlatformHealth{
 			Available: err == nil,
@@ -95,6 +119,8 @@ func (h *hubImpl) Health(ctx context.Context) (*HealthStatus, error) {
 		if err != nil {
 			health.Status = err.Error()
 			health.Details = map[string]string{"error": err.Error()}
+			unhealthyPlatforms = append(unhealthyPlatforms, platformName)
+			h.logger.Warn("Platform unhealthy", "platform", platformName, "error", err)
 		}
 		platforms[platformName] = health
 	}
@@ -110,6 +136,12 @@ func (h *hubImpl) Health(ctx context.Context) (*HealthStatus, error) {
 		}
 	}
 
+	if healthy {
+		h.logger.Info("Health check completed - all platforms healthy", "platformCount", len(platforms))
+	} else {
+		h.logger.Warn("Health check completed - some platforms unhealthy", "unhealthyPlatforms", unhealthyPlatforms)
+	}
+
 	return &HealthStatus{
 		Healthy:   healthy,
 		Status:    status,
@@ -121,7 +153,14 @@ func (h *hubImpl) Health(ctx context.Context) (*HealthStatus, error) {
 
 // Close shuts down the hub
 func (h *hubImpl) Close(ctx context.Context) error {
-	return h.manager.Close()
+	h.logger.Info("Closing hub")
+	err := h.manager.Close()
+	if err != nil {
+		h.logger.Error("Failed to close hub cleanly", "error", err)
+	} else {
+		h.logger.Info("Hub closed successfully")
+	}
+	return err
 }
 
 // Helper methods for conversion

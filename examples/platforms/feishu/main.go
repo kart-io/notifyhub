@@ -6,6 +6,7 @@ import (
 	"context"
 	"fmt"
 	"log"
+	"os"
 	"time"
 
 	"github.com/kart-io/notifyhub/pkg/notifyhub"
@@ -21,42 +22,44 @@ func main() {
 	fmt.Println("🔐 Part 1: Authentication Modes")
 	fmt.Println("------------------------------")
 
-	// 1. No authentication (webhook only)
-	fmt.Println("1. No Authentication Mode")
-	noAuthHub, err := notifyhub.NewHub(
-		feishu.WithFeishu("https://example.com/feishu/webhook"),
+	// Get Feishu webhook URL and secret from environment variables
+	webhookURL := os.Getenv("FEISHU_WEBHOOK_URL")
+	secret := os.Getenv("FEISHU_SECRET")
+
+	if webhookURL == "" {
+		log.Fatal("FEISHU_WEBHOOK_URL environment variable not set")
+	}
+
+	// 1. No authentication
+	fmt.Println("1. No authentication")
+	noAuthHub, err := notifyhub.New(
+		feishu.WithFeishu(webhookURL),
 	)
 	if err != nil {
-		log.Fatalf("❌ Failed to create no-auth hub: %v", err)
+		log.Fatalf("Failed to create hub without auth: %v", err)
 	}
-	defer func() { _ = noAuthHub.Close(context.Background()) }()
-	fmt.Println("✅ No-auth hub created")
+	defer func() { _ = noAuthHub.Close() }()
 
 	// 2. Signature authentication (HMAC-SHA256)
 	fmt.Println("2. Signature Authentication Mode")
-	signatureHub, err := notifyhub.NewHub(
-		feishu.WithFeishu("https://example.com/feishu/webhook",
-			feishu.WithFeishuSecret("your-webhook-secret"),
-			feishu.WithFeishuAuthMode(feishu.AuthModeSignature),
-		),
+	signatureHub, err := notifyhub.New(
+		feishu.WithFeishu(webhookURL, feishu.WithFeishuSecret(secret)),
 	)
 	if err != nil {
-		log.Fatalf("❌ Failed to create signature hub: %v", err)
+		log.Fatalf("Failed to create hub with signature: %v", err)
 	}
-	defer func() { _ = signatureHub.Close(context.Background()) }()
+	defer func() { _ = signatureHub.Close() }()
 	fmt.Println("✅ Signature-auth hub created")
 
 	// 3. Keywords authentication
 	fmt.Println("3. Keywords Authentication Mode")
-	keywordsHub, err := notifyhub.NewHub(
-		feishu.WithFeishu("https://example.com/feishu/webhook",
-			feishu.WithFeishuKeywords([]string{"alert", "notification"}),
-		),
+	keywordsHub, err := notifyhub.New(
+		feishu.WithFeishu(webhookURL, feishu.WithFeishuKeywords([]string{"notifyhub", "test"})),
 	)
 	if err != nil {
-		log.Fatalf("❌ Failed to create keywords hub: %v", err)
+		log.Fatalf("Failed to create hub with keywords: %v", err)
 	}
-	defer func() { _ = keywordsHub.Close(context.Background()) }()
+	defer func() { _ = keywordsHub.Close() }()
 	fmt.Println("✅ Keywords-auth hub created")
 	fmt.Println()
 
@@ -310,7 +313,7 @@ func main() {
 	fmt.Println("--------------------------------")
 
 	// Custom timeout and advanced settings
-	advancedHub, err := notifyhub.NewHub(
+	advancedHub, err := notifyhub.New(
 		feishu.WithFeishu("https://example.com/feishu/webhook",
 			feishu.WithFeishuSecret("webhook-secret"),
 			feishu.WithFeishuTimeout(45*time.Second),
@@ -320,7 +323,7 @@ func main() {
 	if err != nil {
 		log.Printf("❌ Advanced hub creation failed: %v", err)
 	} else {
-		defer func() { _ = advancedHub.Close(context.Background()) }()
+		defer func() { _ = advancedHub.Close() }()
 		fmt.Println("✅ Advanced configuration hub created")
 
 		// Test with advanced hub

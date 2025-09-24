@@ -10,6 +10,7 @@ import (
 	"net/http"
 	"time"
 
+	"github.com/kart-io/notifyhub/pkg/logger"
 	"github.com/kart-io/notifyhub/pkg/notifyhub/platform"
 )
 
@@ -18,10 +19,11 @@ type TeamsSender struct {
 	webhookURL string
 	timeout    time.Duration
 	client     *http.Client
+	logger     logger.Logger
 }
 
 // NewTeamsSender creates a new Microsoft Teams sender
-func NewTeamsSender(config map[string]interface{}) (platform.ExternalSender, error) {
+func NewTeamsSender(config map[string]interface{}, logger logger.Logger) (platform.ExternalSender, error) {
 	webhookURL, ok := config["webhook_url"].(string)
 	if !ok || webhookURL == "" {
 		return nil, fmt.Errorf("webhook_url is required for Teams platform")
@@ -30,6 +32,7 @@ func NewTeamsSender(config map[string]interface{}) (platform.ExternalSender, err
 	sender := &TeamsSender{
 		webhookURL: webhookURL,
 		timeout:    30 * time.Second,
+		logger:     logger,
 	}
 
 	// Configure optional settings
@@ -52,6 +55,9 @@ func (t *TeamsSender) Name() string {
 
 // Send sends a message to Microsoft Teams
 func (t *TeamsSender) Send(ctx context.Context, msg *platform.Message, targets []platform.Target) ([]*platform.SendResult, error) {
+	if t.logger == nil {
+		t.logger = logger.Discard
+	}
 	results := make([]*platform.SendResult, len(targets))
 
 	for i, target := range targets {

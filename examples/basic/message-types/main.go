@@ -5,48 +5,51 @@ package main
 import (
 	"context"
 	"fmt"
-	"log"
+	"os"
 	"time"
 
+	"github.com/kart-io/notifyhub/pkg/logger"
 	"github.com/kart-io/notifyhub/pkg/notifyhub"
 	"github.com/kart-io/notifyhub/pkg/platforms/feishu"
 )
 
 func main() {
-	fmt.Println("📝 Message Types and Builder Patterns")
-	fmt.Println("===================================")
-	fmt.Println()
+	log := logger.New().LogMode(logger.Info)
+
+	log.Info("📝 Message Types and Builder Patterns")
+	log.Info("===================================")
 
 	// Create hub for testing
-	hub, err := notifyhub.NewHub(
-		feishu.WithFeishu("https://example.com/feishu/webhook"),
+	hub, err := notifyhub.New(
+		feishu.WithFeishu(os.Getenv("FEISHU_WEBHOOK_URL")),
 	)
 	if err != nil {
-		log.Fatalf("❌ Failed to create hub: %v", err)
+		log.Error("Failed to create hub", "error", err)
+		os.Exit(1)
 	}
-	defer func() { _ = hub.Close(context.Background()) }()
+	defer func() { _ = hub.Close() }()
 
 	ctx := context.Background()
 
 	// Part 1: Basic Message Types
-	fmt.Println("📋 Part 1: Basic Message Types")
-	fmt.Println("-----------------------------")
+	log.Info("📋 Part 1: Basic Message Types")
+	log.Info("-----------------------------")
 
 	// 1. Normal Message
-	fmt.Println("1. Normal Message (Default Priority)")
+	log.Info("1. Normal Message (Default Priority)")
 	normalMsg := notifyhub.NewMessage("System Update").
 		WithBody("Regular system maintenance completed successfully.").
 		ToTarget(notifyhub.NewTarget("webhook", "", "feishu")).
 		Build()
-	fmt.Printf("   Priority: %d, Title: %s\n", normalMsg.Priority, normalMsg.Title)
+	log.Info("Message details", "priority", normalMsg.Priority, "title", normalMsg.Title)
 
 	// 2. Alert Message (High Priority)
-	fmt.Println("2. Alert Message (High Priority)")
+	log.Info("2. Alert Message (High Priority)")
 	alertMsg := notifyhub.NewAlert("Database Warning").
 		WithBody("Database connection pool is running low.").
 		ToTarget(notifyhub.NewTarget("webhook", "", "feishu")).
 		Build()
-	fmt.Printf("   Priority: %d, Title: %s\n", alertMsg.Priority, alertMsg.Title)
+	log.Info("Alert message details", "priority", alertMsg.Priority, "title", alertMsg.Title)
 
 	// 3. Urgent Message (Highest Priority)
 	fmt.Println("3. Urgent Message (Highest Priority)")

@@ -11,6 +11,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/kart-io/notifyhub/pkg/logger"
 	"github.com/kart-io/notifyhub/pkg/notifyhub/platform"
 )
 
@@ -22,10 +23,11 @@ type SlackSender struct {
 	iconEmoji  string
 	timeout    time.Duration
 	client     *http.Client
+	logger     logger.Logger
 }
 
 // NewSlackSender creates a new Slack sender
-func NewSlackSender(config map[string]interface{}) (platform.ExternalSender, error) {
+func NewSlackSender(config map[string]interface{}, logger logger.Logger) (platform.ExternalSender, error) {
 	webhookURL, ok := config["webhook_url"].(string)
 	if !ok || webhookURL == "" {
 		return nil, fmt.Errorf("webhook_url is required for Slack platform")
@@ -37,6 +39,7 @@ func NewSlackSender(config map[string]interface{}) (platform.ExternalSender, err
 		username:   "NotifyHub Bot",
 		iconEmoji:  ":robot_face:",
 		timeout:    30 * time.Second,
+		logger:     logger,
 	}
 
 	// Configure optional settings
@@ -71,6 +74,9 @@ func (s *SlackSender) Name() string {
 
 // Send sends a message to Slack
 func (s *SlackSender) Send(ctx context.Context, msg *platform.Message, targets []platform.Target) ([]*platform.SendResult, error) {
+	if s.logger == nil {
+		s.logger = logger.Discard
+	}
 	results := make([]*platform.SendResult, len(targets))
 
 	for i, target := range targets {

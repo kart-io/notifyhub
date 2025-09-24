@@ -10,6 +10,7 @@ import (
 
 	"github.com/wneessen/go-mail"
 
+	"github.com/kart-io/notifyhub/pkg/logger"
 	"github.com/kart-io/notifyhub/pkg/notifyhub/platform"
 )
 
@@ -23,22 +24,28 @@ type EmailSenderGoMail struct {
 	smtpTLS      bool
 	smtpSSL      bool
 	timeout      time.Duration
+	logger       logger.Logger
 }
 
 // NewEmailSenderGoMail creates a new Email sender using go-mail
-func NewEmailSenderGoMail(config map[string]interface{}) (platform.ExternalSender, error) {
+func NewEmailSenderGoMail(config map[string]interface{}, logger logger.Logger) (platform.ExternalSender, error) {
+	logger.Debug("Creating EmailSenderGoMail", "config_keys", getConfigKeys(config))
+
 	smtpHost, ok := config["smtp_host"].(string)
 	if !ok || smtpHost == "" {
+		logger.Error("Missing or invalid smtp_host")
 		return nil, fmt.Errorf("smtp_host is required for Email platform")
 	}
 
 	smtpPort, ok := config["smtp_port"].(int)
 	if !ok {
+		logger.Error("Missing or invalid smtp_port")
 		return nil, fmt.Errorf("smtp_port is required for Email platform")
 	}
 
 	smtpFrom, ok := config["smtp_from"].(string)
 	if !ok || smtpFrom == "" {
+		logger.Error("Missing or invalid smtp_from")
 		return nil, fmt.Errorf("smtp_from is required for Email platform")
 	}
 
@@ -48,32 +55,48 @@ func NewEmailSenderGoMail(config map[string]interface{}) (platform.ExternalSende
 		smtpFrom: smtpFrom,
 		smtpTLS:  true, // Default to TLS
 		timeout:  30 * time.Second,
+		logger:   logger, // Assign logger directly
 	}
 
 	// Configure authentication
 	if username, ok := config["smtp_username"].(string); ok {
 		sender.smtpUsername = username
+		logger.Debug("SMTP authentication configured", "username", username)
 	}
 
 	if password, ok := config["smtp_password"].(string); ok {
 		sender.smtpPassword = password
+		logger.Debug("SMTP password configured")
 	}
 
 	// Configure TLS/SSL
 	if tls, ok := config["smtp_tls"].(bool); ok {
 		sender.smtpTLS = tls
+		logger.Debug("SMTP TLS configured", "tls", tls)
 	}
 
 	if ssl, ok := config["smtp_ssl"].(bool); ok {
 		sender.smtpSSL = ssl
+		logger.Debug("SMTP SSL configured", "ssl", ssl)
 	}
 
 	// Configure timeout
 	if timeout, ok := config["timeout"].(time.Duration); ok {
 		sender.timeout = timeout
+		logger.Debug("SMTP timeout configured", "timeout", timeout)
 	}
 
+	logger.Info("EmailSenderGoMail created successfully", "host", smtpHost, "port", smtpPort, "from", smtpFrom)
 	return sender, nil
+}
+
+// getConfigKeys returns the keys from a config map for logging
+func getConfigKeys(config map[string]interface{}) []string {
+	keys := make([]string, 0, len(config))
+	for k := range config {
+		keys = append(keys, k)
+	}
+	return keys
 }
 
 // Name returns the platform name
@@ -83,6 +106,7 @@ func (e *EmailSenderGoMail) Name() string {
 
 // Send sends a message to Email using go-mail library
 func (e *EmailSenderGoMail) Send(ctx context.Context, msg *platform.Message, targets []platform.Target) ([]*platform.SendResult, error) {
+	e.logger.Debug("Starting email send", "messageID", msg.ID, "targetCount", len(targets))
 	results := make([]*platform.SendResult, len(targets))
 
 	for i, target := range targets {
@@ -94,6 +118,7 @@ func (e *EmailSenderGoMail) Send(ctx context.Context, msg *platform.Message, tar
 
 		// Validate target
 		if err := e.ValidateTarget(target); err != nil {
+			e.logger.Error("Invalid email target", "target", target.Value, "error", err)
 			result.Error = err.Error()
 			results[i] = result
 			continue
@@ -101,8 +126,10 @@ func (e *EmailSenderGoMail) Send(ctx context.Context, msg *platform.Message, tar
 
 		// Send email using go-mail
 		if err := e.sendEmailGoMail(ctx, target.Value, msg); err != nil {
+			e.logger.Error("Failed to send email", "to", target.Value, "error", err)
 			result.Error = err.Error()
 		} else {
+			e.logger.Info("Email sent successfully", "to", target.Value, "messageID", msg.ID)
 			result.Success = true
 			result.MessageID = fmt.Sprintf("email_%d", time.Now().UnixNano())
 			result.Response = "Email sent successfully via go-mail"
@@ -116,23 +143,32 @@ func (e *EmailSenderGoMail) Send(ctx context.Context, msg *platform.Message, tar
 		}
 
 		results[i] = result
+		e.logger.Debug("Email send attempt completed", "to", target.Value, "success", result.Success, "duration_ms", time.Since(startTime).Milliseconds())
 	}
 
+	e.logger.Debug("Email batch send completed", "messageID", msg.ID, "totalTargets", len(targets))
 	return results, nil
 }
 
 // sendEmailGoMail sends email using the modern go-mail library
 func (e *EmailSenderGoMail) sendEmailGoMail(ctx context.Context, to string, msg *platform.Message) error {
+	if e.logger == nil {
+		e.logger = logger.Discard
+	}
+	e.logger.Debug("Preparing email", "to", to, "subject", msg.Title)
+
 	// Create new email message
 	m := mail.NewMsg()
 
 	// Set sender
 	if err := m.From(e.smtpFrom); err != nil {
+		e.logger.Error("Failed to set From address", "from", e.smtpFrom, "error", err)
 		return fmt.Errorf("failed to set From address: %w", err)
 	}
 
 	// Set recipient
 	if err := m.To(to); err != nil {
+		e.logger.Error("Failed to set To address", "to", to, "error", err)
 		return fmt.Errorf("failed to set To address: %w", err)
 	}
 
@@ -152,14 +188,18 @@ func (e *EmailSenderGoMail) sendEmailGoMail(ctx context.Context, to string, msg 
 
 	// Handle CC recipients from platform data
 	if ccList, ok := msg.PlatformData["email_cc"].([]string); ok && len(ccList) > 0 {
+		e.logger.Debug("Adding CC recipients", "count", len(ccList))
 		if err := m.Cc(ccList...); err != nil {
+			e.logger.Error("Failed to set CC addresses", "error", err)
 			return fmt.Errorf("failed to set CC addresses: %w", err)
 		}
 	}
 
 	// Handle BCC recipients
 	if bccList, ok := msg.PlatformData["email_bcc"].([]string); ok && len(bccList) > 0 {
+		e.logger.Debug("Adding BCC recipients", "count", len(bccList))
 		if err := m.Bcc(bccList...); err != nil {
+			e.logger.Error("Failed to set BCC addresses", "error", err)
 			return fmt.Errorf("failed to set BCC addresses: %w", err)
 		}
 	}
@@ -185,12 +225,15 @@ func (e *EmailSenderGoMail) sendEmailGoMail(ctx context.Context, to string, msg 
 	// Configure TLS/SSL
 	if e.smtpSSL {
 		// Use implicit SSL/TLS (port 465)
+		e.logger.Debug("Using SSL connection", "port", e.smtpPort)
 		clientOpts = append(clientOpts, mail.WithSSLPort(true))
 	} else if e.smtpTLS {
 		// Use STARTTLS (port 587)
+		e.logger.Debug("Using STARTTLS connection", "port", e.smtpPort)
 		clientOpts = append(clientOpts, mail.WithTLSPolicy(mail.TLSMandatory))
 	} else {
 		// No encryption (not recommended)
+		e.logger.Warn("Using plain SMTP without encryption")
 		clientOpts = append(clientOpts, mail.WithTLSPolicy(mail.NoTLS))
 	}
 
@@ -206,14 +249,18 @@ func (e *EmailSenderGoMail) sendEmailGoMail(ctx context.Context, to string, msg 
 	// Create client
 	client, err := mail.NewClient(e.smtpHost, clientOpts...)
 	if err != nil {
+		e.logger.Error("Failed to create mail client", "host", e.smtpHost, "port", e.smtpPort, "error", err)
 		return fmt.Errorf("failed to create mail client: %w", err)
 	}
 
 	// Send with context
+	e.logger.Debug("Sending email", "host", e.smtpHost, "port", e.smtpPort)
 	if err := client.DialAndSendWithContext(ctx, m); err != nil {
+		e.logger.Error("Failed to send email", "error", err)
 		return fmt.Errorf("failed to send email: %w", err)
 	}
 
+	e.logger.Info("Email sent successfully", "to", to)
 	return nil
 }
 
@@ -223,15 +270,18 @@ func (e *EmailSenderGoMail) ValidateTarget(target platform.Target) error {
 	case "email":
 		// Valid target type for Email
 	default:
+		e.logger.Debug("Invalid target type for email", "type", target.Type)
 		return fmt.Errorf("email supports email targets, got %s", target.Type)
 	}
 
 	if target.Value == "" {
+		e.logger.Debug("Empty email address")
 		return fmt.Errorf("email address cannot be empty")
 	}
 
 	// Basic email validation
 	if !isValidEmail(target.Value) {
+		e.logger.Debug("Invalid email format", "email", target.Value)
 		return fmt.Errorf("invalid email address: %s", target.Value)
 	}
 
@@ -295,5 +345,7 @@ func (e *EmailSenderGoMail) IsHealthy(ctx context.Context) error {
 
 // Close cleans up resources
 func (e *EmailSenderGoMail) Close() error {
+	e.logger.Debug("Closing email sender", "host", e.smtpHost)
+	// No persistent connections to close with go-mail
 	return nil
 }

@@ -8,59 +8,63 @@ import (
 	"log"
 	"time"
 
+	"github.com/kart-io/notifyhub/pkg/logger"
 	"github.com/kart-io/notifyhub/pkg/notifyhub"
 	"github.com/kart-io/notifyhub/pkg/platforms/email"
 	"github.com/kart-io/notifyhub/pkg/platforms/feishu"
 )
 
 func main() {
-	fmt.Println("🛡️  Error Handling Patterns in NotifyHub")
-	fmt.Println("=======================================")
-	fmt.Println()
+	// Create a new logger for the application
+	appLogger := logger.New().LogMode(logger.Info)
+
+	appLogger.Info("🛡️  Error Handling Patterns in NotifyHub")
+	appLogger.Info("=======================================")
 
 	// Part 1: Hub Creation Errors
-	fmt.Println("📋 Part 1: Hub Creation Error Handling")
-	fmt.Println("------------------------------------")
+	appLogger.Info("📋 Part 1: Hub Creation Error Handling")
+	appLogger.Info("------------------------------------")
 
 	// Example of configuration errors
-	fmt.Println("1. Testing invalid configuration...")
+	appLogger.Info("1. Testing invalid configuration...")
 
 	// This will fail due to empty webhook URL
-	invalidHub, err := notifyhub.NewHub(
+	invalidHub, err := notifyhub.New(
 		feishu.WithFeishu("", feishu.WithFeishuSecret("secret")),
+		notifyhub.WithLogger(appLogger),
 	)
 	if err != nil {
-		fmt.Printf("❌ Expected error caught: %v\n", err)
+		appLogger.Error("❌ Expected error caught", "error", err)
 	} else {
-		fmt.Println("❌ Should have failed but didn't!")
-		_ = invalidHub.Close(context.Background())
+		appLogger.Error("❌ Should have failed but didn't!")
+		_ = invalidHub.Close()
 	}
 
 	// Create a valid hub for other tests
-	fmt.Println("2. Creating valid hub...")
-	hub, err := notifyhub.NewHub(
+	appLogger.Info("2. Creating valid hub...")
+	hub, err := notifyhub.New(
 		feishu.WithFeishu("https://example.com/feishu/webhook"),
 		// Add email with potentially failing configuration for demo
 		email.WithEmail("smtp.example.com", 587, "demo@example.com"),
+		notifyhub.WithLogger(appLogger),
 	)
 	if err != nil {
 		log.Fatalf("❌ Failed to create valid hub: %v", err)
 	}
-	defer func() { _ = hub.Close(context.Background()) }()
-	fmt.Println("✅ Valid hub created successfully")
-	fmt.Println()
+	defer func() { _ = hub.Close() }()
+	appLogger.Info("✅ Valid hub created successfully")
 
 	ctx := context.Background()
 
 	// Part 2: Message Validation Errors
-	fmt.Println("📋 Part 2: Message Validation Errors")
-	fmt.Println("----------------------------------")
+	appLogger.Info("📋 Part 2: Message Validation Errors")
+	appLogger.Info("----------------------------------")
 
 	// Declare receipt variable for this section
 	var receipt *notifyhub.Receipt
 
 	// Invalid target type
-	fmt.Println("1. Testing invalid target type...")
+	appLogger.Info("1. Testing invalid target type...")
 	invalidMsg := notifyhub.NewMessage("Invalid Target").
 		WithBody("This message has an invalid target.").
 		ToTarget(notifyhub.NewTarget("invalid-type", "value", "feishu")).
@@ -68,21 +72,20 @@ func main() {
 
 	receipt, err = hub.Send(ctx, invalidMsg)
 	if err != nil {
-		fmt.Printf("❌ Send error: %v\n", err)
+		appLogger.Error("❌ Send error", "error", err)
 	} else {
-		fmt.Printf("📊 Receipt: %d total, %d successful, %d failed\n",
-			receipt.Total, receipt.Successful, receipt.Failed)
+		appLogger.Info("📊 Receipt", "total", receipt.Total, "successful", receipt.Successful, "failed", receipt.Failed)
 
 		// Check individual results for details
 		for _, result := range receipt.Results {
 			if !result.Success {
-				fmt.Printf("   ❌ Platform %s failed: %s\n", result.Platform, result.Error)
+				appLogger.Error("Platform failed", "platform", result.Platform, "error", result.Error)
 			}
 		}
 	}
 
 	// Empty message body
-	fmt.Println("2. Testing empty message...")
+	appLogger.Info("2. Testing empty message...")
 	emptyMsg := notifyhub.NewMessage(""). // Empty title
 						WithBody(""). // Empty body
 						ToTarget(notifyhub.NewTarget("webhook", "", "feishu")).
@@ -90,16 +93,14 @@ func main() {
 
 	receipt, err = hub.Send(ctx, emptyMsg)
 	if err != nil {
-		fmt.Printf("❌ Send error: %v\n", err)
+		appLogger.Error("❌ Send error", "error", err)
 	} else {
-		fmt.Printf("📊 Receipt: %d total, %d successful, %d failed\n",
-			receipt.Total, receipt.Successful, receipt.Failed)
+		appLogger.Info("📊 Receipt", "total", receipt.Total, "successful", receipt.Successful, "failed", receipt.Failed)
 	}
-	fmt.Println()
 
 	// Part 3: Platform-Specific Error Handling
-	fmt.Println("📋 Part 3: Platform-Specific Error Handling")
-	fmt.Println("-----------------------------------------")
+	appLogger.Info("📋 Part 3: Platform-Specific Error Handling")
+	appLogger.Info("-----------------------------------------")
 
 	// Test multiple platforms with some failing
 	multiPlatformMsg := notifyhub.NewMessage("Multi-Platform Test").
@@ -109,43 +110,40 @@ func main() {
 		ToTarget(notifyhub.NewTarget("phone", "invalid-phone", "sms")).   // SMS not configured
 		Build()
 
-	fmt.Println("Sending to multiple platforms (some will fail)...")
+	appLogger.Info("Sending to multiple platforms (some will fail)...")
 	receipt, err = hub.Send(ctx, multiPlatformMsg)
 	if err != nil {
-		fmt.Printf("❌ Send error: %v\n", err)
+		appLogger.Error("❌ Send error", "error", err)
 	} else {
-		fmt.Printf("📊 Multi-platform results:\n")
-		fmt.Printf("   Total: %d, Successful: %d, Failed: %d\n",
-			receipt.Total, receipt.Successful, receipt.Failed)
+		appLogger.Info("📊 Multi-platform results:")
+		appLogger.Info("Results summary", "total", receipt.Total, "successful", receipt.Successful, "failed", receipt.Failed)
 
 		for _, result := range receipt.Results {
 			status := "✅"
+			msg := fmt.Sprintf("%s -> %s", result.Platform, result.Target)
 			if !result.Success {
 				status = "❌"
+				msg = fmt.Sprintf("%s -> %s (Error: %s)", result.Platform, result.Target, result.Error)
 			}
-			fmt.Printf("   %s %s -> %s", status, result.Platform, result.Target)
-			if !result.Success {
-				fmt.Printf(" (Error: %s)", result.Error)
-			}
-			fmt.Println()
+			appLogger.Info(fmt.Sprintf("%s %s", status, msg))
 		}
 	}
-	fmt.Println()
 
 	// Part 4: Timeout Handling
 	fmt.Println("📋 Part 4: Timeout Handling")
 	fmt.Println("-------------------------")
 
 	// Create hub with very short timeout to simulate timeout errors
-	timeoutHub, err := notifyhub.NewHub(
+	timeoutHub, err := notifyhub.New(
 		feishu.WithFeishu("https://example.com/feishu/webhook",
 			feishu.WithFeishuTimeout(1*time.Millisecond), // Very short timeout
 		),
+		notifyhub.WithLogger(appLogger),
 	)
 	if err != nil {
 		log.Printf("Failed to create timeout hub: %v", err)
 	} else {
-		defer func() { _ = timeoutHub.Close(context.Background()) }()
+		defer func() { _ = timeoutHub.Close() }()
 
 		timeoutMsg := notifyhub.NewMessage("Timeout Test").
 			WithBody("This might timeout due to very short timeout setting.").
@@ -299,7 +297,7 @@ func main() {
 
 	if err != nil {
 		metrics.IncrementCounter("notifyhub.errors.total")
-		logger.Error("Send failed", "error", err)
+		appLogger.Error("Send failed", "error", err)
 	} else {
 		metrics.IncrementCounter("notifyhub.messages.success", receipt.Successful)
 		metrics.IncrementCounter("notifyhub.messages.failed", receipt.Failed)

@@ -5,6 +5,7 @@ import (
 	"sync"
 	"time"
 
+	"github.com/kart-io/notifyhub/pkg/logger"
 	"github.com/kart-io/notifyhub/pkg/notifyhub"
 	"github.com/kart-io/notifyhub/pkg/notifyhub/platform"
 )
@@ -28,16 +29,20 @@ func UseGoMail() {
 // ensureRegistered ensures the Email platform is registered with NotifyHub
 func ensureRegistered() {
 	registerOnce.Do(func() {
-		var creator func(map[string]interface{}) (platform.ExternalSender, error)
+		var creator platform.ExternalSenderCreator
 
 		if useGoMailLibrary {
-			creator = NewEmailSenderGoMail
+			creator = func(config map[string]interface{}, logger logger.Logger) (platform.ExternalSender, error) {
+				return NewEmailSenderGoMail(config, logger)
+			}
 		} else {
-			creator = NewEmailSender
+			creator = func(config map[string]interface{}, logger logger.Logger) (platform.ExternalSender, error) {
+				return NewEmailSender(config, logger)
+			}
 		}
 
 		_ = notifyhub.RegisterExtension(&notifyhub.PlatformExtension{
-			Name:    "email",
+			Name:    platform.NameEmail,
 			Creator: creator,
 			DefaultOpts: func() map[string]interface{} {
 				return map[string]interface{}{

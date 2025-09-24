@@ -6,6 +6,7 @@ import (
 	"context"
 	"fmt"
 	"log"
+	"os"
 	"time"
 
 	"github.com/kart-io/notifyhub/examples/external/teams-platform/teams"
@@ -31,15 +32,20 @@ func main() {
 	fmt.Println("🟦 Step 2: Teams Integration")
 	fmt.Println("--------------------------")
 
-	hub, err := notifyhub.NewHub(
-		teams.WithTeams("https://outlook.office.com/webhook/demo",
-			teams.WithTeamsTimeout(45*time.Second),
-		),
+	// Get webhook URL from environment variable
+	webhookURL := os.Getenv("TEAMS_WEBHOOK_URL")
+	if webhookURL == "" {
+		log.Fatal("TEAMS_WEBHOOK_URL environment variable not set")
+	}
+
+	// Create a new hub with Teams platform
+	hub, err := notifyhub.New(
+		teams.WithTeams(webhookURL),
 	)
 	if err != nil {
-		log.Fatalf("❌ Failed to create Teams hub: %v", err)
+		log.Fatalf("Failed to create hub: %v", err)
 	}
-	defer func() { _ = hub.Close(context.Background()) }()
+	defer func() { _ = hub.Close() }()
 
 	fmt.Println("✅ Microsoft Teams platform configured")
 	fmt.Printf("   🟦 Webhook: outlook.office.com\n")

@@ -6,6 +6,7 @@ import (
 	"context"
 	"fmt"
 	"log"
+	"os"
 	"time"
 
 	"github.com/kart-io/notifyhub/pkg/notifyhub"
@@ -23,20 +24,25 @@ func main() {
 
 	// 1. Twilio SMS Provider
 	fmt.Println("1. Twilio SMS Configuration")
-	twilioHub, err := notifyhub.NewHub(
-		sms.WithSMSTwilio("demo-twilio-api-key", "+1234567890",
-			sms.WithSMSTimeout(30*time.Second),
-		),
+	// Get Twilio credentials from environment variables
+	twilioAPIKey := os.Getenv("TWILIO_API_KEY")
+	twilioFromNumber := os.Getenv("TWILIO_FROM_NUMBER")
+
+	if twilioAPIKey == "" || twilioFromNumber == "" {
+		log.Fatal("TWILIO_API_KEY and TWILIO_FROM_NUMBER environment variables must be set")
+	}
+	twilioHub, err := notifyhub.New(
+		sms.WithSMSTwilio(twilioAPIKey, twilioFromNumber),
 	)
 	if err != nil {
-		log.Fatalf("❌ Failed to create Twilio SMS hub: %v", err)
+		log.Fatalf("Failed to create Twilio hub: %v", err)
 	}
-	defer func() { _ = twilioHub.Close(context.Background()) }()
+	defer func() { _ = twilioHub.Close() }()
 	fmt.Println("✅ Twilio SMS hub created")
 
 	// 2. Aliyun SMS Provider
 	fmt.Println("2. Aliyun SMS Configuration")
-	aliyunHub, err := notifyhub.NewHub(
+	aliyunHub, err := notifyhub.New(
 		sms.WithSMSAliyun("demo-aliyun-api-key", "+8612345678901",
 			sms.WithSMSAPISecret("demo-secret"),
 			sms.WithSMSSignName("阿里云"),
@@ -46,12 +52,12 @@ func main() {
 	if err != nil {
 		log.Fatalf("❌ Failed to create Aliyun SMS hub: %v", err)
 	}
-	defer func() { _ = aliyunHub.Close(context.Background()) }()
+	defer func() { _ = aliyunHub.Close() }()
 	fmt.Println("✅ Aliyun SMS hub created")
 
 	// 3. Tencent SMS Provider
 	fmt.Println("3. Tencent SMS Configuration")
-	tencentHub, err := notifyhub.NewHub(
+	tencentHub, err := notifyhub.New(
 		sms.WithSMSTencent("demo-tencent-api-key", "+8687654321098",
 			sms.WithSMSAPISecret("demo-secret"),
 			sms.WithSMSRegion("ap-beijing"),
@@ -60,12 +66,12 @@ func main() {
 	if err != nil {
 		log.Fatalf("❌ Failed to create Tencent SMS hub: %v", err)
 	}
-	defer func() { _ = tencentHub.Close(context.Background()) }()
+	defer func() { _ = tencentHub.Close() }()
 	fmt.Println("✅ Tencent SMS hub created")
 
 	// 4. AWS SNS SMS Provider
 	fmt.Println("4. AWS SNS SMS Configuration")
-	awsHub, err := notifyhub.NewHub(
+	awsHub, err := notifyhub.New(
 		sms.WithSMSAWS("demo-aws-access-key", "+1987654321",
 			sms.WithSMSAPISecret("demo-secret-key"),
 			sms.WithSMSRegion("us-east-1"),
@@ -74,7 +80,7 @@ func main() {
 	if err != nil {
 		log.Fatalf("❌ Failed to create AWS SNS hub: %v", err)
 	}
-	defer func() { _ = awsHub.Close(context.Background()) }()
+	defer func() { _ = awsHub.Close() }()
 	fmt.Println("✅ AWS SNS hub created")
 	fmt.Println()
 
@@ -308,7 +314,7 @@ func main() {
 	fmt.Println("--------------------------------")
 
 	// Custom configuration with all options
-	advancedHub, err := notifyhub.NewHub(
+	advancedHub, err := notifyhub.New(
 		sms.WithSMS("twilio", "advanced-api-key", "+1555000000",
 			sms.WithSMSAPISecret("api-secret"),
 			sms.WithSMSTimeout(45*time.Second),
@@ -318,7 +324,7 @@ func main() {
 	if err != nil {
 		log.Printf("❌ Advanced SMS hub creation failed: %v", err)
 	} else {
-		defer func() { _ = advancedHub.Close(context.Background()) }()
+		defer func() { _ = advancedHub.Close() }()
 		fmt.Println("✅ Advanced SMS configuration created")
 
 		advancedMsg := notifyhub.NewMessage("Advanced Config Test").

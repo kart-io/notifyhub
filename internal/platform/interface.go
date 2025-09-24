@@ -5,6 +5,8 @@ package platform
 import (
 	"context"
 	"time"
+
+	"github.com/kart-io/notifyhub/pkg/logger"
 )
 
 // Sender interface defines the contract that all platform notification senders must implement
@@ -91,7 +93,7 @@ type RateLimitInfo struct {
 // SenderFactory creates platform senders based on configuration
 type SenderFactory interface {
 	// CreateSender creates a new sender for the specified platform
-	CreateSender(platform string, config map[string]interface{}) (Sender, error)
+	CreateSender(platform string, config map[string]interface{}, logger logger.Logger) (Sender, error)
 
 	// GetSupportedPlatforms returns a list of platforms this factory can create
 	GetSupportedPlatforms() []string

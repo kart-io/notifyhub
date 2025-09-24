@@ -7,53 +7,68 @@ import (
 	"fmt"
 	"time"
 
+	"github.com/kart-io/notifyhub/pkg/logger"
 	"github.com/kart-io/notifyhub/pkg/notifyhub"
 	"github.com/kart-io/notifyhub/pkg/platforms/email"
 )
 
 const (
-	gmailEmail       = ""
-	gmailPassword    = ""
-	gmailEmail163    = ""
-	gmailPassword163 = ""
-	sendEmail        = ""
+	// Gmail SMTP configuration
+	// To use Gmail SMTP, you need:
+	// 1. Enable 2-factor authentication in your Google account
+	// 2. Generate an app-specific password: https://myaccount.google.com/apppasswords
+	gmailEmail    = "" // Your Gmail address (e.g., "user@gmail.com")
+	gmailPassword = "" // Your Gmail app password (not your regular password)
+
+	// 163 Mail SMTP configuration
+	// To use 163 Mail SMTP, you need:
+	// 1. Enable SMTP service in 163 Mail settings
+	// 2. Use the authorization code (not your login password)
+	gmailEmail163    = "" // Your 163 email address (e.g., "user@163.com")
+	gmailPassword163 = "" // Your 163 SMTP authorization code
+
+	// Recipient email address
+	sendEmail = "" // Email address to send test emails to
 )
 
 // demo1BasicSMTPConfig demonstrates basic SMTP configuration
 func demo1BasicSMTPConfig() {
-	fmt.Println("🔧 Demo 1: Basic SMTP Configuration")
-	fmt.Println("=====================================")
+	log := logger.New().LogMode(logger.Info)
+
+	log.Info("🔧 Demo 1: Basic SMTP Configuration")
+	log.Info("=====================================")
 
 	// 💡 Make sure MailHog is running: brew install mailhog && mailhog
-	hub, err := notifyhub.NewHub(
+	client, err := notifyhub.New(
 		email.WithEmail("smtp.gmail.com", 465, gmailEmail,
 			email.WithEmailAuth(gmailEmail, gmailPassword),
 			email.WithEmailSSL(true),
 		),
 	)
 	if err != nil {
-		fmt.Printf("❌ Failed to create basic SMTP hub: %v\n", err)
+		log.Error("❌ Failed to create basic SMTP client", "error", err)
 		return
 	}
-	defer func() { _ = hub.Close(context.Background()) }()
+	defer func() { _ = client.Close() }()
 
-	fmt.Println("✅ Basic SMTP hub created successfully")
-	fmt.Println("   - Host: smtp.gmail.com")
-	fmt.Println("   - Port: 465")
-	fmt.Println("   - From: ", gmailEmail)
-	fmt.Println("   - Auth: Yes (basic)")
-	fmt.Println("   - TLS: Yes")
-	fmt.Println()
+	log.Info("✅ Basic SMTP client created successfully")
+	log.Info("   - Host: smtp.gmail.com")
+	log.Info("   - Port: 465")
+	log.Info("   - From: ", "email", gmailEmail)
+	log.Info("   - Auth: Yes (basic)")
+	log.Info("   - TLS: Yes")
 }
 
 // demo2AuthenticatedSMTP demonstrates authenticated SMTP with TLS
 func demo2AuthenticatedSMTP() {
-	fmt.Println("🔐 Demo 2: Authenticated SMTP with TLS")
-	fmt.Println("=========================================")
+	log := logger.New().LogMode(logger.Info)
+
+	log.Info("🔐 Demo 2: Authenticated SMTP with TLS")
+	log.Info("=========================================")
 
 	// 💡 Make sure MailHog is running: brew install mailhog && mailhog
 	// Note: MailHog doesn't require real auth, but we can still test the configuration path.
-	hub, err := notifyhub.NewHub(
+	client, err := notifyhub.New(
 		email.WithEmail("smtp.gmail.com", 465, gmailEmail,
 			email.WithEmailAuth(gmailEmail, gmailPassword),
 			email.WithEmailSSL(true),
@@ -61,19 +76,18 @@ func demo2AuthenticatedSMTP() {
 		),
 	)
 	if err != nil {
-		fmt.Printf("❌ Failed to create authenticated SMTP hub: %v\n", err)
+		log.Error("❌ Failed to create authenticated SMTP client", "error", err)
 		return
 	}
-	defer func() { _ = hub.Close(context.Background()) }()
+	defer func() { _ = client.Close() }()
 
-	fmt.Println("✅ Authenticated SMTP hub created successfully")
-	fmt.Println("   - Host: smtp.gmail.com")
-	fmt.Println("   - Port: 465")
-	fmt.Println("   - TLS: Yes")
-	fmt.Println("   - Auth: Yes (basic)")
-	fmt.Println("   - SSL: Yes")
-	fmt.Println("   - Timeout: 10s")
-	fmt.Println()
+	log.Info("✅ Authenticated SMTP client created successfully")
+	log.Info("   - Host: smtp.gmail.com")
+	log.Info("   - Port: 465")
+	log.Info("   - TLS: Yes")
+	log.Info("   - Auth: Yes (basic)")
+	log.Info("   - SSL: Yes")
+	log.Info("   - Timeout: 10s")
 }
 
 // demo3SSLConfiguration demonstrates SSL configuration
@@ -83,7 +97,7 @@ func demo3SSLConfiguration() {
 
 	// 💡 Make sure MailHog is running: brew install mailhog && mailhog
 	// Note: This demo is for configuration illustration; MailHog doesn't use SSL on port 1025.
-	hub, err := notifyhub.NewHub(
+	client, err := notifyhub.New(
 		email.WithEmail("smtp.gmail.com", 465, gmailEmail,
 			email.WithEmailAuth(gmailEmail, gmailPassword),
 			email.WithEmailSSL(false), // MailHog doesn't use SSL
@@ -91,12 +105,12 @@ func demo3SSLConfiguration() {
 		),
 	)
 	if err != nil {
-		fmt.Printf("❌ Failed to create SSL SMTP hub: %v\n", err)
+		fmt.Printf("❌ Failed to create SSL SMTP client: %v\n", err)
 		return
 	}
-	defer func() { _ = hub.Close(context.Background()) }()
+	defer func() { _ = client.Close() }()
 
-	fmt.Println("✅ SSL SMTP hub created successfully (for local testing)")
+	fmt.Println("✅ SSL SMTP client created successfully (for local testing)")
 	fmt.Println("   - Host: smtp.gmail.com")
 	fmt.Println("   - Port: 465")
 	fmt.Println("   - TLS: Yes")
@@ -114,9 +128,9 @@ func demo4SimpleTextEmail() {
 	ctx := context.Background()
 	email.UseGoMail()
 
-	// Create hub for local testing with MailHog
+	// Create client for local testing with MailHog
 	// 💡 Make sure MailHog is running: brew install mailhog && mailhog
-	hub, err := notifyhub.NewHub(
+	client, err := notifyhub.New(
 		email.WithEmail("smtp.gmail.com", 587, gmailEmail,
 			email.WithEmailAuth(gmailEmail, gmailPassword),
 			email.WithEmailSSL(false),
@@ -124,10 +138,10 @@ func demo4SimpleTextEmail() {
 		),
 	)
 	if err != nil {
-		fmt.Printf("❌ Failed to create hub: %v\n", err)
+		fmt.Printf("❌ Failed to create client: %v\n", err)
 		return
 	}
-	defer func() { _ = hub.Close(ctx) }()
+	defer func() { _ = client.Close() }()
 
 	// Create message
 	msg := notifyhub.NewMessage("System Notification").
@@ -139,7 +153,7 @@ func demo4SimpleTextEmail() {
 
 	// Send
 	fmt.Println("Sending simple text email...")
-	receipt, err := hub.Send(ctx, msg)
+	receipt, err := client.Send(ctx, msg)
 	if err != nil {
 		fmt.Printf("❌ Send failed: %v\n", err)
 	} else if receipt.Results[0].Success {
@@ -157,9 +171,9 @@ func demo5HTMLEmail() {
 
 	ctx := context.Background()
 
-	// Create hub for local testing with MailHog
+	// Create client for local testing with MailHog
 	// 💡 Make sure MailHog is running: brew install mailhog && mailhog
-	hub, err := notifyhub.NewHub(
+	client, err := notifyhub.New(
 		email.WithEmail("smtp.gmail.com", 587, gmailEmail,
 			email.WithEmailAuth(gmailEmail, gmailPassword),
 			email.WithEmailSSL(false),
@@ -167,10 +181,10 @@ func demo5HTMLEmail() {
 		),
 	)
 	if err != nil {
-		fmt.Printf("❌ Failed to create hub: %v\n", err)
+		fmt.Printf("❌ Failed to create client: %v\n", err)
 		return
 	}
-	defer func() { _ = hub.Close(ctx) }()
+	defer func() { _ = client.Close() }()
 
 	// Create HTML message
 	msg := notifyhub.NewMessage("📊 Daily Report").
@@ -201,7 +215,7 @@ func demo5HTMLEmail() {
 
 	// Send
 	fmt.Println("Sending HTML email...")
-	receipt, err := hub.Send(ctx, msg)
+	receipt, err := client.Send(ctx, msg)
 	if err != nil {
 		fmt.Printf("❌ Send failed: %v\n", err)
 	} else if receipt.Results[0].Success {
@@ -219,9 +233,9 @@ func demo6EmailWithPriority() {
 
 	ctx := context.Background()
 
-	// Create hub for local testing with MailHog
+	// Create client for local testing with MailHog
 	// 💡 Make sure MailHog is running: brew install mailhog && mailhog
-	hub, err := notifyhub.NewHub(
+	client, err := notifyhub.New(
 		email.WithEmail("smtp.gmail.com", 465, gmailEmail,
 			email.WithEmailAuth(gmailEmail, gmailPassword),
 			email.WithEmailSSL(true),
@@ -229,10 +243,10 @@ func demo6EmailWithPriority() {
 		),
 	)
 	if err != nil {
-		fmt.Printf("❌ Failed to create hub: %v\n", err)
+		fmt.Printf("❌ Failed to create client: %v\n", err)
 		return
 	}
-	defer func() { _ = hub.Close(ctx) }()
+	defer func() { _ = client.Close() }()
 
 	// Create alert message with high priority
 	msg := notifyhub.NewAlert("🚨 Critical System Alert").
@@ -245,7 +259,7 @@ func demo6EmailWithPriority() {
 
 	// Send
 	fmt.Println("Sending high priority alert...")
-	receipt, err := hub.Send(ctx, msg)
+	receipt, err := client.Send(ctx, msg)
 	if err != nil {
 		fmt.Printf("❌ Send failed: %v\n", err)
 	} else if receipt.Results[0].Success {
@@ -263,9 +277,9 @@ func demo7EmailWithCC() {
 
 	ctx := context.Background()
 
-	// Create hub for local testing with MailHog
+	// Create client for local testing with MailHog
 	// 💡 Make sure MailHog is running: brew install mailhog && mailhog
-	hub, err := notifyhub.NewHub(
+	client, err := notifyhub.New(
 		email.WithEmail("smtp.gmail.com", 465, gmailEmail,
 			email.WithEmailAuth(gmailEmail, gmailPassword),
 			email.WithEmailSSL(true),
@@ -273,10 +287,10 @@ func demo7EmailWithCC() {
 		),
 	)
 	if err != nil {
-		fmt.Printf("❌ Failed to create hub: %v\n", err)
+		fmt.Printf("❌ Failed to create client: %v\n", err)
 		return
 	}
-	defer func() { _ = hub.Close(ctx) }()
+	defer func() { _ = client.Close() }()
 
 	// Create message with CC
 	msg := notifyhub.NewMessage("Monthly Security Review").
@@ -289,7 +303,7 @@ func demo7EmailWithCC() {
 
 	// Send
 	fmt.Println("Sending email with CC recipients...")
-	receipt, err := hub.Send(ctx, msg)
+	receipt, err := client.Send(ctx, msg)
 	if err != nil {
 		fmt.Printf("❌ Send failed: %v\n", err)
 	} else if receipt.Results[0].Success {
@@ -307,9 +321,9 @@ func demo8TemplateEmail() {
 
 	ctx := context.Background()
 
-	// Create hub for local testing with MailHog
+	// Create client for local testing with MailHog
 	// 💡 Make sure MailHog is running: brew install mailhog && mailhog
-	hub, err := notifyhub.NewHub(
+	client, err := notifyhub.New(
 		email.WithEmail("smtp.gmail.com", 465, gmailEmail,
 			email.WithEmailAuth(gmailEmail, gmailPassword),
 			email.WithEmailSSL(true),
@@ -317,10 +331,10 @@ func demo8TemplateEmail() {
 		),
 	)
 	if err != nil {
-		fmt.Printf("❌ Failed to create hub: %v\n", err)
+		fmt.Printf("❌ Failed to create client: %v\n", err)
 		return
 	}
-	defer func() { _ = hub.Close(ctx) }()
+	defer func() { _ = client.Close() }()
 
 	// Create template message
 	msg := notifyhub.NewMessage("Welcome {{user_name}}!").
@@ -336,12 +350,12 @@ func demo8TemplateEmail() {
 		WithVariable("email", "alice@example.com").
 		WithVariable("reg_date", time.Now().Format("2006-01-02")).
 		WithVariable("company", "NotifyHub").
-		ToTarget(notifyhub.NewTarget("email", "longqiuhong199@gmail.com", "email")).
+		ToTarget(notifyhub.NewTarget("email", sendEmail, "email")).
 		Build()
 
 	// Send
 	fmt.Println("Sending template email...")
-	receipt, err := hub.Send(ctx, msg)
+	receipt, err := client.Send(ctx, msg)
 	if err != nil {
 		fmt.Printf("❌ Send failed: %v\n", err)
 	} else if receipt.Results[0].Success {
@@ -359,9 +373,9 @@ func demo9MultipleRecipients() {
 
 	ctx := context.Background()
 
-	// Create hub for local testing with MailHog
+	// Create client for local testing with MailHog
 	// 💡 Make sure MailHog is running: brew install mailhog && mailhog
-	hub, err := notifyhub.NewHub(
+	client, err := notifyhub.New(
 		email.WithEmail("smtp.gmail.com", 465, gmailEmail,
 			email.WithEmailAuth(gmailEmail, gmailPassword),
 			email.WithEmailSSL(true),
@@ -369,10 +383,10 @@ func demo9MultipleRecipients() {
 		),
 	)
 	if err != nil {
-		fmt.Printf("❌ Failed to create hub: %v\n", err)
+		fmt.Printf("❌ Failed to create client: %v\n", err)
 		return
 	}
-	defer func() { _ = hub.Close(ctx) }()
+	defer func() { _ = client.Close() }()
 
 	// Create message for multiple recipients
 	msg := notifyhub.NewMessage("Team Meeting Reminder").
@@ -384,7 +398,7 @@ func demo9MultipleRecipients() {
 
 	// Send
 	fmt.Println("Sending to multiple recipients...")
-	receipt, err := hub.Send(ctx, msg)
+	receipt, err := client.Send(ctx, msg)
 	if err != nil {
 		fmt.Printf("❌ Send failed: %v\n", err)
 	} else {
@@ -413,16 +427,16 @@ func demo10DifferentMessageTypes() {
 
 	ctx := context.Background()
 
-	// Create hub for local testing with MailHog
+	// Create client for local testing with MailHog
 	// 💡 Make sure MailHog is running: brew install mailhog && mailhog
-	hub, err := notifyhub.NewHub(
+	client, err := notifyhub.New(
 		email.WithEmail("localhost", 1025, "sender@example.com"),
 	)
 	if err != nil {
-		fmt.Printf("❌ Failed to create hub: %v\n", err)
+		fmt.Printf("❌ Failed to create client: %v\n", err)
 		return
 	}
-	defer func() { _ = hub.Close(ctx) }()
+	defer func() { _ = client.Close() }()
 
 	// Test different message types
 	types := map[string]*notifyhub.Message{
@@ -444,7 +458,7 @@ func demo10DifferentMessageTypes() {
 
 	for typeName, msg := range types {
 		fmt.Printf("Sending %s message (Priority: %d)...\n", typeName, msg.Priority)
-		receipt, err := hub.Send(ctx, msg)
+		receipt, err := client.Send(ctx, msg)
 		if err != nil {
 			fmt.Printf("  ❌ Failed: %v\n", err)
 		} else if receipt.Results[0].Success {
@@ -462,16 +476,16 @@ func demo11WithGmailSMTP() {
 
 	ctx := context.Background()
 
-	hub, err := notifyhub.NewHub(
+	client, err := notifyhub.New(
 		email.WithGmailSMTP(gmailEmail, gmailPassword),
 	)
 	if err != nil {
-		fmt.Printf("❌ Failed to create hub: %v\n", err)
+		fmt.Printf("❌ Failed to create client: %v\n", err)
 		return
 	}
-	defer func() { _ = hub.Close(ctx) }()
+	defer func() { _ = client.Close() }()
 
-	fmt.Println("✅ With Gmail SMTP hub created successfully")
+	fmt.Println("✅ With Gmail SMTP client created successfully")
 	fmt.Println()
 	// Create message
 	msg := notifyhub.NewMessage("System Notification").
@@ -483,7 +497,7 @@ func demo11WithGmailSMTP() {
 
 	// Send
 	fmt.Println("Sending simple text email...")
-	receipt, err := hub.Send(ctx, msg)
+	receipt, err := client.Send(ctx, msg)
 	fmt.Println(receipt)
 	if err != nil {
 		fmt.Printf("❌ Send failed: %v\n", err)
@@ -501,16 +515,16 @@ func demo12With163SMTP() {
 
 	ctx := context.Background()
 
-	hub, err := notifyhub.NewHub(
+	client, err := notifyhub.New(
 		email.With163SMTP(gmailEmail163, gmailPassword163),
 	)
 	if err != nil {
-		fmt.Printf("❌ Failed to create hub: %v\n", err)
+		fmt.Printf("❌ Failed to create client: %v\n", err)
 		return
 	}
-	defer func() { _ = hub.Close(ctx) }()
+	defer func() { _ = client.Close() }()
 
-	fmt.Println("✅ With 163 SMTP hub created successfully")
+	fmt.Println("✅ With 163 SMTP client created successfully")
 	fmt.Println()
 
 	// Create message
@@ -524,7 +538,7 @@ func demo12With163SMTP() {
 
 	// Send
 	fmt.Println("Sending simple text email...")
-	receipt, err := hub.Send(ctx, msg)
+	receipt, err := client.Send(ctx, msg)
 	fmt.Println(receipt)
 	if err != nil {
 		fmt.Printf("❌ Send failed: %v\n", err)
@@ -537,12 +551,6 @@ func demo12With163SMTP() {
 }
 
 func main() {
-	fmt.Println("📧 NotifyHub Email Platform - Complete Demos")
-	fmt.Println("==============================================")
-	fmt.Println("Each demo is completely independent with its own Hub")
-	fmt.Println()
-
-	// // Run all demos - each creates its own hub
 	demo1BasicSMTPConfig()
 	demo2AuthenticatedSMTP()
 	demo3SSLConfiguration()

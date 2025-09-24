@@ -3,6 +3,8 @@ package config
 
 import (
 	"time"
+
+	"github.com/kart-io/notifyhub/pkg/logger"
 )
 
 // HubConfig represents the main configuration for NotifyHub
@@ -10,6 +12,7 @@ type HubConfig struct {
 	Platforms        map[string]PlatformConfig `json:"platforms"`
 	DefaultTimeout   time.Duration             `json:"default_timeout"`
 	RetryPolicy      RetryPolicy               `json:"retry_policy"`
+	Logger           logger.Logger             `json:"-"` // Logger instance (excluded from JSON)
 	ValidationErrors []error                   `json:"-"` // Collect validation errors during configuration
 }
 

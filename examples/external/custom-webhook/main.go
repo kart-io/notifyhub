@@ -6,6 +6,7 @@ import (
 	"context"
 	"fmt"
 	"log"
+	"os"
 	"time"
 
 	"github.com/kart-io/notifyhub/examples/external/custom-webhook/webhook"
@@ -31,21 +32,23 @@ func main() {
 	fmt.Println("🚀 Step 2: Custom Webhook Integration")
 	fmt.Println("-----------------------------------")
 
-	hub, err := notifyhub.NewHub(
-		webhook.WithWebhook("https://httpbin.org/post",
+	// Get webhook URL from environment variable
+	webhookURL := os.Getenv("WEBHOOK_URL")
+	if webhookURL == "" {
+		log.Fatal("WEBHOOK_URL environment variable not set")
+	}
+
+	// Create a new hub with the custom webhook platform
+	hub, err := notifyhub.New(
+		webhook.WithWebhook(webhookURL,
 			webhook.WithWebhookMethod("POST"),
-			webhook.WithWebhookContentType("application/json"),
-			webhook.WithWebhookTimeout(30*time.Second),
-			webhook.WithWebhookHeaders(map[string]string{
-				"Authorization": "Bearer demo-token",
-				"X-API-Version": "v1",
-			}),
+			webhook.WithWebhookHeaders(map[string]string{"X-Custom-Header": "NotifyHub"}),
 		),
 	)
 	if err != nil {
-		log.Fatalf("❌ Failed to create webhook hub: %v", err)
+		log.Fatalf("Failed to create hub: %v", err)
 	}
-	defer func() { _ = hub.Close(context.Background()) }()
+	defer func() { _ = hub.Close() }()
 
 	fmt.Println("✅ Custom webhook platform configured")
 	fmt.Printf("   🔗 URL: https://httpbin.org/post\n")
@@ -112,47 +115,42 @@ func main() {
 	fmt.Println("🔧 Step 5: Multiple Webhook Configurations")
 	fmt.Println("----------------------------------------")
 
-	// Slack-compatible webhook
-	slackHub, err := notifyhub.NewHub(
-		webhook.WithWebhook("https://hooks.slack.com/services/demo/webhook",
-			webhook.WithWebhookMethod("POST"),
-			webhook.WithWebhookContentType("application/json"),
-			webhook.WithWebhookPayloadTemplate(map[string]interface{}{
-				"text":     "{{message}}",
-				"username": "NotifyHub Bot",
-				"channel":  "#general",
-			}),
-		),
+	// Slack example
+	slackWebhookURL := os.Getenv("SLACK_WEBHOOK_URL")
+	if slackWebhookURL == "" {
+		log.Fatal("SLACK_WEBHOOK_URL environment variable not set")
+	}
+	slackTemplate := map[string]interface{}{
+		"text": "{{title}}: {{message}}",
+	}
+	slackHub, err := notifyhub.New(
+		webhook.WithWebhook(slackWebhookURL, webhook.WithWebhookPayloadTemplate(slackTemplate)),
 	)
 	if err != nil {
-		fmt.Printf("❌ Slack webhook hub failed: %v\n", err)
-	} else {
-		defer func() { _ = slackHub.Close(context.Background()) }()
-		fmt.Println("✅ Slack-compatible webhook configured")
+		log.Fatalf("Failed to create Slack hub: %v", err)
 	}
+	defer func() { _ = slackHub.Close() }()
 
-	// Microsoft Teams webhook
-	teamsHub, err := notifyhub.NewHub(
-		webhook.WithWebhook("https://outlook.office.com/webhook/demo",
-			webhook.WithWebhookMethod("POST"),
-			webhook.WithWebhookContentType("application/json"),
-			webhook.WithWebhookPayloadTemplate(map[string]interface{}{
-				"@type":    "MessageCard",
-				"@context": "http://schema.org/extensions",
-				"summary":  "{{title}}",
-				"text":     "{{message}}",
-			}),
-		),
+	// Microsoft Teams example
+	teamsWebhookURL := os.Getenv("TEAMS_WEBHOOK_URL")
+	if teamsWebhookURL == "" {
+		log.Fatal("TEAMS_WEBHOOK_URL environment variable not set")
+	}
+	teamsTemplate := map[string]interface{}{
+		"title":   "{{title}}",
+		"text":    "{{message}}",
+		"summary": "{{title}}",
+	}
+	teamsHub, err := notifyhub.New(
+		webhook.WithWebhook(teamsWebhookURL, webhook.WithWebhookPayloadTemplate(teamsTemplate)),
 	)
 	if err != nil {
-		fmt.Printf("❌ Teams webhook hub failed: %v\n", err)
-	} else {
-		defer func() { _ = teamsHub.Close(context.Background()) }()
-		fmt.Println("✅ Teams-compatible webhook configured")
+		log.Fatalf("Failed to create Teams hub: %v", err)
 	}
+	defer func() { _ = teamsHub.Close() }()
 
 	// Generic webhook with form data
-	formHub, err := notifyhub.NewHub(
+	formHub, err := notifyhub.New(
 		webhook.WithWebhook("https://httpbin.org/post",
 			webhook.WithWebhookMethod("POST"),
 			webhook.WithWebhookContentType("application/x-www-form-urlencoded"),
@@ -161,7 +159,7 @@ func main() {
 	if err != nil {
 		fmt.Printf("❌ Form webhook hub failed: %v\n", err)
 	} else {
-		defer func() { _ = formHub.Close(context.Background()) }()
+		defer func() { _ = formHub.Close() }()
 		fmt.Println("✅ Form data webhook configured")
 	}
 	fmt.Println()

@@ -5,7 +5,9 @@ import (
 	"sync"
 	"time"
 
+	"github.com/kart-io/notifyhub/pkg/logger"
 	"github.com/kart-io/notifyhub/pkg/notifyhub"
+	"github.com/kart-io/notifyhub/pkg/notifyhub/platform"
 )
 
 var (
@@ -16,8 +18,10 @@ var (
 func ensureRegistered() {
 	registerOnce.Do(func() {
 		_ = notifyhub.RegisterExtension(&notifyhub.PlatformExtension{
-			Name:    "feishu",
-			Creator: NewFeishuSender,
+			Name: platform.NameFeishu,
+			Creator: func(config map[string]interface{}, logger logger.Logger) (platform.ExternalSender, error) {
+				return NewFeishuSender(config, logger)
+			},
 			DefaultOpts: func() map[string]interface{} {
 				return map[string]interface{}{
 					"timeout":   30 * time.Second,

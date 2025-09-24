@@ -10,6 +10,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/kart-io/notifyhub/pkg/logger"
 	"github.com/kart-io/notifyhub/pkg/notifyhub/platform"
 )
 
@@ -34,22 +35,28 @@ type SMSSender struct {
 	template  string
 	signName  string
 	client    *http.Client
+	logger    logger.Logger
 }
 
 // NewSMSSender creates a new SMS sender
-func NewSMSSender(config map[string]interface{}) (platform.ExternalSender, error) {
+func NewSMSSender(config map[string]interface{}, logger logger.Logger) (platform.ExternalSender, error) {
+	logger.Debug("Creating SMSSender", "config_keys", getConfigKeys(config))
+
 	provider, ok := config["provider"].(string)
 	if !ok || provider == "" {
+		logger.Error("Missing or invalid provider")
 		return nil, fmt.Errorf("provider is required for SMS platform")
 	}
 
 	apiKey, ok := config["api_key"].(string)
 	if !ok || apiKey == "" {
+		logger.Error("Missing or invalid api_key")
 		return nil, fmt.Errorf("api_key is required for SMS platform")
 	}
 
 	from, ok := config["from"].(string)
 	if !ok || from == "" {
+		logger.Error("Missing or invalid from number")
 		return nil, fmt.Errorf("from is required for SMS platform")
 	}
 
@@ -58,27 +65,33 @@ func NewSMSSender(config map[string]interface{}) (platform.ExternalSender, error
 		apiKey:   apiKey,
 		from:     from,
 		timeout:  30 * time.Second,
+		logger:   logger,
 	}
 
 	// Configure optional fields
 	if apiSecret, ok := config["api_secret"].(string); ok {
 		sender.apiSecret = apiSecret
+		logger.Debug("API secret configured")
 	}
 
 	if region, ok := config["region"].(string); ok {
 		sender.region = region
+		logger.Debug("Region configured", "region", region)
 	}
 
 	if template, ok := config["template"].(string); ok {
 		sender.template = template
+		logger.Debug("Template configured")
 	}
 
 	if signName, ok := config["sign_name"].(string); ok {
 		sender.signName = signName
+		logger.Debug("Sign name configured", "signName", signName)
 	}
 
 	if timeout, ok := config["timeout"].(time.Duration); ok {
 		sender.timeout = timeout
+		logger.Debug("Timeout configured", "timeout", timeout)
 	}
 
 	// Create HTTP client
@@ -88,10 +101,21 @@ func NewSMSSender(config map[string]interface{}) (platform.ExternalSender, error
 
 	// Validate provider
 	if !isValidProvider(sender.provider) {
+		logger.Error("Unsupported SMS provider", "provider", provider)
 		return nil, fmt.Errorf("unsupported SMS provider: %s", provider)
 	}
 
+	logger.Info("SMSSender created successfully", "provider", provider, "from", from)
 	return sender, nil
+}
+
+// getConfigKeys returns the keys from a config map for logging
+func getConfigKeys(config map[string]interface{}) []string {
+	keys := make([]string, 0, len(config))
+	for k := range config {
+		keys = append(keys, k)
+	}
+	return keys
 }
 
 // Name returns the platform name
@@ -101,6 +125,11 @@ func (s *SMSSender) Name() string {
 
 // Send sends a message to SMS
 func (s *SMSSender) Send(ctx context.Context, msg *platform.Message, targets []platform.Target) ([]*platform.SendResult, error) {
+	if s.logger == nil {
+		s.logger = logger.Discard
+	}
+	s.logger.Debug("Starting SMS send", "messageID", msg.ID, "targetCount", len(targets), "provider", s.provider)
+
 	results := make([]*platform.SendResult, len(targets))
 
 	for i, target := range targets {
@@ -112,19 +141,24 @@ func (s *SMSSender) Send(ctx context.Context, msg *platform.Message, targets []p
 
 		// Validate target
 		if err := s.ValidateTarget(target); err != nil {
+			s.logger.Error("Invalid SMS target", "target", target.Value, "phone", target.Value, "error", err)
 			result.Error = err.Error()
 			results[i] = result
 			continue
 		}
 
+		s.logger.Debug("Building SMS content", "target", target.Value)
 		// Build SMS content
 		smsContent := s.buildSMSContent(msg, target)
 
 		// Send SMS
+		s.logger.Debug("Sending SMS", "to", target.Value, "provider", s.provider)
 		response, err := s.sendSMS(ctx, target.Value, smsContent)
 		if err != nil {
+			s.logger.Error("Failed to send SMS", "target", target.Value, "to", target.Value, "error", err)
 			result.Error = err.Error()
 		} else {
+			s.logger.Info("SMS sent successfully", "target", target.Value, "to", target.Value, "messageID", response.MessageID)
 			result.Success = true
 			result.MessageID = response.MessageID
 			result.Response = response.Description
@@ -137,8 +171,10 @@ func (s *SMSSender) Send(ctx context.Context, msg *platform.Message, targets []p
 		}
 
 		results[i] = result
+		s.logger.Debug("SMS send attempt completed", "target", target.Value, "success", result.Success, "duration_ms", time.Since(startTime).Milliseconds())
 	}
 
+	s.logger.Debug("SMS batch send completed", "messageID", msg.ID, "totalTargets", len(targets))
 	return results, nil
 }
 
@@ -148,10 +184,12 @@ func (s *SMSSender) ValidateTarget(target platform.Target) error {
 	case "phone", "sms":
 		// Valid target types for SMS
 	default:
+		s.logger.Debug("Invalid target type for SMS", "type", target.Type)
 		return fmt.Errorf("sms supports phone and sms targets, got %s", target.Type)
 	}
 
 	if target.Value == "" {
+		s.logger.Debug("Empty phone number")
 		return fmt.Errorf("phone number cannot be empty")
 	}
 
@@ -176,26 +214,34 @@ func (s *SMSSender) GetCapabilities() platform.Capabilities {
 
 // IsHealthy checks if SMS provider is accessible
 func (s *SMSSender) IsHealthy(ctx context.Context) error {
+	s.logger.Debug("Performing health check for SMS sender", "provider", s.provider)
+
 	if s.apiKey == "" {
+		s.logger.Error("SMS API key not configured")
 		return fmt.Errorf("SMS API key not configured")
 	}
 
 	// Test phone number validation with a known valid format
 	testPhone := "+1234567890"
 	if err := s.validatePhoneNumber(testPhone); err != nil {
+		s.logger.Error("SMS provider validation failed", "error", err)
 		return fmt.Errorf("SMS provider validation failed: %w", err)
 	}
 
+	s.logger.Debug("SMS health check passed", "provider", s.provider)
 	return nil
 }
 
 // Close cleans up resources
 func (s *SMSSender) Close() error {
+	s.logger.Debug("Closing SMS sender", "provider", s.provider)
 	return nil
 }
 
 // buildSMSContent builds SMS content from the platform message
 func (s *SMSSender) buildSMSContent(msg *platform.Message, target platform.Target) string {
+	s.logger.Debug("Building SMS content", "messageID", msg.ID, "hasTemplate", msg.PlatformData["sms_template"] != nil)
+
 	var content string
 
 	// Check if there's SMS template data
@@ -279,6 +325,7 @@ type SMSResponse struct {
 
 // sendSMS sends SMS using the configured provider
 func (s *SMSSender) sendSMS(ctx context.Context, to, message string) (*SMSResponse, error) {
+	s.logger.Debug("Sending SMS", "to", to, "provider", s.provider)
 	// TODO: Implement actual provider-specific SMS sending
 	// This is a placeholder implementation that simulates successful sending
 	switch s.provider {

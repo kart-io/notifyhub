@@ -83,29 +83,26 @@ func IsExtensionRegistered(name string) bool {
 
 // WithExtension creates a HubOption for an external platform using generic configuration
 func WithExtension(platformName string, config map[string]interface{}) HubOption {
-	return func(cfg *HubConfig) {
+	return func(cfg *HubConfig) error {
 		// Validate configuration if validator exists
 		if ext, exists := GetExtension(platformName); exists && ext.Validator != nil {
 			if err := ext.Validator(config); err != nil {
-				// Store validation error for later reporting
-				cfg.ValidationErrors = append(cfg.ValidationErrors,
-					fmt.Errorf("validation failed for platform %s: %w", platformName, err))
-				return
+				// Return validation error
+				return fmt.Errorf("validation failed for platform %s: %w", platformName, err)
 			}
 		}
 
 		cfg.Platforms[platformName] = PlatformConfig(config)
+		return nil
 	}
 }
 
 // WithExtensionDefaults creates a HubOption for an external platform using default configuration
 func WithExtensionDefaults(platformName string, overrides ...map[string]interface{}) HubOption {
-	return func(cfg *HubConfig) {
+	return func(cfg *HubConfig) error {
 		ext, exists := GetExtension(platformName)
 		if !exists {
-			cfg.ValidationErrors = append(cfg.ValidationErrors,
-				fmt.Errorf("platform %s is not registered", platformName))
-			return
+			return fmt.Errorf("platform %s is not registered", platformName)
 		}
 
 		// Start with defaults
@@ -122,7 +119,7 @@ func WithExtensionDefaults(platformName string, overrides ...map[string]interfac
 		}
 
 		// Use WithExtension to apply configuration with validation
-		WithExtension(platformName, config)(cfg)
+		return WithExtension(platformName, config)(cfg)
 	}
 }
 

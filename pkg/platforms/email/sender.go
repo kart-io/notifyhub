@@ -11,6 +11,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/kart-io/notifyhub/pkg/logger"
 	"github.com/kart-io/notifyhub/pkg/notifyhub/platform"
 )
 
@@ -25,10 +26,11 @@ type EmailSender struct {
 	smtpSSL      bool
 	timeout      time.Duration
 	auth         smtp.Auth
+	logger       logger.Logger
 }
 
 // NewEmailSender creates a new Email sender
-func NewEmailSender(config map[string]interface{}) (platform.ExternalSender, error) {
+func NewEmailSender(config map[string]interface{}, logger logger.Logger) (platform.ExternalSender, error) {
 	smtpHost, ok := config["smtp_host"].(string)
 	if !ok || smtpHost == "" {
 		return nil, fmt.Errorf("smtp_host is required for Email platform")
@@ -50,6 +52,7 @@ func NewEmailSender(config map[string]interface{}) (platform.ExternalSender, err
 		smtpFrom: smtpFrom,
 		smtpTLS:  true, // Default to TLS
 		timeout:  30 * time.Second,
+		logger:   logger, // Assign logger directly
 	}
 
 	// Configure authentication
@@ -258,6 +261,9 @@ func (e *EmailSender) buildEmailMessage(msg *platform.Message, target platform.T
 
 // sendEmail sends the email using SMTP
 func (e *EmailSender) sendEmail(ctx context.Context, to, content string) error {
+	if e.logger == nil {
+		e.logger = logger.Discard
+	}
 	addr := fmt.Sprintf("%s:%d", e.smtpHost, e.smtpPort)
 	recipients := []string{to}
 
@@ -266,35 +272,33 @@ func (e *EmailSender) sendEmail(ctx context.Context, to, content string) error {
 	defer cancel()
 
 	// Debug logging
-	fmt.Printf("[SMTP DEBUG] Connecting to %s\n", addr)
-	fmt.Printf("[SMTP DEBUG] Auth configured: %v\n", e.auth != nil)
-	fmt.Printf("[SMTP DEBUG] From: %s, To: %s\n", e.smtpFrom, to)
-	fmt.Printf("[SMTP DEBUG] Timeout: %v\n", e.timeout)
+	e.logger.Debug("Connecting to SMTP", "address", addr)
+	e.logger.Debug("Authentication configured", "auth", e.auth != nil)
+	e.logger.Debug("Email details", "from", e.smtpFrom, "to", to)
+	e.logger.Debug("Connection timeout", "timeout", e.timeout)
 
 	// Send email with timeout
 	done := make(chan error, 1)
 	go func() {
-		// Use the original smtp.SendMail - it worked before!
-		fmt.Printf("[SMTP DEBUG] Calling smtp.SendMail (original implementation)...\n")
 		var err error
 
 		if e.smtpTLS {
 			// Use STARTTLS (port 587)
-			fmt.Printf("[SMTP DEBUG] Using STARTTLS connection...\n")
+			e.logger.Debug("Using STARTTLS connection...")
 			err = e.sendWithSTARTTLS(addr, recipients, content)
 		} else if e.smtpSSL {
 			// Use SSL/TLS (port 465)
-			fmt.Printf("[SMTP DEBUG] Using SSL/TLS connection...\n")
+			e.logger.Debug("Using SSL/TLS connection...")
 			err = e.sendWithSSL(addr, recipients, content)
 		} else {
 			// Plain connection (not recommended)
-			fmt.Printf("[SMTP DEBUG] Using plain SMTP (no encryption)...\n")
+			e.logger.Warn("Using plain SMTP (no encryption)")
 			err = smtp.SendMail(addr, e.auth, e.smtpFrom, recipients, []byte(content))
 		}
 		if err != nil {
-			fmt.Printf("[SMTP DEBUG] SendMail error: %v\n", err)
+			e.logger.Error("SendMail error", "error", err)
 		} else {
-			fmt.Printf("[SMTP DEBUG] SendMail success\n")
+			e.logger.Info("Email sent successfully", "to", to)
 		}
 		done <- err
 	}()
@@ -303,7 +307,7 @@ func (e *EmailSender) sendEmail(ctx context.Context, to, content string) error {
 	case err := <-done:
 		return err
 	case <-timeoutCtx.Done():
-		fmt.Printf("[SMTP DEBUG] Send timeout after %v\n", e.timeout)
+		e.logger.Error("Send timeout", "duration", e.timeout)
 		return fmt.Errorf("email send timeout")
 	}
 }

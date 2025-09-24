@@ -36,7 +36,7 @@ func main() {
 	fmt.Println("🚀 Step 2: Mixed Platform Hub")
 	fmt.Println("---------------------------")
 
-	hub, err := notifyhub.NewHub(
+	hub, err := notifyhub.New(
 		// Built-in platform (Feishu)
 		feishu.WithFeishu("https://example.com/feishu/webhook",
 			feishu.WithFeishuSecret("demo-secret"),
@@ -52,7 +52,7 @@ func main() {
 	if err != nil {
 		log.Fatalf("❌ Failed to create hub: %v", err)
 	}
-	defer func() { _ = hub.Close(context.Background()) }()
+	defer func() { _ = hub.Close() }()
 
 	fmt.Println("✅ Hub created with both built-in and external platforms!")
 	fmt.Printf("   📱 Feishu: Built-in platform\n")

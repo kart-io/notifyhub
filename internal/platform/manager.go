@@ -5,6 +5,8 @@ import (
 	"fmt"
 	"sync"
 	"time"
+
+	"github.com/kart-io/notifyhub/pkg/logger"
 )
 
 // manager implements the Manager interface for managing platform senders
@@ -190,7 +192,7 @@ func (m *manager) Close() error {
 }
 
 // SenderCreator is a function type that creates a sender with given configuration
-type SenderCreator func(config map[string]interface{}) (Sender, error)
+type SenderCreator func(config map[string]interface{}, logger logger.Logger) (Sender, error)
 
 // Global registry for sender creators
 var senderRegistry = make(map[string]SenderCreator)
@@ -209,23 +211,23 @@ func NewDefaultSenderFactory() SenderFactory {
 }
 
 // CreateSender creates a new sender for the specified platform
-func (f *defaultSenderFactory) CreateSender(platformName string, config map[string]interface{}) (Sender, error) {
+func (f *defaultSenderFactory) CreateSender(platformName string, config map[string]interface{}, logger logger.Logger) (Sender, error) {
 	// First check if there's a registered creator for this platform
 	if creator, exists := senderRegistry[platformName]; exists {
-		return creator(config)
+		return creator(config, logger)
 	}
 
 	// Fall back to built-in implementations
 	switch platformName {
 	case "email":
 		// Create email sender using the specific implementation
-		return createEmailSender(config)
+		return createEmailSender(config, logger)
 	case "feishu":
 		// Create feishu sender using the specific implementation
-		return createFeishuSender(config)
+		return createFeishuSender(config, logger)
 	case "sms":
 		// Create SMS sender using the specific implementation
-		return createSMSSender(config)
+		return createSMSSender(config, logger)
 	default:
 		return nil, fmt.Errorf("unsupported platform: %s", platformName)
 	}
@@ -237,8 +239,8 @@ func (f *defaultSenderFactory) GetSupportedPlatforms() []string {
 }
 
 // ValidateConfig validates configuration for a platform
-func (f *defaultSenderFactory) ValidateConfig(platform string, config map[string]interface{}) error {
-	switch platform {
+func (f *defaultSenderFactory) ValidateConfig(platformName string, config map[string]interface{}) error {
+	switch platformName {
 	case "email":
 		required := []string{"smtp_host", "smtp_port", "smtp_username", "smtp_password", "smtp_from"}
 		return validateRequiredFields(config, required)
@@ -249,7 +251,7 @@ func (f *defaultSenderFactory) ValidateConfig(platform string, config map[string
 		required := []string{"provider", "api_key"}
 		return validateRequiredFields(config, required)
 	default:
-		return fmt.Errorf("unsupported platform: %s", platform)
+		return fmt.Errorf("unsupported platform: %s", platformName)
 	}
 }
 
@@ -410,8 +412,8 @@ func (r *defaultTargetResolver) ResolveTargets(targets interface{}) map[string][
 }
 
 // ValidateTargetForPlatform checks if a target is valid for a platform
-func (r *defaultTargetResolver) ValidateTargetForPlatform(target InternalTarget, platform string) error {
-	switch platform {
+func (r *defaultTargetResolver) ValidateTargetForPlatform(target InternalTarget, platformName string) error {
+	switch platformName {
 	case "email":
 		if target.Type != "email" {
 			return fmt.Errorf("email platform only supports email targets")
@@ -443,7 +445,7 @@ func validateRequiredFields(config map[string]interface{}, required []string) er
 // Platform-specific sender creation functions
 
 // createEmailSender creates an email sender with the given configuration
-func createEmailSender(config map[string]interface{}) (Sender, error) {
+func createEmailSender(config map[string]interface{}, logger logger.Logger) (Sender, error) {
 	// Import the actual email sender implementation
 	// We need to avoid import cycles, so we'll use internal imports
 	// For now, create a basic implementation
@@ -472,7 +474,7 @@ func createEmailSender(config map[string]interface{}) (Sender, error) {
 }
 
 // createFeishuSender creates a feishu sender with the given configuration
-func createFeishuSender(config map[string]interface{}) (Sender, error) {
+func createFeishuSender(config map[string]interface{}, logger logger.Logger) (Sender, error) {
 	// This is a fallback implementation, the real feishu sender should be registered
 	// during package initialization. This should not be called in normal operation.
 	webhookURL, _ := config["webhook_url"].(string)
@@ -483,7 +485,7 @@ func createFeishuSender(config map[string]interface{}) (Sender, error) {
 }
 
 // createSMSSender creates an SMS sender with the given configuration
-func createSMSSender(config map[string]interface{}) (Sender, error) {
+func createSMSSender(config map[string]interface{}, logger logger.Logger) (Sender, error) {
 	provider, _ := config["provider"].(string)
 	apiKey, _ := config["api_key"].(string)
 

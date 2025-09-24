@@ -27,7 +27,7 @@ func main() {
 
 	secureHub := createSecureHub()
 	if secureHub != nil {
-		defer func() { _ = secureHub.Close(context.Background()) }()
+		defer func() { _ = secureHub.Close() }()
 		fmt.Println("✅ Security-hardened hub created")
 		fmt.Println("   🔐 TLS encryption enabled")
 		fmt.Println("   🔑 Certificate validation enforced")
@@ -43,7 +43,7 @@ func main() {
 	tenantHubs := createMultiTenantHubs()
 	for tenantID, hub := range tenantHubs {
 		if hub != nil {
-			defer func() { _ = hub.Close(context.Background()) }()
+			defer func() { _ = hub.Close() }()
 			fmt.Printf("✅ Tenant hub created: %s\n", tenantID)
 		}
 	}
@@ -57,7 +57,7 @@ func main() {
 
 	rateLimitedHub := createRateLimitedHub()
 	if rateLimitedHub != nil {
-		defer func() { _ = rateLimitedHub.Close(context.Background()) }()
+		defer func() { _ = rateLimitedHub.Close() }()
 		demonstrateRateLimit(rateLimitedHub)
 	}
 	fmt.Println()
@@ -68,7 +68,7 @@ func main() {
 
 	governanceHub := createGovernanceHub()
 	if governanceHub != nil {
-		defer func() { _ = governanceHub.Close(context.Background()) }()
+		defer func() { _ = governanceHub.Close() }()
 		demonstrateMessageGovernance(governanceHub)
 	}
 	fmt.Println()
@@ -79,7 +79,7 @@ func main() {
 
 	drHub := createDisasterRecoveryHub()
 	if drHub != nil {
-		defer func() { _ = drHub.Close(context.Background()) }()
+		defer func() { _ = drHub.Close() }()
 		demonstrateDisasterRecovery(drHub)
 	}
 	fmt.Println()
@@ -98,7 +98,7 @@ func main() {
 
 	integrationHub := createEnterpriseIntegrationHub()
 	if integrationHub != nil {
-		defer func() { _ = integrationHub.Close(context.Background()) }()
+		defer func() { _ = integrationHub.Close() }()
 		demonstrateEnterpriseIntegration(integrationHub)
 	}
 	fmt.Println()
@@ -136,7 +136,7 @@ func main() {
 }
 
 // Security and compliance
-func createSecureHub() notifyhub.Hub {
+func createSecureHub() notifyhub.Client {
 	fmt.Println("🔒 Creating security-hardened hub...")
 
 	// Configure TLS settings (for demonstration)
@@ -146,7 +146,7 @@ func createSecureHub() notifyhub.Hub {
 	}
 
 	// Enterprise security configuration
-	hub, err := notifyhub.NewHub(
+	hub, err := notifyhub.New(
 		feishu.WithFeishu(getSecureEnvVar("FEISHU_WEBHOOK_URL"),
 			feishu.WithFeishuSecret(getSecureEnvVar("FEISHU_SECRET")),
 			feishu.WithFeishuTimeout(30*time.Second),
@@ -177,14 +177,14 @@ func createSecureHub() notifyhub.Hub {
 }
 
 // Multi-tenancy support
-func createMultiTenantHubs() map[string]notifyhub.Hub {
+func createMultiTenantHubs() map[string]notifyhub.Client {
 	fmt.Println("🏢 Creating multi-tenant hubs...")
 
 	tenants := []string{"tenant-a", "tenant-b", "tenant-c"}
-	hubs := make(map[string]notifyhub.Hub)
+	hubs := make(map[string]notifyhub.Client)
 
 	for _, tenantID := range tenants {
-		hub, err := notifyhub.NewHub(
+		hub, err := notifyhub.New(
 			feishu.WithFeishu(fmt.Sprintf("https://tenant-%s.example.com/webhook", tenantID),
 				feishu.WithFeishuSecret(fmt.Sprintf("secret-%s", tenantID)),
 			),
@@ -206,7 +206,7 @@ func createMultiTenantHubs() map[string]notifyhub.Hub {
 	return hubs
 }
 
-func demonstrateTenantIsolation(tenantHubs map[string]notifyhub.Hub) {
+func demonstrateTenantIsolation(tenantHubs map[string]notifyhub.Client) {
 	fmt.Println("🔒 Demonstrating tenant isolation...")
 	ctx := context.Background()
 
@@ -233,10 +233,10 @@ func demonstrateTenantIsolation(tenantHubs map[string]notifyhub.Hub) {
 }
 
 // Rate limiting and quotas
-func createRateLimitedHub() notifyhub.Hub {
+func createRateLimitedHub() notifyhub.Client {
 	fmt.Println("⚡ Creating rate-limited hub...")
 
-	hub, err := notifyhub.NewHub(
+	hub, err := notifyhub.New(
 		feishu.WithFeishu("https://example.com/webhook"),
 		email.WithEmail("smtp.example.com", 587, "rate-limited@company.com"),
 		// Add rate limiting configuration
@@ -257,7 +257,7 @@ func createRateLimitedHub() notifyhub.Hub {
 	return hub
 }
 
-func demonstrateRateLimit(hub notifyhub.Hub) {
+func demonstrateRateLimit(hub notifyhub.Client) {
 	fmt.Println("⚡ Testing rate limiting...")
 	ctx := context.Background()
 
@@ -285,10 +285,10 @@ func demonstrateRateLimit(hub notifyhub.Hub) {
 }
 
 // Message governance
-func createGovernanceHub() notifyhub.Hub {
+func createGovernanceHub() notifyhub.Client {
 	fmt.Println("📋 Creating governance-enabled hub...")
 
-	hub, err := notifyhub.NewHub(
+	hub, err := notifyhub.New(
 		feishu.WithFeishu("https://example.com/webhook"),
 		email.WithEmail("smtp.example.com", 587, "governance@company.com"),
 		// Add governance configuration
@@ -311,7 +311,7 @@ func createGovernanceHub() notifyhub.Hub {
 	return hub
 }
 
-func demonstrateMessageGovernance(hub notifyhub.Hub) {
+func demonstrateMessageGovernance(hub notifyhub.Client) {
 	fmt.Println("📋 Testing message governance...")
 	ctx := context.Background()
 
@@ -367,10 +367,10 @@ func demonstrateMessageGovernance(hub notifyhub.Hub) {
 }
 
 // Disaster recovery
-func createDisasterRecoveryHub() notifyhub.Hub {
+func createDisasterRecoveryHub() notifyhub.Client {
 	fmt.Println("🚨 Creating disaster recovery hub...")
 
-	hub, err := notifyhub.NewHub(
+	hub, err := notifyhub.New(
 		// Primary region
 		feishu.WithFeishu("https://primary.example.com/webhook"),
 		email.WithEmail("smtp-primary.example.com", 587, "primary@company.com"),
@@ -397,7 +397,7 @@ func createDisasterRecoveryHub() notifyhub.Hub {
 	return hub
 }
 
-func demonstrateDisasterRecovery(hub notifyhub.Hub) {
+func demonstrateDisasterRecovery(hub notifyhub.Client) {
 	fmt.Println("🚨 Simulating disaster recovery...")
 	ctx := context.Background()
 
@@ -537,10 +537,10 @@ func displayComplianceReport(report *ComplianceReport) {
 }
 
 // Enterprise integration
-func createEnterpriseIntegrationHub() notifyhub.Hub {
+func createEnterpriseIntegrationHub() notifyhub.Client {
 	fmt.Println("🔗 Creating enterprise integration hub...")
 
-	hub, err := notifyhub.NewHub(
+	hub, err := notifyhub.New(
 		feishu.WithFeishu("https://example.com/webhook"),
 		email.WithEmail("smtp.example.com", 587, "integration@company.com"),
 		// Add enterprise integration options
@@ -563,7 +563,7 @@ func createEnterpriseIntegrationHub() notifyhub.Hub {
 	return hub
 }
 
-func demonstrateEnterpriseIntegration(hub notifyhub.Hub) {
+func demonstrateEnterpriseIntegration(hub notifyhub.Client) {
 	fmt.Println("🔗 Testing enterprise integrations...")
 	ctx := context.Background()
 

@@ -3,52 +3,51 @@
 package main
 
 import (
-	"context"
-	"fmt"
-	"log"
 	"os"
 	"time"
 
+	"github.com/kart-io/notifyhub/pkg/logger"
 	"github.com/kart-io/notifyhub/pkg/notifyhub"
 	"github.com/kart-io/notifyhub/pkg/platforms/email"
 	"github.com/kart-io/notifyhub/pkg/platforms/feishu"
 	"github.com/kart-io/notifyhub/pkg/platforms/sms"
 )
 
+var log = logger.New().LogMode(logger.Info)
+
 func main() {
-	fmt.Println("⚙️  Advanced Configuration Patterns Demo")
-	fmt.Println("======================================")
-	fmt.Println()
+
+	log.Info("⚙️  Advanced Configuration Patterns Demo")
+	log.Info("======================================")
 
 	// Part 1: Environment-Based Configuration
-	fmt.Println("🌍 Part 1: Environment-Based Configuration")
-	fmt.Println("----------------------------------------")
+	log.Info("🌍 Part 1: Environment-Based Configuration")
+	log.Info("----------------------------------------")
 
 	// Production configuration
 	prodHub := createProductionHub()
 	if prodHub != nil {
-		defer func() { _ = prodHub.Close(context.Background()) }()
-		fmt.Println("✅ Production hub configured")
+		defer func() { _ = prodHub.Close() }()
+		log.Info("✅ Production hub configured")
 	}
 
 	// Development configuration
 	devHub := createDevelopmentHub()
 	if devHub != nil {
-		defer func() { _ = devHub.Close(context.Background()) }()
-		fmt.Println("✅ Development hub configured")
+		defer func() { _ = devHub.Close() }()
+		log.Info("✅ Development hub configured")
 	}
 
 	// Test configuration
 	testHub := createTestHub()
 	if testHub != nil {
-		defer func() { _ = testHub.Close(context.Background()) }()
-		fmt.Println("✅ Test hub configured")
+		defer func() { _ = testHub.Close() }()
+		log.Info("✅ Test hub configured")
 	}
-	fmt.Println()
 
 	// Part 2: Configuration Builders
-	fmt.Println("🏗️  Part 2: Configuration Builders")
-	fmt.Println("--------------------------------")
+	log.Info("🏗️  Part 2: Configuration Builders")
+	log.Info("--------------------------------")
 
 	// Fluent configuration builder (conceptual example)
 	builderHub := NewConfigBuilder().
@@ -63,14 +62,13 @@ func main() {
 		Build()
 
 	if builderHub != nil {
-		defer func() { _ = builderHub.Close(context.Background()) }()
-		fmt.Println("✅ Builder-pattern hub created")
+		defer func() { _ = builderHub.Close() }()
+		log.Info("✅ Builder-pattern hub created")
 	}
-	fmt.Println()
 
 	// Part 3: Configuration Validation
-	fmt.Println("🔍 Part 3: Configuration Validation")
-	fmt.Println("---------------------------------")
+	log.Info("🔍 Part 3: Configuration Validation")
+	log.Info("---------------------------------")
 
 	// Valid configuration
 	validConfig := map[string]interface{}{
@@ -87,9 +85,9 @@ func main() {
 	}
 
 	if validateConfiguration(validConfig) {
-		fmt.Println("✅ Configuration validation passed")
+		log.Info("✅ Configuration validation passed")
 	} else {
-		fmt.Println("❌ Configuration validation failed")
+		log.Info("❌ Configuration validation failed")
 	}
 
 	// Invalid configuration
@@ -101,74 +99,67 @@ func main() {
 	}
 
 	if validateConfiguration(invalidConfig) {
-		fmt.Println("✅ Invalid config unexpectedly passed")
+		log.Info("✅ Invalid config unexpectedly passed")
 	} else {
-		fmt.Println("❌ Invalid configuration correctly rejected")
+		log.Info("❌ Invalid configuration correctly rejected")
 	}
-	fmt.Println()
 
 	// Part 4: Configuration Templates
-	fmt.Println("📋 Part 4: Configuration Templates")
-	fmt.Println("--------------------------------")
+	log.Info("📋 Part 4: Configuration Templates")
+	log.Info("--------------------------------")
 
 	// Team communication template
 	if createTeamTemplate() != nil {
-		fmt.Println("✅ Team communication template created")
+		log.Info("✅ Team communication template created")
 	}
 
 	// Operations alert template
 	if createOpsTemplate() != nil {
-		fmt.Println("✅ Operations alert template created")
+		log.Info("✅ Operations alert template created")
 	}
 
 	// Customer notification template
 	if createCustomerTemplate() != nil {
-		fmt.Println("✅ Customer notification template created")
+		log.Info("✅ Customer notification template created")
 	}
-	fmt.Println()
 
 	// Part 5: Dynamic Configuration
-	fmt.Println("🔄 Part 5: Dynamic Configuration")
-	fmt.Println("------------------------------")
+	log.Info("🔄 Part 5: Dynamic Configuration")
+	log.Info("------------------------------")
 
 	// Configuration that changes based on conditions
 	dynamicHub := createDynamicConfiguration()
 	if dynamicHub != nil {
-		defer func() { _ = dynamicHub.Close(context.Background()) }()
-		fmt.Println("✅ Dynamic configuration created")
+		defer func() { _ = dynamicHub.Close() }()
+		log.Info("✅ Dynamic configuration created")
 	}
-	fmt.Println()
 
 	// Summary
-	fmt.Println("⚙️  Configuration Best Practices")
-	fmt.Println("==============================")
-	fmt.Println("✅ ENVIRONMENT SEPARATION:")
-	fmt.Println("   • Different configs for prod/dev/test")
-	fmt.Println("   • Environment variable usage")
-	fmt.Println("   • Secure credential management")
-	fmt.Println()
-	fmt.Println("✅ CONFIGURATION VALIDATION:")
-	fmt.Println("   • Early validation prevents runtime errors")
-	fmt.Println("   • Clear error messages for debugging")
-	fmt.Println("   • Type safety and required field checks")
-	fmt.Println()
-	fmt.Println("✅ CONFIGURATION TEMPLATES:")
-	fmt.Println("   • Reusable configuration patterns")
-	fmt.Println("   • Team-specific setups")
-	fmt.Println("   • Use case optimizations")
-	fmt.Println()
-	fmt.Println("✅ DYNAMIC CONFIGURATION:")
-	fmt.Println("   • Runtime configuration changes")
-	fmt.Println("   • Conditional platform selection")
-	fmt.Println("   • Feature flag integration")
-	fmt.Println()
+	log.Info("⚙️  Configuration Best Practices")
+	log.Info("==============================")
+	log.Info("✅ ENVIRONMENT SEPARATION:")
+	log.Info("   • Different configs for prod/dev/test")
+	log.Info("   • Environment variable usage")
+	log.Info("   • Secure credential management")
+	log.Info("✅ CONFIGURATION VALIDATION:")
+	log.Info("   • Early validation prevents runtime errors")
+	log.Info("   • Clear error messages for debugging")
+	log.Info("   • Type safety and required field checks")
+	log.Info("✅ CONFIGURATION TEMPLATES:")
+	log.Info("   • Reusable configuration patterns")
+	log.Info("   • Team-specific setups")
+	log.Info("   • Use case optimizations")
+	log.Info("✅ DYNAMIC CONFIGURATION:")
+	log.Info("   • Runtime configuration changes")
+	log.Info("   • Conditional platform selection")
+	log.Info("   • Feature flag integration")
 
-	fmt.Println("⚙️  Advanced Configuration Demo Complete!")
+	log.Info("⚙️  Advanced Configuration Demo Complete!")
 }
 
 // Environment-based configuration functions
 
-func createProductionHub() notifyhub.Hub {
+func createProductionHub() notifyhub.Client {
 	// Production uses environment variables for security
 	feishuWebhook := os.Getenv("FEISHU_WEBHOOK_URL")
 	feishuSecret := os.Getenv("FEISHU_SECRET")
@@ -181,7 +172,7 @@ func createProductionHub() notifyhub.Hub {
 		feishuWebhook = "https://example.com/feishu/webhook" // Fallback for demo
 	}
 
-	hub, err := notifyhub.NewHub(
+	hub, err := notifyhub.New(
 		feishu.WithFeishu(feishuWebhook,
 			feishu.WithFeishuSecret(feishuSecret),
 			feishu.WithFeishuTimeout(30*time.Second),
@@ -198,15 +189,15 @@ func createProductionHub() notifyhub.Hub {
 	)
 
 	if err != nil {
-		log.Printf("Failed to create production hub: %v", err)
+		log.Error("Failed to create production hub", "error", err)
 		return nil
 	}
 	return hub
 }
 
-func createDevelopmentHub() notifyhub.Hub {
+func createDevelopmentHub() notifyhub.Client {
 	// Development uses relaxed settings and mock endpoints
-	hub, err := notifyhub.NewHub(
+	hub, err := notifyhub.New(
 		feishu.WithFeishu("https://dev.example.com/feishu/webhook",
 			feishu.WithFeishuTimeout(60*time.Second), // Longer timeout for debugging
 		),
@@ -217,21 +208,21 @@ func createDevelopmentHub() notifyhub.Hub {
 	)
 
 	if err != nil {
-		log.Printf("Failed to create development hub: %v", err)
+		log.Error("Failed to create development hub", "error", err)
 		return nil
 	}
 	return hub
 }
 
-func createTestHub() notifyhub.Hub {
+func createTestHub() notifyhub.Client {
 	// Test uses mock configurations
-	hub, err := notifyhub.NewHub(
+	hub, err := notifyhub.New(
 		feishu.WithFeishu("https://test.example.com/webhook"),
 		email.WithEmail("test-smtp", 587, "test@example.com"),
 	)
 
 	if err != nil {
-		log.Printf("Failed to create test hub: %v", err)
+		log.Error("Failed to create test hub", "error", err)
 		return nil
 	}
 	return hub
@@ -297,7 +288,7 @@ func (c *ConfigBuilder) WithSMSTimeout(timeout time.Duration) *ConfigBuilder {
 	return c
 }
 
-func (c *ConfigBuilder) Build() notifyhub.Hub {
+func (c *ConfigBuilder) Build() notifyhub.Client {
 	var options []notifyhub.HubOption
 
 	if len(c.feishuConfig) > 0 {
@@ -343,9 +334,9 @@ func (c *ConfigBuilder) Build() notifyhub.Hub {
 		))
 	}
 
-	hub, err := notifyhub.NewHub(options...)
+	hub, err := notifyhub.New(options...)
 	if err != nil {
-		log.Printf("Failed to build hub: %v", err)
+		log.Error("Failed to build hub", "error", err)
 		return nil
 	}
 	return hub
@@ -353,10 +344,11 @@ func (c *ConfigBuilder) Build() notifyhub.Hub {
 
 // Configuration validation
 func validateConfiguration(config map[string]interface{}) bool {
+
 	// Validate Feishu configuration
 	if feishuConfig, ok := config["feishu"].(map[string]interface{}); ok {
 		if webhookURL, exists := feishuConfig["webhook_url"].(string); !exists || webhookURL == "" {
-			fmt.Println("   ❌ Feishu webhook_url is required and cannot be empty")
+			log.Error("   ❌ Feishu webhook_url is required and cannot be empty")
 			return false
 		}
 	}
@@ -364,11 +356,11 @@ func validateConfiguration(config map[string]interface{}) bool {
 	// Validate Email configuration
 	if emailConfig, ok := config["email"].(map[string]interface{}); ok {
 		if host, exists := emailConfig["smtp_host"].(string); !exists || host == "" {
-			fmt.Println("   ❌ Email smtp_host is required")
+			log.Error("   ❌ Email smtp_host is required")
 			return false
 		}
 		if _, exists := emailConfig["smtp_port"].(int); !exists {
-			fmt.Println("   ❌ Email smtp_port is required")
+			log.Error("   ❌ Email smtp_port is required")
 			return false
 		}
 	}
@@ -377,9 +369,9 @@ func validateConfiguration(config map[string]interface{}) bool {
 }
 
 // Configuration templates
-func createTeamTemplate() notifyhub.Hub {
+func createTeamTemplate() notifyhub.Client {
 	// Team communication focused configuration
-	hub, _ := notifyhub.NewHub(
+	hub, _ := notifyhub.New(
 		feishu.WithFeishu("https://team.example.com/webhook",
 			feishu.WithFeishuTimeout(15*time.Second), // Fast for team communication
 		),
@@ -387,9 +379,9 @@ func createTeamTemplate() notifyhub.Hub {
 	return hub
 }
 
-func createOpsTemplate() notifyhub.Hub {
+func createOpsTemplate() notifyhub.Client {
 	// Operations alerts with multiple channels
-	hub, _ := notifyhub.NewHub(
+	hub, _ := notifyhub.New(
 		feishu.WithFeishu("https://ops.example.com/webhook"),
 		email.WithEmail("smtp.company.com", 587, "ops@company.com"),
 		sms.WithSMSTwilio("ops-twilio-key", "+1234567890"),
@@ -397,9 +389,9 @@ func createOpsTemplate() notifyhub.Hub {
 	return hub
 }
 
-func createCustomerTemplate() notifyhub.Hub {
+func createCustomerTemplate() notifyhub.Client {
 	// Customer notifications (email + SMS)
-	hub, _ := notifyhub.NewHub(
+	hub, _ := notifyhub.New(
 		email.WithEmail("smtp.mailgun.com", 587, "noreply@company.com",
 			email.WithEmailAuth("api", "mailgun-key"),
 		),
@@ -409,7 +401,7 @@ func createCustomerTemplate() notifyhub.Hub {
 }
 
 // Dynamic configuration
-func createDynamicConfiguration() notifyhub.Hub {
+func createDynamicConfiguration() notifyhub.Client {
 	environment := getOrDefault(os.Getenv("ENVIRONMENT"), "development")
 
 	var options []notifyhub.HubOption
@@ -432,9 +424,9 @@ func createDynamicConfiguration() notifyhub.Hub {
 		)
 	}
 
-	hub, err := notifyhub.NewHub(options...)
+	hub, err := notifyhub.New(options...)
 	if err != nil {
-		log.Printf("Failed to create dynamic hub: %v", err)
+		log.Error("Failed to create dynamic hub", "error", err)
 		return nil
 	}
 	return hub

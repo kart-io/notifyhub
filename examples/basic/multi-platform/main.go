@@ -5,9 +5,10 @@ package main
 import (
 	"context"
 	"fmt"
-	"log"
+	"os"
 	"time"
 
+	"github.com/kart-io/notifyhub/pkg/logger"
 	"github.com/kart-io/notifyhub/pkg/notifyhub"
 	"github.com/kart-io/notifyhub/pkg/platforms/email"
 	"github.com/kart-io/notifyhub/pkg/platforms/feishu"
@@ -15,14 +16,15 @@ import (
 )
 
 func main() {
-	fmt.Println("🌐 Multi-Platform NotifyHub Demo")
-	fmt.Println("===============================")
-	fmt.Println()
+	log := logger.New().LogMode(logger.Info)
+
+	log.Info("🌐 Multi-Platform NotifyHub Demo")
+	log.Info("===============================")
 
 	// Step 1: Create hub with multiple platforms
-	fmt.Println("Step 1: Setting up multi-platform hub...")
+	log.Info("Step 1: Setting up multi-platform hub...")
 
-	hub, err := notifyhub.NewHub(
+	hub, err := notifyhub.New(
 		// Feishu for team notifications
 		feishu.WithFeishu(
 			"https://example.com/feishu/webhook",
@@ -46,18 +48,18 @@ func main() {
 		),
 	)
 	if err != nil {
-		log.Fatalf("❌ Failed to create hub: %v", err)
+		log.Error("❌ Failed to create hub", "error", err)
+		os.Exit(1)
 	}
-	defer func() { _ = hub.Close(context.Background()) }()
+	defer func() { _ = hub.Close() }()
 
-	fmt.Println("✅ Multi-platform hub created!")
-	fmt.Printf("   📱 Platforms configured: Feishu, Email, SMS\n")
-	fmt.Println()
+	log.Info("✅ Multi-platform hub created!")
+	log.Info("📱 Platforms configured: Feishu, Email, SMS")
 
 	ctx := context.Background()
 
 	// Step 2: Send to all platforms
-	fmt.Println("Step 2: Broadcasting message to all platforms...")
+	log.Info("Step 2: Broadcasting message to all platforms...")
 
 	broadcastMsg := notifyhub.NewMessage("Multi-Platform Broadcast").
 		WithBody("🌐 This message is sent to multiple platforms using the unified architecture!").
@@ -70,9 +72,9 @@ func main() {
 
 	receipt, err := hub.Send(ctx, broadcastMsg)
 	if err != nil {
-		log.Printf("❌ Broadcast failed: %v", err)
+		log.Error("❌ Broadcast failed", "error", err)
 	} else {
-		fmt.Printf("✅ Broadcast sent to %d platforms!\n", len(receipt.Results))
+		log.Info("✅ Broadcast sent to platforms!", "count", len(receipt.Results))
 		for _, result := range receipt.Results {
 			status := "✅"
 			if !result.Success {

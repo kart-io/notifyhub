@@ -5,62 +5,60 @@ package main
 import (
 	"context"
 	"fmt"
-	"log"
+	"os"
 
+	"github.com/kart-io/notifyhub/pkg/logger"
 	"github.com/kart-io/notifyhub/pkg/notifyhub"
 	"github.com/kart-io/notifyhub/pkg/platforms/feishu"
 )
 
 func main() {
-	fmt.Println("🚀 Getting Started with NotifyHub")
-	fmt.Println("================================")
-	fmt.Println()
+	log := logger.New().LogMode(logger.Info)
 
-	// Step 1: Create a Hub with Feishu platform
-	fmt.Println("Step 1: Creating NotifyHub instance...")
+	log.Info("🚀 Getting Started with NotifyHub")
+	log.Info("================================")
 
-	hub, err := notifyhub.NewHub(
-		// Configure Feishu platform using the new unified platform package
-		feishu.WithFeishuSignature(
-			"https://open.feishu.cn/open-apis/bot/v2/hook/688dc0bf-c74b-41d1-a6b9-8cb660477488", // Replace with your webhook URL
-			"gQURr67BPOsTZlI7jBn0Jh", // Required: add webhook secret
-		),
-		// Configure Feishu platform using the new unified platform package
-		feishu.WithFeishuKeywordAuth(
-			"https://open.feishu.cn/open-apis/bot/v2/hook/b6bd1f02-01a7-4adc-9cd0-f043414dd5f1", // Replace with your webhook URL
-			[]string{"alert", "notification"}, // Required: add webhook secret
-		),
+	// Get Feishu webhook URL and secret from environment variables
+	webhookURL := os.Getenv("FEISHU_WEBHOOK_URL")
+	secret := os.Getenv("FEISHU_SECRET")
+
+	if webhookURL == "" {
+		log.Error("FEISHU_WEBHOOK_URL environment variable not set")
+		os.Exit(1)
+	}
+
+	// Create a new NotifyHub client
+	hub, err := notifyhub.New(
+		feishu.WithFeishu(webhookURL, feishu.WithFeishuSecret(secret)),
 	)
 	if err != nil {
-		log.Fatalf("❌ Failed to create hub: %v", err)
+		log.Error("Failed to create NotifyHub client", "error", err)
+		os.Exit(1)
 	}
-	defer func() { _ = hub.Close(context.Background()) }()
+	defer func() { _ = hub.Close() }()
 
-	fmt.Println("✅ Hub created successfully!")
-	fmt.Println()
+	log.Info("✅ Hub created successfully!")
 
 	// Step 2: Create a simple message
-	fmt.Println("Step 2: Creating a message...")
+	log.Info("Step 2: Creating a message...")
 
 	message := notifyhub.NewMessage("Hello NotifyHub!").
 		WithBody("This is my first notification using the unified platform system.").
 		ToTarget(notifyhub.NewTarget("webhook", "", "feishu")).
 		Build()
 
-	fmt.Printf("✅ Message created: %s\n", message.Title)
-	fmt.Println()
+	log.Info("✅ Message created", "title", message.Title)
 
 	// Step 3: Send the message
-	fmt.Println("Step 3: Sending message...")
+	log.Info("Step 3: Sending message...")
 
 	ctx := context.Background()
 	receipt, err := hub.Send(ctx, message)
 	if err != nil {
-		log.Printf("❌ Send failed: %v", err)
+		log.Error("❌ Send failed", "error", err)
 	} else {
-		fmt.Printf("✅ Message sent successfully!\n")
-		fmt.Printf("   📊 Results: %d total, %d successful, %d failed\n",
-			receipt.Total, receipt.Successful, receipt.Failed)
+		log.Info("✅ Message sent successfully!")
+		log.Info("📊 Results", "total", receipt.Total, "successful", receipt.Successful, "failed", receipt.Failed)
 
 		// Show detailed results
 		for _, result := range receipt.Results {
@@ -68,14 +66,12 @@ func main() {
 			if !result.Success {
 				status = "❌"
 			}
-			fmt.Printf("   %s Platform: %s, Target: %s\n",
-				status, result.Platform, result.Target)
+			log.Info(fmt.Sprintf("%s Platform result", status), "platform", result.Platform, "target", result.Target)
 		}
 	}
-	fmt.Println()
 
 	// Step 4: Try different message types
-	fmt.Println("Step 4: Trying different message types...")
+	log.Info("Step 4: Trying different message types...")
 
 	// Alert message (high priority)
 	alertMsg := notifyhub.NewAlert("System Alert").
@@ -91,42 +87,37 @@ func main() {
 
 	// Send alert
 	if _, err := hub.Send(ctx, alertMsg); err != nil {
-		fmt.Printf("❌ Alert send failed: %v\n", err)
+		log.Error("❌ Alert send failed", "error", err)
 	} else {
-		fmt.Printf("✅ Alert sent (Priority: %d)\n", alertMsg.Priority)
+		log.Info("✅ Alert sent", "priority", alertMsg.Priority)
 	}
 
 	// Send urgent
 	if _, err := hub.Send(ctx, urgentMsg); err != nil {
-		fmt.Printf("❌ Urgent send failed: %v\n", err)
+		log.Error("❌ Urgent send failed", "error", err)
 	} else {
-		fmt.Printf("✅ Urgent message sent (Priority: %d)\n", urgentMsg.Priority)
+		log.Info("✅ Urgent message sent", "priority", urgentMsg.Priority)
 	}
-	fmt.Println()
 
 	// Step 5: Understanding the new architecture
-	fmt.Println("🏗️  Understanding the New Architecture")
-	fmt.Println("-----------------------------------")
-	fmt.Println("✅ UNIFIED PLATFORM PACKAGES:")
-	fmt.Println("  • Each platform lives in its own package")
-	fmt.Println("  • Auto-registration when package is imported")
-	fmt.Println("  • Consistent API across all platforms")
-	fmt.Println()
-	fmt.Println("✅ EXTERNAL EXTENSIBILITY:")
-	fmt.Println("  • External developers can create platform packages")
-	fmt.Println("  • Same API quality as built-in platforms")
-	fmt.Println("  • No core library modifications needed")
-	fmt.Println()
-	fmt.Println("✅ BACKWARD COMPATIBILITY:")
-	fmt.Println("  • Old notifyhub.WithFeishu() still works")
-	fmt.Println("  • Gradual migration path available")
-	fmt.Println("  • Deprecated functions clearly marked")
-	fmt.Println()
+	log.Info("🏗️  Understanding the New Architecture")
+	log.Info("-----------------------------------")
+	log.Info("✅ UNIFIED PLATFORM PACKAGES:")
+	log.Info("  • Each platform lives in its own package")
+	log.Info("  • Auto-registration when package is imported")
+	log.Info("  • Consistent API across all platforms")
+	log.Info("✅ EXTERNAL EXTENSIBILITY:")
+	log.Info("  • External developers can create platform packages")
+	log.Info("  • Same API quality as built-in platforms")
+	log.Info("  • No core library modifications needed")
+	log.Info("✅ BACKWARD COMPATIBILITY:")
+	log.Info("  • Old notifyhub.WithFeishu() still works")
+	log.Info("  • Gradual migration path available")
+	log.Info("  • Deprecated functions clearly marked")
 
-	fmt.Println("🎉 Getting Started Complete!")
-	fmt.Println()
-	fmt.Println("Next steps:")
-	fmt.Println("• Try examples/basic/multi-platform/ for multiple platforms")
-	fmt.Println("• See examples/platforms/ for platform-specific features")
-	fmt.Println("• Check examples/external/ for building custom platforms")
+	log.Info("🎉 Getting Started Complete!")
+	log.Info("Next steps:")
+	log.Info("• Try examples/basic/multi-platform/ for multiple platforms")
+	log.Info("• See examples/platforms/ for platform-specific features")
+	log.Info("• Check examples/external/ for building custom platforms")
 }
