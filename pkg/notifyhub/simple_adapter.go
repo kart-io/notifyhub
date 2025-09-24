@@ -5,8 +5,8 @@ import (
 	"time"
 
 	"github.com/kart-io/notifyhub/pkg/notifyhub/message"
-	"github.com/kart-io/notifyhub/pkg/notifyhub/target"
 	"github.com/kart-io/notifyhub/pkg/notifyhub/receipt"
+	"github.com/kart-io/notifyhub/pkg/notifyhub/target"
 )
 
 // Demonstrate the modular structure working

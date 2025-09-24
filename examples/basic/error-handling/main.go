@@ -1,0 +1,323 @@
+// Package main demonstrates error handling patterns in NotifyHub
+// This shows how to properly handle errors and implement resilient notification systems
+package main
+
+import (
+	"context"
+	"fmt"
+	"log"
+	"time"
+
+	"github.com/kart-io/notifyhub/pkg/notifyhub"
+	"github.com/kart-io/notifyhub/pkg/platforms/email"
+	"github.com/kart-io/notifyhub/pkg/platforms/feishu"
+)
+
+func main() {
+	fmt.Println("🛡️  Error Handling Patterns in NotifyHub")
+	fmt.Println("=======================================")
+	fmt.Println()
+
+	// Part 1: Hub Creation Errors
+	fmt.Println("📋 Part 1: Hub Creation Error Handling")
+	fmt.Println("------------------------------------")
+
+	// Example of configuration errors
+	fmt.Println("1. Testing invalid configuration...")
+
+	// This will fail due to empty webhook URL
+	invalidHub, err := notifyhub.NewHub(
+		feishu.WithFeishu("", feishu.WithFeishuSecret("secret")),
+	)
+	if err != nil {
+		fmt.Printf("❌ Expected error caught: %v\n", err)
+	} else {
+		fmt.Println("❌ Should have failed but didn't!")
+		_ = invalidHub.Close(context.Background())
+	}
+
+	// Create a valid hub for other tests
+	fmt.Println("2. Creating valid hub...")
+	hub, err := notifyhub.NewHub(
+		feishu.WithFeishu("https://example.com/feishu/webhook"),
+		// Add email with potentially failing configuration for demo
+		email.WithEmail("smtp.example.com", 587, "demo@example.com"),
+	)
+	if err != nil {
+		log.Fatalf("❌ Failed to create valid hub: %v", err)
+	}
+	defer func() { _ = hub.Close(context.Background()) }()
+	fmt.Println("✅ Valid hub created successfully")
+	fmt.Println()
+
+	ctx := context.Background()
+
+	// Part 2: Message Validation Errors
+	fmt.Println("📋 Part 2: Message Validation Errors")
+	fmt.Println("----------------------------------")
+
+	// Declare receipt variable for this section
+	var receipt *notifyhub.Receipt
+
+	// Invalid target type
+	fmt.Println("1. Testing invalid target type...")
+	invalidMsg := notifyhub.NewMessage("Invalid Target").
+		WithBody("This message has an invalid target.").
+		ToTarget(notifyhub.NewTarget("invalid-type", "value", "feishu")).
+		Build()
+
+	receipt, err = hub.Send(ctx, invalidMsg)
+	if err != nil {
+		fmt.Printf("❌ Send error: %v\n", err)
+	} else {
+		fmt.Printf("📊 Receipt: %d total, %d successful, %d failed\n",
+			receipt.Total, receipt.Successful, receipt.Failed)
+
+		// Check individual results for details
+		for _, result := range receipt.Results {
+			if !result.Success {
+				fmt.Printf("   ❌ Platform %s failed: %s\n", result.Platform, result.Error)
+			}
+		}
+	}
+
+	// Empty message body
+	fmt.Println("2. Testing empty message...")
+	emptyMsg := notifyhub.NewMessage(""). // Empty title
+						WithBody(""). // Empty body
+						ToTarget(notifyhub.NewTarget("webhook", "", "feishu")).
+						Build()
+
+	receipt, err = hub.Send(ctx, emptyMsg)
+	if err != nil {
+		fmt.Printf("❌ Send error: %v\n", err)
+	} else {
+		fmt.Printf("📊 Receipt: %d total, %d successful, %d failed\n",
+			receipt.Total, receipt.Successful, receipt.Failed)
+	}
+	fmt.Println()
+
+	// Part 3: Platform-Specific Error Handling
+	fmt.Println("📋 Part 3: Platform-Specific Error Handling")
+	fmt.Println("-----------------------------------------")
+
+	// Test multiple platforms with some failing
+	multiPlatformMsg := notifyhub.NewMessage("Multi-Platform Test").
+		WithBody("Testing error handling across platforms.").
+		ToTarget(notifyhub.NewTarget("webhook", "", "feishu")).           // Should work
+		ToTarget(notifyhub.NewTarget("email", "invalid-email", "email")). // Invalid email
+		ToTarget(notifyhub.NewTarget("phone", "invalid-phone", "sms")).   // SMS not configured
+		Build()
+
+	fmt.Println("Sending to multiple platforms (some will fail)...")
+	receipt, err = hub.Send(ctx, multiPlatformMsg)
+	if err != nil {
+		fmt.Printf("❌ Send error: %v\n", err)
+	} else {
+		fmt.Printf("📊 Multi-platform results:\n")
+		fmt.Printf("   Total: %d, Successful: %d, Failed: %d\n",
+			receipt.Total, receipt.Successful, receipt.Failed)
+
+		for _, result := range receipt.Results {
+			status := "✅"
+			if !result.Success {
+				status = "❌"
+			}
+			fmt.Printf("   %s %s -> %s", status, result.Platform, result.Target)
+			if !result.Success {
+				fmt.Printf(" (Error: %s)", result.Error)
+			}
+			fmt.Println()
+		}
+	}
+	fmt.Println()
+
+	// Part 4: Timeout Handling
+	fmt.Println("📋 Part 4: Timeout Handling")
+	fmt.Println("-------------------------")
+
+	// Create hub with very short timeout to simulate timeout errors
+	timeoutHub, err := notifyhub.NewHub(
+		feishu.WithFeishu("https://example.com/feishu/webhook",
+			feishu.WithFeishuTimeout(1*time.Millisecond), // Very short timeout
+		),
+	)
+	if err != nil {
+		log.Printf("Failed to create timeout hub: %v", err)
+	} else {
+		defer func() { _ = timeoutHub.Close(context.Background()) }()
+
+		timeoutMsg := notifyhub.NewMessage("Timeout Test").
+			WithBody("This might timeout due to very short timeout setting.").
+			ToTarget(notifyhub.NewTarget("webhook", "", "feishu")).
+			Build()
+
+		fmt.Println("Testing with very short timeout...")
+		receipt, err := timeoutHub.Send(ctx, timeoutMsg)
+		if err != nil {
+			fmt.Printf("❌ Timeout error: %v\n", err)
+		} else {
+			for _, result := range receipt.Results {
+				if !result.Success {
+					fmt.Printf("❌ Platform timeout: %s\n", result.Error)
+				}
+			}
+		}
+	}
+	fmt.Println()
+
+	// Part 5: Best Practices for Error Handling
+	fmt.Println("📋 Part 5: Error Handling Best Practices")
+	fmt.Println("--------------------------------------")
+
+	// 1. Always check errors
+	fmt.Println("1. Always check errors at every step")
+
+	// 2. Handle partial failures gracefully
+	fmt.Println("2. Handle partial failures gracefully")
+	resilientMsg := notifyhub.NewMessage("Resilient Message").
+		WithBody("This message handles failures gracefully.").
+		ToTarget(notifyhub.NewTarget("webhook", "", "feishu")).
+		ToTarget(notifyhub.NewTarget("email", "admin@example.com", "email")).
+		Build()
+
+	receipt, err = hub.Send(ctx, resilientMsg)
+	if err != nil {
+		fmt.Printf("   ❌ Critical error (all platforms failed): %v\n", err)
+	} else {
+		if receipt.Failed > 0 {
+			fmt.Printf("   ⚠️  Partial failure: %d/%d platforms failed\n", receipt.Failed, receipt.Total)
+			// Log failed platforms for monitoring
+			for _, result := range receipt.Results {
+				if !result.Success {
+					fmt.Printf("   📝 Log: Platform %s failed - %s\n", result.Platform, result.Error)
+				}
+			}
+		} else {
+			fmt.Printf("   ✅ All platforms succeeded\n")
+		}
+	}
+
+	// 3. Implement retry logic for critical messages
+	fmt.Println("3. Implement retry logic for critical messages")
+	criticalMsg := notifyhub.NewUrgent("CRITICAL ALERT").
+		WithBody("This critical message will be retried on failure.").
+		ToTarget(notifyhub.NewTarget("webhook", "", "feishu")).
+		Build()
+
+	maxRetries := 3
+	for attempt := 1; attempt <= maxRetries; attempt++ {
+		fmt.Printf("   Attempt %d/%d...\n", attempt, maxRetries)
+
+		_, err := hub.Send(ctx, criticalMsg)
+		if err != nil {
+			fmt.Printf("   ❌ Attempt %d failed: %v\n", attempt, err)
+			if attempt < maxRetries {
+				backoff := time.Duration(attempt) * time.Second
+				fmt.Printf("   ⏳ Waiting %v before retry...\n", backoff)
+				time.Sleep(backoff)
+			}
+		} else if receipt.Failed == 0 {
+			fmt.Printf("   ✅ Critical message sent successfully on attempt %d\n", attempt)
+			break
+		} else {
+			fmt.Printf("   ⚠️  Partial failure on attempt %d\n", attempt)
+		}
+	}
+
+	// 4. Use context for cancellation
+	fmt.Println("4. Use context for cancellation and timeouts")
+
+	// Create context with timeout
+	timeoutCtx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	defer cancel()
+
+	contextMsg := notifyhub.NewMessage("Context Test").
+		WithBody("This message respects context cancellation.").
+		ToTarget(notifyhub.NewTarget("webhook", "", "feishu")).
+		Build()
+
+	_, err = hub.Send(timeoutCtx, contextMsg)
+	if err != nil {
+		fmt.Printf("   ❌ Context error: %v\n", err)
+	} else {
+		fmt.Printf("   ✅ Message sent within context timeout\n")
+	}
+	fmt.Println()
+
+	// Part 6: Error Classification
+	fmt.Println("📋 Part 6: Error Classification")
+	fmt.Println("-----------------------------")
+	fmt.Println("NotifyHub errors fall into categories:")
+	fmt.Println()
+	fmt.Println("🔧 CONFIGURATION ERRORS:")
+	fmt.Println("   • Invalid webhook URLs")
+	fmt.Println("   • Missing required credentials")
+	fmt.Println("   • Malformed configuration")
+	fmt.Println("   ➡️  Action: Fix configuration, restart")
+	fmt.Println()
+	fmt.Println("📝 VALIDATION ERRORS:")
+	fmt.Println("   • Invalid target types")
+	fmt.Println("   • Malformed email addresses")
+	fmt.Println("   • Invalid phone numbers")
+	fmt.Println("   ➡️  Action: Validate input, fix data")
+	fmt.Println()
+	fmt.Println("🌐 NETWORK ERRORS:")
+	fmt.Println("   • Connection timeouts")
+	fmt.Println("   • DNS resolution failures")
+	fmt.Println("   • Network unreachable")
+	fmt.Println("   ➡️  Action: Retry with backoff")
+	fmt.Println()
+	fmt.Println("🔑 AUTHENTICATION ERRORS:")
+	fmt.Println("   • Invalid API keys")
+	fmt.Println("   • Expired tokens")
+	fmt.Println("   • Permission denied")
+	fmt.Println("   ➡️  Action: Update credentials")
+	fmt.Println()
+	fmt.Println("📊 RATE LIMIT ERRORS:")
+	fmt.Println("   • Too many requests")
+	fmt.Println("   • Quota exceeded")
+	fmt.Println("   • Service throttling")
+	fmt.Println("   ➡️  Action: Implement rate limiting, retry later")
+	fmt.Println()
+
+	// Part 7: Monitoring and Alerting
+	fmt.Println("📋 Part 7: Monitoring and Alerting")
+	fmt.Println("--------------------------------")
+	fmt.Println("Implement monitoring for:")
+	fmt.Println("• Success/failure rates per platform")
+	fmt.Println("• Response times and timeouts")
+	fmt.Println("• Error patterns and trends")
+	fmt.Println("• Platform availability")
+	fmt.Println()
+	fmt.Println("Example monitoring code:")
+	fmt.Println(`
+	_, err := hub.Send(ctx, message)
+
+	// Log metrics
+	metrics.IncrementCounter("notifyhub.messages.total")
+
+	if err != nil {
+		metrics.IncrementCounter("notifyhub.errors.total")
+		logger.Error("Send failed", "error", err)
+	} else {
+		metrics.IncrementCounter("notifyhub.messages.success", receipt.Successful)
+		metrics.IncrementCounter("notifyhub.messages.failed", receipt.Failed)
+
+		for _, result := range receipt.Results {
+			metrics.RecordDuration("notifyhub.platform.duration",
+				result.Duration, "platform", result.Platform)
+		}
+	}
+	`)
+
+	fmt.Println("🛡️  Error Handling Demo Complete!")
+	fmt.Println()
+	fmt.Println("Key Takeaways:")
+	fmt.Println("• Always check errors at every step")
+	fmt.Println("• Handle partial failures gracefully")
+	fmt.Println("• Implement retry logic for critical messages")
+	fmt.Println("• Use context for timeouts and cancellation")
+	fmt.Println("• Monitor error patterns for proactive fixes")
+	fmt.Println("• Classify errors for appropriate responses")
+}

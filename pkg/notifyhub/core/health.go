@@ -25,22 +25,3 @@ type PlatformHealth struct {
 type QueueHealth struct {
 	Available bool `json:"available"`
 }
-
-// determineOverallStatus determines the overall health status
-func (h *HealthStatus) determineOverallStatus() {
-	h.Healthy = true
-	h.Status = "healthy"
-
-	for _, platform := range h.Platforms {
-		if !platform.Available {
-			h.Healthy = false
-			h.Status = "unhealthy"
-			break
-		}
-	}
-
-	if !h.Queue.Available {
-		h.Healthy = false
-		h.Status = "unhealthy"
-	}
-}

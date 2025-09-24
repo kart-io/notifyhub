@@ -3,9 +3,6 @@ package core
 
 import (
 	"sync"
-
-	// Import internal register to auto-register internal platforms
-	_ "github.com/kart-io/notifyhub/internal/pkg/register"
 )
 
 var (
@@ -13,12 +10,11 @@ var (
 )
 
 // ensureInternalPlatformsRegistered ensures that internal platforms are registered
-// This function is called during Hub creation to guarantee that internal platforms
-// are available for use
+// This function is no longer needed as platforms auto-register via extension system
+// but kept for backward compatibility
 func ensureInternalPlatformsRegistered() {
 	initOnce.Do(func() {
-		// The internal/pkg/register package automatically registers platforms
-		// via its init() function when imported above
-		// This ensures platforms are registered exactly once
+		// With the new platform extension system, platforms auto-register
+		// when their packages are imported. No manual registration needed.
 	})
 }

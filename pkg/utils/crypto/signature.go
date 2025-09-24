@@ -252,10 +252,8 @@ func (ms *MessageSigner) SignMessage(messageID, content string, timestamp int64,
 	parts = append(parts, messageID, content, strconv.FormatInt(timestamp, 10))
 
 	// Add sorted metadata
-	if metadata != nil {
-		for key, value := range metadata {
-			parts = append(parts, fmt.Sprintf("%s=%s", key, value))
-		}
+	for key, value := range metadata {
+		parts = append(parts, fmt.Sprintf("%s=%s", key, value))
 	}
 
 	payload := strings.Join(parts, "|")
@@ -287,11 +285,11 @@ func NewTokenSigner(algorithm SignatureAlgorithm, secret string) *TokenSigner {
 
 // SignedToken represents a signed token
 type SignedToken struct {
-	Token     string    `json:"token"`
-	Signature string    `json:"signature"`
-	Timestamp int64     `json:"timestamp"`
-	ExpiresAt int64     `json:"expires_at"`
-	Algorithm string    `json:"algorithm"`
+	Token     string `json:"token"`
+	Signature string `json:"signature"`
+	Timestamp int64  `json:"timestamp"`
+	ExpiresAt int64  `json:"expires_at"`
+	Algorithm string `json:"algorithm"`
 }
 
 // CreateSignedToken creates a new signed token

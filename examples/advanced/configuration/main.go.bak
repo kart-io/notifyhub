@@ -1,0 +1,449 @@
+// Package main demonstrates advanced configuration patterns
+// This shows enterprise-ready configuration management for NotifyHub
+package main
+
+import (
+	"context"
+	"fmt"
+	"log"
+	"os"
+	"time"
+
+	"github.com/kart-io/notifyhub/pkg/notifyhub"
+	"github.com/kart-io/notifyhub/pkg/platforms/feishu"
+	"github.com/kart-io/notifyhub/pkg/platforms/email"
+	"github.com/kart-io/notifyhub/pkg/platforms/sms"
+)
+
+func main() {
+	fmt.Println("⚙️  Advanced Configuration Patterns Demo")
+	fmt.Println("======================================")
+	fmt.Println()
+
+	// Part 1: Environment-Based Configuration
+	fmt.Println("🌍 Part 1: Environment-Based Configuration")
+	fmt.Println("----------------------------------------")
+
+	// Production configuration
+	prodHub := createProductionHub()
+	if prodHub != nil {
+		defer prodHub.Close(context.Background())
+		fmt.Println("✅ Production hub configured")
+	}
+
+	// Development configuration
+	devHub := createDevelopmentHub()
+	if devHub != nil {
+		defer devHub.Close(context.Background())
+		fmt.Println("✅ Development hub configured")
+	}
+
+	// Test configuration
+	testHub := createTestHub()
+	if testHub != nil {
+		defer testHub.Close(context.Background())
+		fmt.Println("✅ Test hub configured")
+	}
+	fmt.Println()
+
+	// Part 2: Configuration Builders
+	fmt.Println("🏗️  Part 2: Configuration Builders")
+	fmt.Println("--------------------------------")
+
+	// Fluent configuration builder (conceptual example)
+	builderHub := NewConfigBuilder().
+		WithFeishu("https://example.com/feishu/webhook").
+		WithFeishuSecret("prod-secret").
+		WithFeishuTimeout(30 * time.Second).
+		WithEmail("smtp.company.com", 587, "notifications@company.com").
+		WithEmailAuth("smtp-user", "smtp-pass").
+		WithEmailTLS(true).
+		WithSMSTwilio("twilio-key", "+1234567890").
+		WithSMSTimeout(20 * time.Second).
+		Build()
+
+	if builderHub != nil {
+		defer builderHub.Close(context.Background())
+		fmt.Println("✅ Builder-pattern hub created")
+	}
+	fmt.Println()
+
+	// Part 3: Configuration Validation
+	fmt.Println("🔍 Part 3: Configuration Validation")
+	fmt.Println("---------------------------------")
+
+	// Valid configuration
+	validConfig := map[string]interface{}{
+		"feishu": map[string]interface{}{
+			"webhook_url": "https://example.com/webhook",
+			"secret":      "valid-secret",
+			"timeout":     30 * time.Second,
+		},
+		"email": map[string]interface{}{
+			"smtp_host": "smtp.company.com",
+			"smtp_port": 587,
+			"smtp_from": "notifications@company.com",
+		},
+	}
+
+	if validateConfiguration(validConfig) {
+		fmt.Println("✅ Configuration validation passed")
+	} else {
+		fmt.Println("❌ Configuration validation failed")
+	}
+
+	// Invalid configuration
+	invalidConfig := map[string]interface{}{
+		"feishu": map[string]interface{}{
+			"webhook_url": "", // Invalid: empty URL
+			"secret":      "secret",
+		},
+	}
+
+	if validateConfiguration(invalidConfig) {
+		fmt.Println("✅ Invalid config unexpectedly passed")
+	} else {
+		fmt.Println("❌ Invalid configuration correctly rejected")
+	}
+	fmt.Println()
+
+	// Part 4: Configuration Templates
+	fmt.Println("📋 Part 4: Configuration Templates")
+	fmt.Println("--------------------------------")
+
+	// Team communication template
+	if createTeamTemplate() != nil {
+		fmt.Println("✅ Team communication template created")
+	}
+
+	// Operations alert template
+	if createOpsTemplate() != nil {
+		fmt.Println("✅ Operations alert template created")
+	}
+
+	// Customer notification template
+	if createCustomerTemplate() != nil {
+		fmt.Println("✅ Customer notification template created")
+	}
+	fmt.Println()
+
+	// Part 5: Dynamic Configuration
+	fmt.Println("🔄 Part 5: Dynamic Configuration")
+	fmt.Println("------------------------------")
+
+	// Configuration that changes based on conditions
+	dynamicHub := createDynamicConfiguration()
+	if dynamicHub != nil {
+		defer dynamicHub.Close(context.Background())
+		fmt.Println("✅ Dynamic configuration created")
+	}
+	fmt.Println()
+
+	// Summary
+	fmt.Println("⚙️  Configuration Best Practices")
+	fmt.Println("==============================")
+	fmt.Println("✅ ENVIRONMENT SEPARATION:")
+	fmt.Println("   • Different configs for prod/dev/test")
+	fmt.Println("   • Environment variable usage")
+	fmt.Println("   • Secure credential management")
+	fmt.Println()
+	fmt.Println("✅ CONFIGURATION VALIDATION:")
+	fmt.Println("   • Early validation prevents runtime errors")
+	fmt.Println("   • Clear error messages for debugging")
+	fmt.Println("   • Type safety and required field checks")
+	fmt.Println()
+	fmt.Println("✅ CONFIGURATION TEMPLATES:")
+	fmt.Println("   • Reusable configuration patterns")
+	fmt.Println("   • Team-specific setups")
+	fmt.Println("   • Use case optimizations")
+	fmt.Println()
+	fmt.Println("✅ DYNAMIC CONFIGURATION:")
+	fmt.Println("   • Runtime configuration changes")
+	fmt.Println("   • Conditional platform selection")
+	fmt.Println("   • Feature flag integration")
+	fmt.Println()
+
+	fmt.Println("⚙️  Advanced Configuration Demo Complete!")
+}
+
+// Environment-based configuration functions
+
+func createProductionHub() notifyhub.Hub {
+	// Production uses environment variables for security
+	feishuWebhook := os.Getenv("FEISHU_WEBHOOK_URL")
+	feishuSecret := os.Getenv("FEISHU_SECRET")
+	emailHost := os.Getenv("SMTP_HOST")
+	emailUser := os.Getenv("SMTP_USER")
+	emailPass := os.Getenv("SMTP_PASS")
+	twilioKey := os.Getenv("TWILIO_API_KEY")
+
+	if feishuWebhook == "" {
+		feishuWebhook = "https://example.com/feishu/webhook" // Fallback for demo
+	}
+
+	hub, err := notifyhub.NewHub(
+		feishu.WithFeishu(feishuWebhook,
+			feishu.WithFeishuSecret(feishuSecret),
+			feishu.WithFeishuTimeout(30*time.Second),
+		),
+		email.WithEmail(getOrDefault(emailHost, "smtp.company.com"), 587,
+			"notifications@company.com",
+			email.WithEmailAuth(emailUser, emailPass),
+			email.WithEmailTLS(true),
+			email.WithEmailTimeout(45*time.Second),
+		),
+		sms.WithSMSTwilio(getOrDefault(twilioKey, "demo-key"), "+1234567890",
+			sms.WithSMSTimeout(30*time.Second),
+		),
+	)
+
+	if err != nil {
+		log.Printf("Failed to create production hub: %v", err)
+		return nil
+	}
+	return hub
+}
+
+func createDevelopmentHub() notifyhub.Hub {
+	// Development uses relaxed settings and mock endpoints
+	hub, err := notifyhub.NewHub(
+		feishu.WithFeishu("https://dev.example.com/feishu/webhook",
+			feishu.WithFeishuTimeout(60*time.Second), // Longer timeout for debugging
+		),
+		email.WithEmail("localhost", 1025, "dev@example.com", // MailHog for local dev
+			email.WithEmailTLS(false),
+			email.WithEmailTimeout(10*time.Second),
+		),
+	)
+
+	if err != nil {
+		log.Printf("Failed to create development hub: %v", err)
+		return nil
+	}
+	return hub
+}
+
+func createTestHub() notifyhub.Hub {
+	// Test uses mock configurations
+	hub, err := notifyhub.NewHub(
+		feishu.WithFeishu("https://test.example.com/webhook"),
+		email.WithEmail("test-smtp", 587, "test@example.com"),
+	)
+
+	if err != nil {
+		log.Printf("Failed to create test hub: %v", err)
+		return nil
+	}
+	return hub
+}
+
+// Configuration builder extension (conceptual)
+type ConfigBuilder struct {
+	feishuConfig map[string]interface{}
+	emailConfig  map[string]interface{}
+	smsConfig    map[string]interface{}
+}
+
+func NewConfigBuilder() *ConfigBuilder {
+	return &ConfigBuilder{
+		feishuConfig: make(map[string]interface{}),
+		emailConfig:  make(map[string]interface{}),
+		smsConfig:    make(map[string]interface{}),
+	}
+}
+
+func (c *ConfigBuilder) WithFeishu(webhookURL string) *ConfigBuilder {
+	c.feishuConfig["webhook_url"] = webhookURL
+	return c
+}
+
+func (c *ConfigBuilder) WithFeishuSecret(secret string) *ConfigBuilder {
+	c.feishuConfig["secret"] = secret
+	return c
+}
+
+func (c *ConfigBuilder) WithFeishuTimeout(timeout time.Duration) *ConfigBuilder {
+	c.feishuConfig["timeout"] = timeout
+	return c
+}
+
+func (c *ConfigBuilder) WithEmail(host string, port int, from string) *ConfigBuilder {
+	c.emailConfig["smtp_host"] = host
+	c.emailConfig["smtp_port"] = port
+	c.emailConfig["smtp_from"] = from
+	return c
+}
+
+func (c *ConfigBuilder) WithEmailAuth(username, password string) *ConfigBuilder {
+	c.emailConfig["smtp_username"] = username
+	c.emailConfig["smtp_password"] = password
+	return c
+}
+
+func (c *ConfigBuilder) WithEmailTLS(useTLS bool) *ConfigBuilder {
+	c.emailConfig["smtp_tls"] = useTLS
+	return c
+}
+
+func (c *ConfigBuilder) WithSMSTwilio(apiKey, from string) *ConfigBuilder {
+	c.smsConfig["provider"] = "twilio"
+	c.smsConfig["api_key"] = apiKey
+	c.smsConfig["from"] = from
+	return c
+}
+
+func (c *ConfigBuilder) WithSMSTimeout(timeout time.Duration) *ConfigBuilder {
+	c.smsConfig["timeout"] = timeout
+	return c
+}
+
+func (c *ConfigBuilder) Build() notifyhub.Hub {
+	var options []notifyhub.HubOption
+
+	if len(c.feishuConfig) > 0 {
+		options = append(options, feishu.WithFeishu(
+			c.feishuConfig["webhook_url"].(string),
+			func(config map[string]interface{}) {
+				for k, v := range c.feishuConfig {
+					if k != "webhook_url" {
+						config[k] = v
+					}
+				}
+			},
+		))
+	}
+
+	if len(c.emailConfig) > 0 {
+		options = append(options, email.WithEmail(
+			c.emailConfig["smtp_host"].(string),
+			c.emailConfig["smtp_port"].(int),
+			c.emailConfig["smtp_from"].(string),
+			func(config map[string]interface{}) {
+				for k, v := range c.emailConfig {
+					if k != "smtp_host" && k != "smtp_port" && k != "smtp_from" {
+						config[k] = v
+					}
+				}
+			},
+		))
+	}
+
+	if len(c.smsConfig) > 0 {
+		options = append(options, sms.WithSMS(
+			c.smsConfig["provider"].(string),
+			c.smsConfig["api_key"].(string),
+			c.smsConfig["from"].(string),
+			func(config map[string]interface{}) {
+				for k, v := range c.smsConfig {
+					if k != "provider" && k != "api_key" && k != "from" {
+						config[k] = v
+					}
+				}
+			},
+		))
+	}
+
+	hub, err := notifyhub.NewHub(options...)
+	if err != nil {
+		log.Printf("Failed to build hub: %v", err)
+		return nil
+	}
+	return hub
+}
+
+// Configuration validation
+func validateConfiguration(config map[string]interface{}) bool {
+	// Validate Feishu configuration
+	if feishuConfig, ok := config["feishu"].(map[string]interface{}); ok {
+		if webhookURL, exists := feishuConfig["webhook_url"].(string); !exists || webhookURL == "" {
+			fmt.Println("   ❌ Feishu webhook_url is required and cannot be empty")
+			return false
+		}
+	}
+
+	// Validate Email configuration
+	if emailConfig, ok := config["email"].(map[string]interface{}); ok {
+		if host, exists := emailConfig["smtp_host"].(string); !exists || host == "" {
+			fmt.Println("   ❌ Email smtp_host is required")
+			return false
+		}
+		if _, exists := emailConfig["smtp_port"].(int); !exists {
+			fmt.Println("   ❌ Email smtp_port is required")
+			return false
+		}
+	}
+
+	return true
+}
+
+// Configuration templates
+func createTeamTemplate() notifyhub.Hub {
+	// Team communication focused configuration
+	hub, _ := notifyhub.NewHub(
+		feishu.WithFeishu("https://team.example.com/webhook",
+			feishu.WithFeishuTimeout(15*time.Second), // Fast for team communication
+		),
+	)
+	return hub
+}
+
+func createOpsTemplate() notifyhub.Hub {
+	// Operations alerts with multiple channels
+	hub, _ := notifyhub.NewHub(
+		feishu.WithFeishu("https://ops.example.com/webhook"),
+		email.WithEmail("smtp.company.com", 587, "ops@company.com"),
+		sms.WithSMSTwilio("ops-twilio-key", "+1234567890"),
+	)
+	return hub
+}
+
+func createCustomerTemplate() notifyhub.Hub {
+	// Customer notifications (email + SMS)
+	hub, _ := notifyhub.NewHub(
+		email.WithEmail("smtp.mailgun.com", 587, "noreply@company.com",
+			email.WithEmailAuth("api", "mailgun-key"),
+		),
+		sms.WithSMSTwilio("customer-twilio-key", "+1234567890"),
+	)
+	return hub
+}
+
+// Dynamic configuration
+func createDynamicConfiguration() notifyhub.Hub {
+	environment := getOrDefault(os.Getenv("ENVIRONMENT"), "development")
+
+	var options []notifyhub.HubOption
+
+	// Always include Feishu for team communication
+	options = append(options, feishu.WithFeishu("https://example.com/webhook"))
+
+	// Production gets all platforms
+	if environment == "production" {
+		options = append(options,
+			email.WithEmail("smtp.company.com", 587, "prod@company.com"),
+			sms.WithSMSTwilio("prod-twilio", "+1234567890"),
+		)
+	}
+
+	// Development gets limited platforms
+	if environment == "development" {
+		options = append(options,
+			email.WithEmail("localhost", 1025, "dev@example.com"),
+		)
+	}
+
+	hub, err := notifyhub.NewHub(options...)
+	if err != nil {
+		log.Printf("Failed to create dynamic hub: %v", err)
+		return nil
+	}
+	return hub
+}
+
+// Utility functions
+func getOrDefault(value, defaultValue string) string {
+	if value == "" {
+		return defaultValue
+	}
+	return value
+}

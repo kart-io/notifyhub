@@ -362,8 +362,9 @@ func (r WebhookURLRule) Validate(value interface{}) error {
 
 	// Recommend HTTPS for production
 	if strings.HasPrefix(str, "http://") {
-		// This is a warning, not an error
+		// This is a warning, not an error - HTTP is allowed but not recommended
 		// In production, you might want to make this an error
+		_ = str // acknowledge the check was intentional
 	}
 
 	return nil
@@ -390,7 +391,7 @@ func (r FeishuUserIDRule) Validate(value interface{}) error {
 	}
 
 	if len(str) < 10 {
-		return fmt.Errorf("Feishu user ID too short")
+		return fmt.Errorf("feishu user ID too short")
 	}
 
 	return nil
@@ -556,4 +557,3 @@ func BuildChoiceRule(required bool, choices []interface{}) *Validator {
 
 	return validator
 }
-

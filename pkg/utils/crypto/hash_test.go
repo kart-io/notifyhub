@@ -278,7 +278,7 @@ func BenchmarkHashSHA256(b *testing.B) {
 	b.ResetTimer()
 
 	for i := 0; i < b.N; i++ {
-		hasher.Hash(data)
+		_, _ = hasher.Hash(data)
 	}
 }
 
@@ -288,7 +288,7 @@ func BenchmarkHashMD5(b *testing.B) {
 	b.ResetTimer()
 
 	for i := 0; i < b.N; i++ {
-		hasher.Hash(data)
+		_, _ = hasher.Hash(data)
 	}
 }
 
@@ -298,7 +298,7 @@ func BenchmarkHashSHA512(b *testing.B) {
 	b.ResetTimer()
 
 	for i := 0; i < b.N; i++ {
-		hasher.Hash(data)
+		_, _ = hasher.Hash(data)
 	}
 }
 

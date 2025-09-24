@@ -1,0 +1,349 @@
+// Package main demonstrates creating a Microsoft Teams platform integration
+// This shows how to create external platforms for enterprise communication tools
+package main
+
+import (
+	"context"
+	"fmt"
+	"log"
+	"time"
+
+	"github.com/kart-io/notifyhub/examples/external/teams-platform/teams"
+	"github.com/kart-io/notifyhub/pkg/notifyhub"
+)
+
+func main() {
+	fmt.Println("🟦 Microsoft Teams Platform Integration Demo")
+	fmt.Println("===========================================")
+	fmt.Println()
+	fmt.Println("This demo shows how to create a Microsoft Teams platform")
+	fmt.Println("integration for enterprise communication scenarios.")
+	fmt.Println()
+
+	// Step 1: Platform Registration
+	fmt.Println("📋 Step 1: Platform Registration")
+	fmt.Println("------------------------------")
+	fmt.Println("Available platforms:")
+	showAvailablePlatforms()
+	fmt.Println()
+
+	// Step 2: Create Hub with Teams Integration
+	fmt.Println("🟦 Step 2: Teams Integration")
+	fmt.Println("--------------------------")
+
+	hub, err := notifyhub.NewHub(
+		teams.WithTeams("https://outlook.office.com/webhook/demo",
+			teams.WithTeamsTimeout(45*time.Second),
+		),
+	)
+	if err != nil {
+		log.Fatalf("❌ Failed to create Teams hub: %v", err)
+	}
+	defer func() { _ = hub.Close(context.Background()) }()
+
+	fmt.Println("✅ Microsoft Teams platform configured")
+	fmt.Printf("   🟦 Webhook: outlook.office.com\n")
+	fmt.Printf("   ⏱️  Timeout: 45 seconds\n")
+	fmt.Printf("   📧 Format: MessageCard\n")
+	fmt.Println()
+
+	ctx := context.Background()
+
+	// Step 3: Send Basic MessageCard
+	fmt.Println("📤 Step 3: Basic Teams MessageCard")
+	fmt.Println("---------------------------------")
+
+	basicMsg := notifyhub.NewMessage("Teams Integration Test").
+		WithBody("This is a basic MessageCard sent to Microsoft Teams.").
+		WithMetadata("service", "notifyhub").
+		WithMetadata("environment", "demo").
+		ToTarget(notifyhub.NewTarget("webhook", "", "teams")).
+		Build()
+
+	receipt, err := hub.Send(ctx, basicMsg)
+	if err != nil {
+		fmt.Printf("❌ Basic message failed: %v\n", err)
+	} else {
+		fmt.Printf("✅ Basic MessageCard sent (Duration: %dms)\n",
+			receipt.Results[0].Duration.Milliseconds())
+	}
+	fmt.Println()
+
+	// Step 4: Rich MessageCard with Facts
+	fmt.Println("📊 Step 4: Rich MessageCard with Facts")
+	fmt.Println("------------------------------------")
+
+	richMsg := notifyhub.NewAlert("System Performance Alert").
+		WithBody("API response times have exceeded acceptable thresholds.").
+		WithMetadata("service", "user-api").
+		WithMetadata("environment", "production").
+		WithMetadata("severity", "high").
+		WithVariable("response_time", "1.2s").
+		WithVariable("threshold", "500ms").
+		WithVariable("affected_users", "1,247").
+		ToTarget(notifyhub.NewTarget("webhook", "", "teams")).
+		Build()
+
+	if _, err := hub.Send(ctx, richMsg); err != nil {
+		fmt.Printf("❌ Rich MessageCard failed: %v\n", err)
+	} else {
+		fmt.Printf("✅ Rich MessageCard with facts sent\n")
+	}
+	fmt.Println()
+
+	// Step 5: Custom MessageCard with Actions
+	fmt.Println("🔘 Step 5: MessageCard with Actions")
+	fmt.Println("---------------------------------")
+
+	actionMsg := notifyhub.NewUrgent("Deployment Approval Required").
+		WithBody("Production deployment is ready and requires approval.").
+		WithPlatformData(map[string]interface{}{
+			"teams_card": map[string]interface{}{
+				"@type":      "MessageCard",
+				"@context":   "http://schema.org/extensions",
+				"summary":    "Deployment Approval",
+				"title":      "🚀 Production Deployment Ready",
+				"text":       "Release v2.1.4 is ready for production deployment.",
+				"themeColor": "0076D7",
+				"sections": []map[string]interface{}{
+					{
+						"activityTitle":    "Release Information",
+						"activitySubtitle": "Version 2.1.4",
+						"facts": []map[string]interface{}{
+							{"name": "Author", "value": "DevOps Team"},
+							{"name": "Release Date", "value": time.Now().Format("2006-01-02")},
+							{"name": "Features", "value": "5 new features, 12 bug fixes"},
+							{"name": "Tests", "value": "All 847 tests passing"},
+						},
+						"markdown": true,
+					},
+				},
+				"potentialAction": []map[string]interface{}{
+					{
+						"@type": "ActionCard",
+						"name":  "Deployment Actions",
+						"actions": []map[string]interface{}{
+							{
+								"@type":  "HttpPOST",
+								"name":   "✅ Approve",
+								"target": "https://api.example.com/deploy/approve",
+							},
+							{
+								"@type":  "HttpPOST",
+								"name":   "❌ Reject",
+								"target": "https://api.example.com/deploy/reject",
+							},
+						},
+					},
+					{
+						"@type": "OpenUri",
+						"name":  "📋 View Release Notes",
+						"targets": []map[string]interface{}{
+							{
+								"os":  "default",
+								"uri": "https://releases.example.com/v2.1.4",
+							},
+						},
+					},
+				},
+			},
+		}).
+		ToTarget(notifyhub.NewTarget("webhook", "", "teams")).
+		Build()
+
+	if _, err := hub.Send(ctx, actionMsg); err != nil {
+		fmt.Printf("❌ Action MessageCard failed: %v\n", err)
+	} else {
+		fmt.Printf("✅ Interactive MessageCard with actions sent\n")
+	}
+	fmt.Println()
+
+	// Step 6: Priority-Based Color Coding
+	fmt.Println("🎨 Step 6: Priority-Based Color Coding")
+	fmt.Println("------------------------------------")
+
+	priorities := []struct {
+		level   string
+		message *notifyhub.Message
+		color   string
+	}{
+		{
+			level: "Low Priority",
+			color: "Gray",
+			message: notifyhub.NewMessage("Routine Maintenance").
+				WithBody("Scheduled maintenance will occur tonight.").
+				Build(),
+		},
+		{
+			level: "Normal Priority",
+			color: "Green",
+			message: notifyhub.NewMessage("Feature Deployment").
+				WithBody("New dashboard features are now available.").
+				Build(),
+		},
+		{
+			level: "Alert Priority",
+			color: "Orange",
+			message: notifyhub.NewAlert("Performance Warning").
+				WithBody("Database queries are running slower than usual.").
+				Build(),
+		},
+		{
+			level: "Urgent Priority",
+			color: "Red",
+			message: notifyhub.NewUrgent("Security Incident").
+				WithBody("Suspicious activity detected in user authentication.").
+				Build(),
+		},
+	}
+
+	for _, p := range priorities {
+		p.message.Targets = append(p.message.Targets, notifyhub.NewTarget("webhook", "", "teams"))
+
+		if _, err := hub.Send(ctx, p.message); err != nil {
+			fmt.Printf("❌ %s failed: %v\n", p.level, err)
+		} else {
+			fmt.Printf("✅ %s sent (%s theme)\n", p.level, p.color)
+		}
+
+		time.Sleep(500 * time.Millisecond) // Rate limit messages
+	}
+	fmt.Println()
+
+	// Step 7: Enterprise Use Cases
+	fmt.Println("🏢 Step 7: Enterprise Use Cases")
+	fmt.Println("-----------------------------")
+
+	useCases := map[string]*notifyhub.Message{
+		"IT Operations": notifyhub.NewAlert("Server Maintenance").
+			WithBody("Planned server maintenance starting at 2:00 AM EST.").
+			WithPlatformData(map[string]interface{}{
+				"teams_card": map[string]interface{}{
+					"@type":      "MessageCard",
+					"@context":   "http://schema.org/extensions",
+					"summary":    "IT Operations Alert",
+					"title":      "🔧 Scheduled Maintenance",
+					"text":       "Production servers will be offline for maintenance.",
+					"themeColor": "FF6D00",
+					"sections": []map[string]interface{}{
+						{
+							"activityTitle": "Maintenance Window",
+							"facts": []map[string]interface{}{
+								{"name": "Start Time", "value": "2:00 AM EST"},
+								{"name": "Duration", "value": "2 hours"},
+								{"name": "Affected Services", "value": "Web API, Database"},
+								{"name": "Impact", "value": "Service unavailable"},
+							},
+						},
+					},
+				},
+			}).
+			Build(),
+
+		"Security Alert": notifyhub.NewUrgent("Security Incident").
+			WithBody("Multiple failed login attempts detected from suspicious IP.").
+			WithPlatformData(map[string]interface{}{
+				"teams_card": map[string]interface{}{
+					"@type":      "MessageCard",
+					"@context":   "http://schema.org/extensions",
+					"summary":    "Security Alert",
+					"title":      "🚨 Security Incident Detected",
+					"text":       "Immediate attention required for security event.",
+					"themeColor": "FF0000",
+					"sections": []map[string]interface{}{
+						{
+							"activityTitle": "Incident Details",
+							"facts": []map[string]interface{}{
+								{"name": "Event Type", "value": "Brute Force Attack"},
+								{"name": "Source IP", "value": "203.0.113.42"},
+								{"name": "Target Account", "value": "admin@company.com"},
+								{"name": "Attempts", "value": "127 in 5 minutes"},
+								{"name": "Status", "value": "IP Blocked"},
+							},
+						},
+					},
+				},
+			}).
+			Build(),
+
+		"Business Metrics": notifyhub.NewMessage("Daily KPI Report").
+			WithBody("Daily business metrics and performance indicators.").
+			WithPlatformData(map[string]interface{}{
+				"teams_card": map[string]interface{}{
+					"@type":      "MessageCard",
+					"@context":   "http://schema.org/extensions",
+					"summary":    "Daily Report",
+					"title":      "📈 Daily Business Metrics",
+					"text":       "Key performance indicators for today.",
+					"themeColor": "00AA00",
+					"sections": []map[string]interface{}{
+						{
+							"activityTitle": "Performance Metrics",
+							"facts": []map[string]interface{}{
+								{"name": "Active Users", "value": "2,847"},
+								{"name": "Revenue", "value": "$42,150"},
+								{"name": "Conversions", "value": "147 (3.2%)"},
+								{"name": "Support Tickets", "value": "23 (resolved: 18)"},
+								{"name": "System Uptime", "value": "99.97%"},
+							},
+						},
+					},
+				},
+			}).
+			Build(),
+	}
+
+	for useCase, msg := range useCases {
+		msg.Targets = append(msg.Targets, notifyhub.NewTarget("webhook", "", "teams"))
+		if _, err := hub.Send(ctx, msg); err != nil {
+			fmt.Printf("❌ %s failed: %v\n", useCase, err)
+		} else {
+			fmt.Printf("✅ %s MessageCard sent\n", useCase)
+		}
+		time.Sleep(500 * time.Millisecond)
+	}
+	fmt.Println()
+
+	// Step 8: Teams Platform Features
+	fmt.Println("🟦 Step 8: Teams Platform Features")
+	fmt.Println("---------------------------------")
+	fmt.Println("The Microsoft Teams platform integration provides:")
+	fmt.Println()
+	fmt.Println("📧 MESSAGECARD FEATURES:")
+	fmt.Println("   • Rich MessageCard format with sections")
+	fmt.Println("   • Color-coded themes based on priority")
+	fmt.Println("   • Facts display for structured data")
+	fmt.Println("   • Summary and detailed text content")
+	fmt.Println()
+	fmt.Println("🔘 INTERACTIVE ELEMENTS:")
+	fmt.Println("   • Action buttons for user interaction")
+	fmt.Println("   • HTTP POST and OpenUri actions")
+	fmt.Println("   • Multi-choice action cards")
+	fmt.Println("   • External link integration")
+	fmt.Println()
+	fmt.Println("🏢 ENTERPRISE INTEGRATION:")
+	fmt.Println("   • Office 365 connector webhooks")
+	fmt.Println("   • Channel-specific messaging")
+	fmt.Println("   • Enterprise security compliance")
+	fmt.Println("   • Teams app integration ready")
+	fmt.Println()
+
+	fmt.Println("🟦 Microsoft Teams Platform Integration Demo Complete!")
+	fmt.Println()
+	fmt.Println("This external platform demonstrates:")
+	fmt.Println("• Full MessageCard schema implementation")
+	fmt.Println("• Enterprise-grade rich content formatting")
+	fmt.Println("• Interactive actions and user engagement")
+	fmt.Println("• Seamless NotifyHub architecture integration")
+}
+
+func showAvailablePlatforms() {
+	platforms := notifyhub.GetAvailablePlatforms()
+	for _, platform := range platforms {
+		platformType := "Built-in"
+		if platform.IsExtension {
+			platformType = "External"
+		}
+		fmt.Printf("  📦 %s (%s)\n", platform.Name, platformType)
+	}
+}

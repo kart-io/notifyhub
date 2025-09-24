@@ -303,7 +303,7 @@ func TestRateHelpers(t *testing.T) {
 
 func TestBurstLimiter(t *testing.T) {
 	rate := PerSecond(100) // Higher rate to ensure token bucket allows requests
-	burst := 10           // Higher burst for token bucket
+	burst := 10            // Higher burst for token bucket
 	maxBurstSize := 3
 	burstWindow := time.Second
 

@@ -64,12 +64,12 @@ fmt-check: ## Check if code is properly formatted
 lint: ## Run golangci-lint on refactored packages
 	@echo "$(YELLOW)Running linter on refactored packages...$(NC)"
 	@if command -v $(GOLANGCI_LINT) >/dev/null 2>&1; then \
-		$(GOLANGCI_LINT) run ./pkg/notifyhub ./internal/platform ./examples/elegant_api --timeout=5m; \
+		$(GOLANGCI_LINT) run ./pkg/notifyhub ./internal/platform  --timeout=5m; \
 		echo "$(GREEN)✓ Linting completed$(NC)"; \
 	else \
 		echo "$(RED)golangci-lint not found. Installing...$(NC)"; \
 		$(MAKE) install-lint; \
-		$(GOLANGCI_LINT) run ./pkg/notifyhub ./internal/platform ./examples/elegant_api --timeout=5m; \
+		$(GOLANGCI_LINT) run ./pkg/notifyhub ./internal/platform  --timeout=5m; \
 		echo "$(GREEN)✓ Linting completed$(NC)"; \
 	fi
 

@@ -9,11 +9,11 @@ import (
 
 // SlidingWindowLimiter implements a sliding window rate limiter
 type SlidingWindowLimiter struct {
-	mu        sync.Mutex
-	limit     int
-	window    time.Duration
-	requests  []time.Time
-	clock     Clock
+	mu       sync.Mutex
+	limit    int
+	window   time.Duration
+	requests []time.Time
+	clock    Clock
 }
 
 // NewSlidingWindowLimiter creates a new sliding window rate limiter

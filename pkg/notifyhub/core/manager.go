@@ -75,12 +75,12 @@ func (m *PublicPlatformManager) ListSenders() []string {
 
 // LocalSendResult is a local copy of SendResult to avoid import issues
 type LocalSendResult struct {
-	Target    platform.Target            `json:"target"`
-	Success   bool                       `json:"success"`
-	MessageID string                     `json:"message_id,omitempty"`
-	Error     string                     `json:"error,omitempty"`
-	Response  string                     `json:"response,omitempty"`
-	Metadata  map[string]interface{}     `json:"metadata,omitempty"`
+	Target    platform.Target        `json:"target"`
+	Success   bool                   `json:"success"`
+	MessageID string                 `json:"message_id,omitempty"`
+	Error     string                 `json:"error,omitempty"`
+	Response  string                 `json:"response,omitempty"`
+	Metadata  map[string]interface{} `json:"metadata,omitempty"`
 }
 
 // SendToAll sends a message to all targets across all relevant platforms

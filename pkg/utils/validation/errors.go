@@ -8,10 +8,10 @@ import (
 
 // ValidationError represents a validation error
 type ValidationError struct {
-	Field   string `json:"field"`
+	Field   string      `json:"field"`
 	Value   interface{} `json:"value,omitempty"`
-	Rule    string `json:"rule"`
-	Message string `json:"message"`
+	Rule    string      `json:"rule"`
+	Message string      `json:"message"`
 }
 
 // Error implements the error interface
@@ -310,9 +310,9 @@ func (e MessageValidationError) Error() string {
 
 // TargetValidationError represents a target validation error
 type TargetValidationError struct {
-	TargetType string `json:"target_type"`
+	TargetType  string `json:"target_type"`
 	TargetValue string `json:"target_value"`
-	Message    string `json:"message"`
+	Message     string `json:"message"`
 }
 
 // Error implements the error interface

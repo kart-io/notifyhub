@@ -124,10 +124,10 @@ func TestPhoneRule(t *testing.T) {
 
 	// Test invalid phone numbers
 	invalidPhones := []string{
-		"1234567890",    // missing +
-		"+0123456789",   // starts with 0
-		"+1",            // too short (need at least 2 digits)
-		"invalid",       // not numeric
+		"1234567890",  // missing +
+		"+0123456789", // starts with 0
+		"+1",          // too short (need at least 2 digits)
+		"invalid",     // not numeric
 	}
 
 	for _, phone := range invalidPhones {
@@ -285,9 +285,9 @@ func TestValidator(t *testing.T) {
 
 	// Test invalid data
 	invalidData := map[string]interface{}{
-		"name":  "J",                    // too short
-		"email": "invalid-email",        // invalid email
-		"age":   15,                     // too young
+		"name":  "J",             // too short
+		"email": "invalid-email", // invalid email
+		"age":   15,              // too young
 	}
 
 	result = validator.Validate(invalidData)
@@ -491,6 +491,6 @@ func BenchmarkEmailRule(b *testing.B) {
 
 	b.ResetTimer()
 	for i := 0; i < b.N; i++ {
-		rule.Validate(email)
+		_ = rule.Validate(email)
 	}
 }

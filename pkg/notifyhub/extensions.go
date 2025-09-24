@@ -220,9 +220,9 @@ func AutoDetectAndRegister(platformName string, config map[string]interface{}, c
 
 // GetPlatformInfo returns information about all registered platforms
 type PlatformInfo struct {
-	Name         string   `json:"name"`
-	IsBuiltIn    bool     `json:"is_built_in"`
-	IsExtension  bool     `json:"is_extension"`
+	Name         string                `json:"name"`
+	IsBuiltIn    bool                  `json:"is_built_in"`
+	IsExtension  bool                  `json:"is_extension"`
 	Capabilities platform.Capabilities `json:"capabilities,omitempty"`
 }
 

@@ -11,7 +11,6 @@ import (
 	"github.com/kart-io/notifyhub/pkg/notifyhub/platform"
 	"github.com/kart-io/notifyhub/pkg/notifyhub/receipt"
 	"github.com/kart-io/notifyhub/pkg/notifyhub/target"
-
 	// Note: Internal platform registration is handled during NewHub creation
 	// No need to import internal packages here
 )
