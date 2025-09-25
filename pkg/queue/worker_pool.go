@@ -13,22 +13,22 @@ import (
 
 // workerPool manages multiple workers for processing queue messages
 type workerPool struct {
-	queue       Queue
-	handler     MessageHandler
-	workers     map[string]Worker
-	workerCount int32
-	minWorkers  int
-	maxWorkers  int
-	scalePolicy *ScalePolicy
-	running     bool
-	metrics     *MetricsCollector
+	queue        Queue
+	handler      MessageHandler
+	workers      map[string]Worker
+	workerCount  int32
+	minWorkers   int
+	maxWorkers   int
+	scalePolicy  *ScalePolicy
+	running      bool
+	metrics      *MetricsCollector
 	healthErrors []HealthError
-	mutex       sync.RWMutex
-	stopCh      chan struct{}
-	wg          sync.WaitGroup
-	logger      logger.Logger
-	stats       *PoolStats
-	startTime   time.Time
+	mutex        sync.RWMutex
+	stopCh       chan struct{}
+	wg           sync.WaitGroup
+	logger       logger.Logger
+	stats        *PoolStats
+	startTime    time.Time
 }
 
 // PoolStats contains worker pool statistics
@@ -55,11 +55,11 @@ func NewWorkerPool(queue Queue, handler MessageHandler, minWorkers, maxWorkers i
 	}
 
 	return &workerPool{
-		queue:       queue,
-		handler:     handler,
-		workers:     make(map[string]Worker),
-		minWorkers:  minWorkers,
-		maxWorkers:  maxWorkers,
+		queue:      queue,
+		handler:    handler,
+		workers:    make(map[string]Worker),
+		minWorkers: minWorkers,
+		maxWorkers: maxWorkers,
 		scalePolicy: &ScalePolicy{
 			ScaleUpThreshold:   50,
 			ScaleDownThreshold: 10,
@@ -67,10 +67,10 @@ func NewWorkerPool(queue Queue, handler MessageHandler, minWorkers, maxWorkers i
 			ScaleDownStep:      1,
 			ScaleInterval:      10 * time.Second,
 		},
-		stopCh:  make(chan struct{}),
-		logger:  log,
-		stats:   &PoolStats{},
-		metrics: NewMetricsCollector(),
+		stopCh:    make(chan struct{}),
+		logger:    log,
+		stats:     &PoolStats{},
+		metrics:   NewMetricsCollector(),
 		startTime: time.Now(),
 	}
 }

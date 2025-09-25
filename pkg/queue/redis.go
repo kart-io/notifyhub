@@ -9,8 +9,8 @@ import (
 	"sync/atomic"
 	"time"
 
-	"github.com/redis/go-redis/v9"
 	"github.com/kart-io/notifyhub/pkg/logger"
+	"github.com/redis/go-redis/v9"
 )
 
 // redisQueue implements a Redis-backed queue with priority and delay support

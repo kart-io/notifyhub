@@ -7,22 +7,22 @@ import (
 )
 
 type HealthChecker struct {
-	queue       ObservableQueue
-	workerPool  WorkerPool
+	queue         ObservableQueue
+	workerPool    WorkerPool
 	checkInterval time.Duration
-	thresholds  HealthThresholds
-	status      *HealthStatus
-	mutex       sync.RWMutex
-	stopCh      chan struct{}
-	wg          sync.WaitGroup
+	thresholds    HealthThresholds
+	status        *HealthStatus
+	mutex         sync.RWMutex
+	stopCh        chan struct{}
+	wg            sync.WaitGroup
 }
 
 type HealthThresholds struct {
-	MaxQueueSize       int
-	MaxErrorRate       float64
-	DegradedErrorRate  float64
-	MaxProcessingTime  time.Duration
-	MinWorkers         int
+	MaxQueueSize      int
+	MaxErrorRate      float64
+	DegradedErrorRate float64
+	MaxProcessingTime time.Duration
+	MinWorkers        int
 }
 
 func NewHealthChecker(queue ObservableQueue, pool WorkerPool, interval time.Duration) *HealthChecker {

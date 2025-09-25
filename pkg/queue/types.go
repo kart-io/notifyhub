@@ -157,11 +157,11 @@ type QueueMetrics struct {
 
 // WorkerMetrics contains worker pool performance metrics
 type WorkerMetrics struct {
-	ActiveWorkers   int           `json:"active_workers"`   // 活跃工作协程数
-	IdleWorkers     int           `json:"idle_workers"`     // 空闲工作协程数
-	ProcessedCount  int64         `json:"processed_count"`  // 总处理消息数
-	ErrorCount      int64         `json:"error_count"`      // 总错误数
-	AverageTime     time.Duration `json:"average_time"`     // 平均处理时间
+	ActiveWorkers  int           `json:"active_workers"`  // 活跃工作协程数
+	IdleWorkers    int           `json:"idle_workers"`    // 空闲工作协程数
+	ProcessedCount int64         `json:"processed_count"` // 总处理消息数
+	ErrorCount     int64         `json:"error_count"`     // 总错误数
+	AverageTime    time.Duration `json:"average_time"`    // 平均处理时间
 }
 
 // HealthStatus represents system health status
@@ -176,10 +176,10 @@ type HealthStatus struct {
 
 // HealthError represents a health check error
 type HealthError struct {
-	Code        string    `json:"code"`
-	Message     string    `json:"message"`
-	Timestamp   time.Time `json:"timestamp"`
-	Severity    string    `json:"severity"` // "warning" | "error" | "critical"
+	Code      string    `json:"code"`
+	Message   string    `json:"message"`
+	Timestamp time.Time `json:"timestamp"`
+	Severity  string    `json:"severity"` // "warning" | "error" | "critical"
 }
 
 // ScalePolicy defines worker pool scaling behavior

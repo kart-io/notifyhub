@@ -9,13 +9,13 @@ import (
 
 // MetricsCollector collects and manages queue metrics
 type MetricsCollector struct {
-	queueMetrics     *QueueMetrics
-	workerMetrics    *WorkerMetrics
-	healthStatus     *HealthStatus
-	startTime        time.Time
-	lastProcessTime  time.Time
-	subscribers      map[string][]func(msg *Message)
-	mutex            sync.RWMutex
+	queueMetrics    *QueueMetrics
+	workerMetrics   *WorkerMetrics
+	healthStatus    *HealthStatus
+	startTime       time.Time
+	lastProcessTime time.Time
+	subscribers     map[string][]func(msg *Message)
+	mutex           sync.RWMutex
 
 	// Internal counters
 	totalProcessingTime int64 // in nanoseconds
@@ -38,11 +38,11 @@ func NewMetricsCollector() *MetricsCollector {
 			ThroughputQPS:   0,
 		},
 		workerMetrics: &WorkerMetrics{
-			ActiveWorkers:   0,
-			IdleWorkers:     0,
-			ProcessedCount:  0,
-			ErrorCount:      0,
-			AverageTime:     0,
+			ActiveWorkers:  0,
+			IdleWorkers:    0,
+			ProcessedCount: 0,
+			ErrorCount:     0,
+			AverageTime:    0,
 		},
 		healthStatus: &HealthStatus{
 			Status:      "healthy",
@@ -156,11 +156,11 @@ func (mc *MetricsCollector) GetWorkerMetrics() *WorkerMetrics {
 	defer mc.mutex.RUnlock()
 
 	return &WorkerMetrics{
-		ActiveWorkers:   mc.workerMetrics.ActiveWorkers,
-		IdleWorkers:     mc.workerMetrics.IdleWorkers,
-		ProcessedCount:  atomic.LoadInt64(&mc.workerMetrics.ProcessedCount),
-		ErrorCount:      atomic.LoadInt64(&mc.workerMetrics.ErrorCount),
-		AverageTime:     mc.workerMetrics.AverageTime,
+		ActiveWorkers:  mc.workerMetrics.ActiveWorkers,
+		IdleWorkers:    mc.workerMetrics.IdleWorkers,
+		ProcessedCount: atomic.LoadInt64(&mc.workerMetrics.ProcessedCount),
+		ErrorCount:     atomic.LoadInt64(&mc.workerMetrics.ErrorCount),
+		AverageTime:    mc.workerMetrics.AverageTime,
 	}
 }
 
@@ -223,7 +223,9 @@ func (mc *MetricsCollector) notifySubscribers(event string, msg *Message) {
 		go func(cb func(msg *Message), m *Message) {
 			defer func() {
 				if r := recover(); r != nil {
-					// Log panic but don't crash
+					// Recover from callback panic to avoid crashing the queue
+					// In production, this should be properly logged
+					_ = r // Acknowledge the recovery value
 				}
 			}()
 			cb(m)

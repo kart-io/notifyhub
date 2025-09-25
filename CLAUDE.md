@@ -51,6 +51,7 @@ NotifyHub is a unified notification system built with a modular, plugin-based ar
 ### Key Design Patterns
 
 **Builder Pattern with Functional Options**: Configuration uses functional options pattern
+
 ```go
 hub, err := client.New(
     config.WithFeishu("webhook", "secret"),
@@ -59,11 +60,13 @@ hub, err := client.New(
 ```
 
 **Interface-Based Plugin System**: All major components implement interfaces for extensibility
+
 - `Notifier` interface for platform adapters
 - `Queue` interface for different queue backends
 - `Logger` interface for different logging backends
 
 **Message-Target Abstraction**: Unified message structure with platform-agnostic targets
+
 ```go
 type Message struct {
     Title    string
@@ -107,25 +110,33 @@ type Message struct {
 ## Technical Implementation Details
 
 ### Queue System Design
+
 The queue system supports multiple backends with pluggable interfaces:
+
 - **SimpleQueue**: In-memory with buffered channels
 - **RedisQueue**: Redis Streams with consumer groups
 - **MessageScheduler**: Min-heap for delayed message scheduling
 
 ### Rate Limiting Implementation
+
 Token bucket algorithm implementation in `/internal/ratelimiter.go`:
+
 - Configurable refill rates and capacity
 - Thread-safe with mutex protection
 - Timeout support for graceful handling
 
 ### Retry Policy Architecture
+
 Sophisticated retry system with multiple strategies:
+
 - Exponential backoff with configurable multiplier
 - Jitter to prevent thundering herd problems
 - Maximum retry limits and custom policies
 
 ### OpenTelemetry Integration
+
 Full observability stack in `/observability/telemetry.go`:
+
 - OTLP exporter configuration
 - Distributed tracing spans for message operations
 - Metrics collection (counters, histograms, gauges)
@@ -163,6 +174,7 @@ Test files follow Go conventions (`*_test.go`) and are distributed across packag
 ## Version Information
 
 Current implementation version: v1.2.0 with advanced features:
+
 - Delay message scheduling (FR12)
 - Rate limiting (NFR7)
 - Redis queue adapter

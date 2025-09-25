@@ -63,7 +63,11 @@ func TestMemoryQueue(t *testing.T) {
 
 	t.Run("Capacity Limit", func(t *testing.T) {
 		q := NewMemoryQueue(2, logger.Discard)
-		defer q.Close()
+		defer func() {
+			if err := q.Close(); err != nil {
+				t.Errorf("Failed to close queue: %v", err)
+			}
+		}()
 
 		ctx := context.Background()
 
@@ -86,7 +90,11 @@ func TestMemoryQueue(t *testing.T) {
 
 	t.Run("Priority Queue", func(t *testing.T) {
 		q := NewMemoryQueue(10, logger.Discard)
-		defer q.Close()
+		defer func() {
+			if err := q.Close(); err != nil {
+				t.Errorf("Failed to close queue: %v", err)
+			}
+		}()
 
 		ctx := context.Background()
 
@@ -129,7 +137,11 @@ func TestMemoryQueue(t *testing.T) {
 
 	t.Run("Delayed Messages", func(t *testing.T) {
 		q := NewMemoryQueue(10, logger.Discard)
-		defer q.Close()
+		defer func() {
+			if err := q.Close(); err != nil {
+				t.Errorf("Failed to close queue: %v", err)
+			}
+		}()
 
 		ctx := context.Background()
 
@@ -167,7 +179,11 @@ func TestMemoryQueue(t *testing.T) {
 
 	t.Run("Concurrent Operations", func(t *testing.T) {
 		q := NewMemoryQueue(100, logger.Discard)
-		defer q.Close()
+		defer func() {
+			if err := q.Close(); err != nil {
+				t.Errorf("Failed to close queue: %v", err)
+			}
+		}()
 
 		ctx := context.Background()
 		var wg sync.WaitGroup
@@ -182,7 +198,9 @@ func TestMemoryQueue(t *testing.T) {
 					ID:      fmt.Sprintf("msg-%d-%d", id, time.Now().UnixNano()),
 					Payload: id,
 				}
-				q.Enqueue(ctx, msg)
+				if err := q.Enqueue(ctx, msg); err != nil {
+					t.Logf("Failed to enqueue: %v", err)
+				}
 			}(i)
 		}
 
@@ -214,13 +232,19 @@ func TestMemoryQueue(t *testing.T) {
 
 	t.Run("Clear Operation", func(t *testing.T) {
 		q := NewMemoryQueue(10, logger.Discard)
-		defer q.Close()
+		defer func() {
+			if err := q.Close(); err != nil {
+				t.Errorf("Failed to close queue: %v", err)
+			}
+		}()
 
 		ctx := context.Background()
 
 		// Add some messages
 		for i := 0; i < 5; i++ {
-			q.Enqueue(ctx, &Message{ID: string(rune('a' + i)), Payload: i})
+			if err := q.Enqueue(ctx, &Message{ID: string(rune('a' + i)), Payload: i}); err != nil {
+				t.Logf("Failed to enqueue: %v", err)
+			}
 		}
 		if q.Size() != 5 {
 			t.Errorf("Expected size 5, got %d", q.Size())
@@ -247,7 +271,11 @@ func TestRetryQueue(t *testing.T) {
 			Multiplier:      2.0,
 		}
 		rq := NewRetryQueue(baseQueue, retryPolicy, logger.Discard)
-		defer rq.Close()
+		defer func() {
+			if err := rq.Close(); err != nil {
+				t.Errorf("Failed to close retry queue: %v", err)
+			}
+		}()
 
 		ctx := context.Background()
 
@@ -288,7 +316,11 @@ func TestRetryQueue(t *testing.T) {
 func TestWorkerPool(t *testing.T) {
 	t.Run("Basic Worker Pool", func(t *testing.T) {
 		q := NewMemoryQueue(100, logger.Discard)
-		defer q.Close()
+		defer func() {
+			if err := q.Close(); err != nil {
+				t.Errorf("Failed to close queue: %v", err)
+			}
+		}()
 
 		var processedCount int32
 		handler := func(ctx context.Context, msg *Message) error {
@@ -306,7 +338,9 @@ func TestWorkerPool(t *testing.T) {
 
 		// Add messages
 		for i := 0; i < 10; i++ {
-			q.Enqueue(ctx, &Message{ID: string(rune('a' + i)), Payload: i})
+			if err := q.Enqueue(ctx, &Message{ID: string(rune('a' + i)), Payload: i}); err != nil {
+				t.Logf("Failed to enqueue: %v", err)
+			}
 		}
 
 		// Wait for processing
@@ -325,7 +359,11 @@ func TestWorkerPool(t *testing.T) {
 
 	t.Run("Worker Scaling", func(t *testing.T) {
 		q := NewMemoryQueue(100, logger.Discard)
-		defer q.Close()
+		defer func() {
+			if err := q.Close(); err != nil {
+				t.Errorf("Failed to close queue: %v", err)
+			}
+		}()
 
 		handler := func(ctx context.Context, msg *Message) error {
 			time.Sleep(10 * time.Millisecond) // Simulate work
@@ -339,7 +377,11 @@ func TestWorkerPool(t *testing.T) {
 		if err != nil {
 			t.Fatal(err)
 		}
-		defer pool.Stop()
+		defer func() {
+			if err := pool.Stop(); err != nil {
+				t.Errorf("Failed to stop worker pool: %v", err)
+			}
+		}()
 
 		// Initial worker count
 		if pool.GetWorkerCount() != 1 {
@@ -389,7 +431,11 @@ func TestQueueFactory(t *testing.T) {
 		if q == nil {
 			t.Fatal("Queue should not be nil")
 		}
-		defer q.Close()
+		defer func() {
+			if err := q.Close(); err != nil {
+				t.Errorf("Failed to close queue: %v", err)
+			}
+		}()
 
 		// Should be a memory queue
 		if _, ok := q.(*memoryQueue); !ok {
@@ -414,7 +460,11 @@ func TestQueueFactory(t *testing.T) {
 		if q == nil {
 			t.Fatal("Queue should not be nil")
 		}
-		defer q.Close()
+		defer func() {
+			if err := q.Close(); err != nil {
+				t.Errorf("Failed to close queue: %v", err)
+			}
+		}()
 
 		// Should be a retry queue
 		if _, ok := q.(RetryQueue); !ok {
@@ -440,7 +490,11 @@ func TestQueueFactory(t *testing.T) {
 // Benchmark tests
 func BenchmarkMemoryQueueEnqueue(b *testing.B) {
 	q := NewMemoryQueue(b.N, logger.Discard)
-	defer q.Close()
+	defer func() {
+		if err := q.Close(); err != nil {
+			b.Errorf("Failed to close queue: %v", err)
+		}
+	}()
 
 	ctx := context.Background()
 	msg := &Message{
@@ -450,30 +504,47 @@ func BenchmarkMemoryQueueEnqueue(b *testing.B) {
 
 	b.ResetTimer()
 	for i := 0; i < b.N; i++ {
-		q.Enqueue(ctx, msg)
+		if err := q.Enqueue(ctx, msg); err != nil {
+			// Expected error in benchmark, ignore but acknowledge
+			_ = err
+		}
 	}
 }
 
 func BenchmarkMemoryQueueDequeue(b *testing.B) {
 	q := NewMemoryQueue(b.N, logger.Discard)
-	defer q.Close()
+	defer func() {
+		if err := q.Close(); err != nil {
+			b.Errorf("Failed to close queue: %v", err)
+		}
+	}()
 
 	ctx := context.Background()
 
 	// Pre-fill queue
 	for i := 0; i < b.N; i++ {
-		q.Enqueue(ctx, &Message{ID: string(rune(i)), Payload: i})
+		if err := q.Enqueue(ctx, &Message{ID: string(rune(i)), Payload: i}); err != nil {
+			// Expected error in benchmark, ignore but acknowledge
+			_ = err
+		}
 	}
 
 	b.ResetTimer()
 	for i := 0; i < b.N; i++ {
-		q.Dequeue(ctx)
+		if _, err := q.Dequeue(ctx); err != nil {
+			// Expected error in benchmark, ignore but acknowledge
+			_ = err
+		}
 	}
 }
 
 func BenchmarkConcurrentOperations(b *testing.B) {
 	q := NewMemoryQueue(b.N*2, logger.Discard)
-	defer q.Close()
+	defer func() {
+		if err := q.Close(); err != nil {
+			b.Errorf("Failed to close queue: %v", err)
+		}
+	}()
 
 	ctx := context.Background()
 
@@ -485,8 +556,14 @@ func BenchmarkConcurrentOperations(b *testing.B) {
 				ID:      fmt.Sprintf("concurrent-%d-%d", counter, time.Now().UnixNano()),
 				Payload: "concurrent",
 			}
-			q.Enqueue(ctx, msg)
-			q.Dequeue(ctx)
+			if err := q.Enqueue(ctx, msg); err != nil {
+				// Expected error in benchmark, ignore but acknowledge
+				_ = err
+			}
+			if _, err := q.Dequeue(ctx); err != nil {
+				// Expected error in benchmark, ignore but acknowledge
+				_ = err
+			}
 		}
 	})
 }
