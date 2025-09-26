@@ -44,7 +44,7 @@ func NewRetryQueue(baseQueue Queue, retryPolicy RetryPolicy, log logger.Logger) 
 }
 
 // Retry moves a message back to the queue with incremented retry count
-func (rq *retryQueue) Retry(ctx context.Context, msg *Message) error {
+func (rq *retryQueue) Retry(ctx context.Context, msg *QueueMessage) error {
 	if msg == nil {
 		return ErrInvalidMessage
 	}
@@ -84,7 +84,7 @@ func (rq *retryQueue) Retry(ctx context.Context, msg *Message) error {
 }
 
 // MoveToDeadLetter moves a message to the dead letter queue
-func (rq *retryQueue) MoveToDeadLetter(ctx context.Context, msg *Message) error {
+func (rq *retryQueue) MoveToDeadLetter(ctx context.Context, msg *QueueMessage) error {
 	if msg == nil {
 		return ErrInvalidMessage
 	}
@@ -208,7 +208,7 @@ func (w *RetryableWorker) Stop() error {
 }
 
 // Process handles a single message
-func (w *RetryableWorker) Process(ctx context.Context, msg *Message) error {
+func (w *RetryableWorker) Process(ctx context.Context, msg *QueueMessage) error {
 	if msg == nil {
 		return ErrInvalidMessage
 	}

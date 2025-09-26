@@ -11,7 +11,9 @@ import (
 	"github.com/wneessen/go-mail"
 
 	"github.com/kart-io/notifyhub/pkg/logger"
+	"github.com/kart-io/notifyhub/pkg/notifyhub/message"
 	"github.com/kart-io/notifyhub/pkg/notifyhub/platform"
+	"github.com/kart-io/notifyhub/pkg/notifyhub/target"
 )
 
 // EmailSenderGoMail implements the ExternalSender interface using go-mail library
@@ -105,31 +107,31 @@ func (e *EmailSenderGoMail) Name() string {
 }
 
 // Send sends a message to Email using go-mail library
-func (e *EmailSenderGoMail) Send(ctx context.Context, msg *platform.Message, targets []platform.Target) ([]*platform.SendResult, error) {
+func (e *EmailSenderGoMail) Send(ctx context.Context, msg *message.Message, targets []target.Target) ([]*platform.SendResult, error) {
 	e.logger.Debug("Starting email send", "messageID", msg.ID, "targetCount", len(targets))
 	results := make([]*platform.SendResult, len(targets))
 
-	for i, target := range targets {
+	for i, tgt := range targets {
 		startTime := time.Now()
 		result := &platform.SendResult{
-			Target:  target,
+			Target:  tgt,
 			Success: false,
 		}
 
 		// Validate target
-		if err := e.ValidateTarget(target); err != nil {
-			e.logger.Error("Invalid email target", "target", target.Value, "error", err)
+		if err := e.ValidateTarget(tgt); err != nil {
+			e.logger.Error("Invalid email target", "target", tgt.Value, "error", err)
 			result.Error = err.Error()
 			results[i] = result
 			continue
 		}
 
 		// Send email using go-mail
-		if err := e.sendEmailGoMail(ctx, target.Value, msg); err != nil {
-			e.logger.Error("Failed to send email", "to", target.Value, "error", err)
+		if err := e.sendEmailGoMail(ctx, tgt.Value, msg); err != nil {
+			e.logger.Error("Failed to send email", "to", tgt.Value, "error", err)
 			result.Error = err.Error()
 		} else {
-			e.logger.Info("Email sent successfully", "to", target.Value, "messageID", msg.ID)
+			e.logger.Info("Email sent successfully", "to", tgt.Value, "messageID", msg.ID)
 			result.Success = true
 			result.MessageID = fmt.Sprintf("email_%d", time.Now().UnixNano())
 			result.Response = "Email sent successfully via go-mail"
@@ -143,7 +145,7 @@ func (e *EmailSenderGoMail) Send(ctx context.Context, msg *platform.Message, tar
 		}
 
 		results[i] = result
-		e.logger.Debug("Email send attempt completed", "to", target.Value, "success", result.Success, "duration_ms", time.Since(startTime).Milliseconds())
+		e.logger.Debug("Email send attempt completed", "to", tgt.Value, "success", result.Success, "duration_ms", time.Since(startTime).Milliseconds())
 	}
 
 	e.logger.Debug("Email batch send completed", "messageID", msg.ID, "totalTargets", len(targets))
@@ -151,7 +153,7 @@ func (e *EmailSenderGoMail) Send(ctx context.Context, msg *platform.Message, tar
 }
 
 // sendEmailGoMail sends email using the modern go-mail library
-func (e *EmailSenderGoMail) sendEmailGoMail(ctx context.Context, to string, msg *platform.Message) error {
+func (e *EmailSenderGoMail) sendEmailGoMail(ctx context.Context, to string, msg *message.Message) error {
 	if e.logger == nil {
 		e.logger = logger.Discard
 	}
@@ -265,24 +267,24 @@ func (e *EmailSenderGoMail) sendEmailGoMail(ctx context.Context, to string, msg 
 }
 
 // ValidateTarget validates a target for Email
-func (e *EmailSenderGoMail) ValidateTarget(target platform.Target) error {
-	switch target.Type {
+func (e *EmailSenderGoMail) ValidateTarget(tgt target.Target) error {
+	switch tgt.Type {
 	case "email":
 		// Valid target type for Email
 	default:
-		e.logger.Debug("Invalid target type for email", "type", target.Type)
-		return fmt.Errorf("email supports email targets, got %s", target.Type)
+		e.logger.Debug("Invalid target type for email", "type", tgt.Type)
+		return fmt.Errorf("email supports email targets, got %s", tgt.Type)
 	}
 
-	if target.Value == "" {
+	if tgt.Value == "" {
 		e.logger.Debug("Empty email address")
 		return fmt.Errorf("email address cannot be empty")
 	}
 
 	// Basic email validation
-	if !isValidEmail(target.Value) {
-		e.logger.Debug("Invalid email format", "email", target.Value)
-		return fmt.Errorf("invalid email address: %s", target.Value)
+	if !isValidEmail(tgt.Value) {
+		e.logger.Debug("Invalid email format", "email", tgt.Value)
+		return fmt.Errorf("invalid email address: %s", tgt.Value)
 	}
 
 	return nil

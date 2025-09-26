@@ -2,8 +2,6 @@
 package platform
 
 import (
-	"context"
-
 	"github.com/kart-io/notifyhub/pkg/logger"
 )
 
@@ -17,84 +15,36 @@ const (
 	NameWebhook = "webhook"
 )
 
-// ExternalSender represents a platform notification sender (public interface for external implementations)
-type ExternalSender interface {
-	// Name returns the platform name
-	Name() string
+// ExternalSender is deprecated: use Platform interface instead
+// This is kept for backward compatibility and will be removed in a future version
+type ExternalSender = Platform
 
-	// Send sends a message to the specified targets
-	Send(ctx context.Context, msg *Message, targets []Target) ([]*SendResult, error)
+// NOTE: Message and Target types are now provided by unified packages:
+// - Message: github.com/kart-io/notifyhub/pkg/notifyhub/message.Message
+// - Target: github.com/kart-io/notifyhub/pkg/notifyhub/target.Target
 
-	// ValidateTarget validates a target for this platform
-	ValidateTarget(target Target) error
+// SendResult and Capabilities are now defined in interface.go
+// These type aliases are kept for backward compatibility
 
-	// GetCapabilities returns the capabilities of this platform
-	GetCapabilities() Capabilities
+// PlatformCreator is a function that creates a platform with given configuration
+type PlatformCreator func(config map[string]interface{}, logger logger.Logger) (Platform, error)
 
-	// IsHealthy checks if the platform is healthy
-	IsHealthy(ctx context.Context) error
+// ExternalSenderCreator is deprecated: use PlatformCreator instead
+// This is kept for backward compatibility and will be removed in a future version
+type ExternalSenderCreator = PlatformCreator
 
-	// Close gracefully shuts down the sender
-	Close() error
-}
-
-// Message represents the message structure for external platforms
-type Message struct {
-	ID           string                 `json:"id"`
-	Title        string                 `json:"title"`
-	Body         string                 `json:"body"`
-	Format       string                 `json:"format"` // "text", "markdown", "html"
-	Priority     int                    `json:"priority"`
-	Metadata     map[string]interface{} `json:"metadata,omitempty"`
-	Variables    map[string]interface{} `json:"variables,omitempty"`
-	PlatformData map[string]interface{} `json:"platform_data,omitempty"`
-}
-
-// Target represents a target for external platforms
-type Target struct {
-	Type     string `json:"type"`     // "email", "user", "group", "webhook", "phone"
-	Value    string `json:"value"`    // target identifier
-	Platform string `json:"platform"` // platform name
-}
-
-// SendResult represents the result of sending to a single target
-type SendResult struct {
-	Target    Target                 `json:"target"`
-	Success   bool                   `json:"success"`
-	MessageID string                 `json:"message_id,omitempty"`
-	Error     string                 `json:"error,omitempty"`
-	Response  string                 `json:"response,omitempty"`
-	Metadata  map[string]interface{} `json:"metadata,omitempty"`
-}
-
-// Capabilities describes what a platform can do
-type Capabilities struct {
-	Name                 string   `json:"name"`
-	SupportedTargetTypes []string `json:"supported_target_types"`
-	SupportedFormats     []string `json:"supported_formats"`
-	MaxMessageSize       int      `json:"max_message_size"`
-	SupportsScheduling   bool     `json:"supports_scheduling"`
-	SupportsAttachments  bool     `json:"supports_attachments"`
-	SupportsMentions     bool     `json:"supports_mentions"`
-	SupportsRichContent  bool     `json:"supports_rich_content"`
-	RequiredSettings     []string `json:"required_settings"`
-}
-
-// ExternalSenderCreator is a function that creates an external sender with given configuration
-type ExternalSenderCreator func(config map[string]interface{}, logger logger.Logger) (ExternalSender, error)
-
-// RegisterPlatform registers an external platform sender creator
+// RegisterPlatform registers a platform creator
 // This is the public API for external packages to register their platforms
-func RegisterPlatform(platformName string, creator ExternalSenderCreator) {
+func RegisterPlatform(platformName string, creator PlatformCreator) {
 	// Use a global registry that can be accessed by core package
 	globalPlatformRegistry[platformName] = creator
 }
 
 // Global registry for platform creators
-var globalPlatformRegistry = make(map[string]ExternalSenderCreator)
+var globalPlatformRegistry = make(map[string]PlatformCreator)
 
 // GetRegisteredCreators returns all registered platform creators
-func GetRegisteredCreators() map[string]ExternalSenderCreator {
+func GetRegisteredCreators() map[string]PlatformCreator {
 	return globalPlatformRegistry
 }
 

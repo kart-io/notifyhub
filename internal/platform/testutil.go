@@ -2,18 +2,20 @@ package platform
 
 import (
 	"context"
-	"time"
 
 	"github.com/kart-io/notifyhub/pkg/logger"
+	"github.com/kart-io/notifyhub/pkg/notifyhub/message"
+	"github.com/kart-io/notifyhub/pkg/notifyhub/platform"
+	"github.com/kart-io/notifyhub/pkg/notifyhub/target"
 )
 
-// MockSender is a mock implementation of the Sender interface for testing
+// MockSender is a mock implementation of the ExternalSender interface for testing
 type MockSender struct {
 	name         string
 	sendError    error
-	sendResults  []*SendResult
+	sendResults  []*platform.SendResult
 	validateErr  error
-	capabilities PlatformCapabilities
+	capabilities platform.Capabilities
 	healthErr    error
 	closeErr     error
 }
@@ -22,7 +24,7 @@ type MockSender struct {
 func NewMockSender(name string) *MockSender {
 	return &MockSender{
 		name: name,
-		capabilities: PlatformCapabilities{
+		capabilities: platform.Capabilities{
 			Name:                 name,
 			SupportedTargetTypes: []string{"test"},
 			SupportedFormats:     []string{"text"},
@@ -38,7 +40,7 @@ func (m *MockSender) Name() string {
 }
 
 // Send mocks sending a message
-func (m *MockSender) Send(ctx context.Context, msg *InternalMessage, targets []InternalTarget) ([]*SendResult, error) {
+func (m *MockSender) Send(ctx context.Context, msg *message.Message, targets []target.Target) ([]*platform.SendResult, error) {
 	if m.sendError != nil {
 		return nil, m.sendError
 	}
@@ -48,27 +50,26 @@ func (m *MockSender) Send(ctx context.Context, msg *InternalMessage, targets []I
 	}
 
 	// Default: create successful results
-	results := make([]*SendResult, len(targets))
-	for i, target := range targets {
-		results[i] = &SendResult{
-			Target:    target,
+	results := make([]*platform.SendResult, len(targets))
+	for i, t := range targets {
+		results[i] = &platform.SendResult{
+			Target:    t,
 			Success:   true,
-			MessageID: "mock_" + msg.ID + "_" + target.Value,
-			SentAt:    time.Now(),
-			Duration:  time.Millisecond * 100,
-			Metadata:  make(map[string]string),
+			MessageID: "mock_" + msg.ID + "_" + t.Value,
+			Response:  "success",
+			Metadata:  make(map[string]interface{}),
 		}
 	}
 	return results, nil
 }
 
 // ValidateTarget mocks target validation
-func (m *MockSender) ValidateTarget(target InternalTarget) error {
+func (m *MockSender) ValidateTarget(t target.Target) error {
 	return m.validateErr
 }
 
 // GetCapabilities returns mock capabilities
-func (m *MockSender) GetCapabilities() PlatformCapabilities {
+func (m *MockSender) GetCapabilities() platform.Capabilities {
 	return m.capabilities
 }
 
@@ -88,7 +89,7 @@ func (m *MockSender) SetSendError(err error) {
 }
 
 // SetSendResults sets specific results to be returned by Send
-func (m *MockSender) SetSendResults(results []*SendResult) {
+func (m *MockSender) SetSendResults(results []*platform.SendResult) {
 	m.sendResults = results
 }
 
@@ -109,27 +110,27 @@ func (m *MockSender) SetCloseError(err error) {
 
 // MockSenderFactory is a mock implementation of SenderFactory
 type MockSenderFactory struct {
-	senders map[string]Sender
+	senders map[string]platform.ExternalSender
 	errors  map[string]error
 }
 
 // NewMockSenderFactory creates a new mock sender factory
 func NewMockSenderFactory() *MockSenderFactory {
 	return &MockSenderFactory{
-		senders: make(map[string]Sender),
+		senders: make(map[string]platform.ExternalSender),
 		errors:  make(map[string]error),
 	}
 }
 
 // CreateSender creates a mock sender or returns an error
-func (f *MockSenderFactory) CreateSender(platform string, config map[string]interface{}, logger logger.Logger) (Sender, error) {
-	if err, exists := f.errors[platform]; exists {
+func (f *MockSenderFactory) CreateSender(platformName string, config map[string]interface{}, logger logger.Logger) (platform.ExternalSender, error) {
+	if err, exists := f.errors[platformName]; exists {
 		return nil, err
 	}
-	if sender, exists := f.senders[platform]; exists {
+	if sender, exists := f.senders[platformName]; exists {
 		return sender, nil
 	}
-	return NewMockSender(platform), nil
+	return NewMockSender(platformName), nil
 }
 
 // GetSupportedPlatforms returns mock supported platforms
@@ -142,19 +143,19 @@ func (f *MockSenderFactory) GetSupportedPlatforms() []string {
 }
 
 // ValidateConfig always returns nil for mocking
-func (f *MockSenderFactory) ValidateConfig(platform string, config map[string]interface{}) error {
-	if err, exists := f.errors[platform]; exists {
+func (f *MockSenderFactory) ValidateConfig(platformName string, config map[string]interface{}) error {
+	if err, exists := f.errors[platformName]; exists {
 		return err
 	}
 	return nil
 }
 
 // AddSender adds a mock sender for a platform
-func (f *MockSenderFactory) AddSender(platform string, sender Sender) {
-	f.senders[platform] = sender
+func (f *MockSenderFactory) AddSender(platformName string, sender platform.ExternalSender) {
+	f.senders[platformName] = sender
 }
 
 // SetError sets an error for a platform
-func (f *MockSenderFactory) SetError(platform string, err error) {
-	f.errors[platform] = err
+func (f *MockSenderFactory) SetError(platformName string, err error) {
+	f.errors[platformName] = err
 }

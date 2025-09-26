@@ -8,18 +8,44 @@ import (
 	"github.com/kart-io/notifyhub/pkg/utils/idgen"
 )
 
-// Message represents a notification message with fluent API support
+// Format represents message format types
+type Format string
+
+const (
+	FormatText     Format = "text"
+	FormatMarkdown Format = "markdown"
+	FormatHTML     Format = "html"
+)
+
+// String returns the string representation of format
+func (f Format) String() string {
+	return string(f)
+}
+
+// IsValid returns true if the format is valid
+func (f Format) IsValid() bool {
+	switch f {
+	case FormatText, FormatMarkdown, FormatHTML:
+		return true
+	default:
+		return false
+	}
+}
+
+// Message represents a unified notification message structure
+// This is the canonical Message definition that replaces all other Message types in the codebase
 type Message struct {
 	ID           string                 `json:"id"`
 	Title        string                 `json:"title"`
 	Body         string                 `json:"body"`
-	Format       string                 `json:"format"` // "text", "markdown", "html"
+	Format       Format                 `json:"format"`
 	Priority     Priority               `json:"priority"`
 	Targets      []target.Target        `json:"targets"`
 	Metadata     map[string]interface{} `json:"metadata,omitempty"`
 	Variables    map[string]interface{} `json:"variables,omitempty"`
-	ScheduledAt  *time.Time             `json:"scheduled_at,omitempty"`
 	PlatformData map[string]interface{} `json:"platform_data,omitempty"`
+	CreatedAt    time.Time              `json:"created_at"`
+	ScheduledAt  *time.Time             `json:"scheduled_at,omitempty"`
 }
 
 // Helper methods for the Message type
@@ -83,6 +109,32 @@ func (m *Message) SetPlatformData(key string, value interface{}) {
 		m.PlatformData = make(map[string]interface{})
 	}
 	m.PlatformData[key] = value
+}
+
+// New creates a new message with auto-generated ID and CreatedAt timestamp
+func New() *Message {
+	return &Message{
+		ID:           generateMessageID(),
+		Format:       FormatText,     // default format
+		Priority:     PriorityNormal, // default priority
+		CreatedAt:    time.Now(),
+		Metadata:     make(map[string]interface{}),
+		Variables:    make(map[string]interface{}),
+		PlatformData: make(map[string]interface{}),
+	}
+}
+
+// NewWithID creates a new message with the specified ID
+func NewWithID(id string) *Message {
+	return &Message{
+		ID:           id,
+		Format:       FormatText,
+		Priority:     PriorityNormal,
+		CreatedAt:    time.Now(),
+		Metadata:     make(map[string]interface{}),
+		Variables:    make(map[string]interface{}),
+		PlatformData: make(map[string]interface{}),
+	}
 }
 
 // generateMessageID generates a unique message ID

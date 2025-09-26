@@ -1,6 +1,6 @@
-# NotifyHub Makefile
-# Author: Generated for NotifyHub project
-# Description: Build, test, lint, and format tools for NotifyHub
+# NotifyHub v3.0 Makefile
+# Author: NotifyHub Development Team
+# Description: Build, test, lint, and format tools for NotifyHub v3.0 Architecture
 
 # Go parameters
 GOCMD = go
@@ -35,7 +35,8 @@ NC = \033[0m # No Color
 
 .PHONY: help
 help: ## Display this help message
-	@echo "$(BLUE)NotifyHub Makefile Commands:$(NC)"
+	@echo "$(BLUE)NotifyHub v3.0 Makefile Commands:$(NC)"
+	@echo "$(YELLOW)Architecture: Unified 3-layer design with Platform abstraction$(NC)"
 	@echo ""
 	@grep -E '^[a-zA-Z_-]+:.*?## .*$$' $(MAKEFILE_LIST) | sort | awk 'BEGIN {FS = ":.*?## "}; {printf "$(GREEN)%-20s$(NC) %s\n", $$1, $$2}'
 
@@ -61,15 +62,15 @@ fmt-check: ## Check if code is properly formatted
 	fi
 
 .PHONY: lint
-lint: ## Run golangci-lint on refactored packages
-	@echo "$(YELLOW)Running linter on refactored packages...$(NC)"
+lint: ## Run golangci-lint on v3.0 core packages
+	@echo "$(YELLOW)Running linter on v3.0 core packages...$(NC)"
 	@if command -v $(GOLANGCI_LINT) >/dev/null 2>&1; then \
-		$(GOLANGCI_LINT) run ./pkg/notifyhub ./internal/platform  --timeout=5m; \
+		$(GOLANGCI_LINT) run ./pkg/notifyhub ./pkg/queue ./pkg/logger ./internal/platform --timeout=5m; \
 		echo "$(GREEN)✓ Linting completed$(NC)"; \
 	else \
 		echo "$(RED)golangci-lint not found. Installing...$(NC)"; \
 		$(MAKE) install-lint; \
-		$(GOLANGCI_LINT) run ./pkg/notifyhub ./internal/platform  --timeout=5m; \
+		$(GOLANGCI_LINT) run ./pkg/notifyhub ./pkg/queue ./pkg/logger ./internal/platform --timeout=5m; \
 		echo "$(GREEN)✓ Linting completed$(NC)"; \
 	fi
 
@@ -89,13 +90,13 @@ lint-all: ## Run golangci-lint on all packages (including legacy)
 .PHONY: lint-fix
 lint-fix: ## Run golangci-lint with autofix
 	@echo "$(YELLOW)Running linter with autofix...$(NC)"
-	@$(GOLANGCI_LINT) run --fix --timeout=5m
+	@$(GOLANGCI_LINT) run ./pkg/notifyhub ./pkg/queue ./pkg/logger ./internal/platform --fix --timeout=5m
 	@echo "$(GREEN)✓ Linting with autofix completed$(NC)"
 
 .PHONY: vet
-vet: ## Run go vet on refactored packages
-	@echo "$(YELLOW)Running go vet on refactored packages...$(NC)"
-	@$(GOVET) ./pkg/notifyhub ./internal/platform ./examples/elegant_api
+vet: ## Run go vet on v3.0 core packages
+	@echo "$(YELLOW)Running go vet on v3.0 core packages...$(NC)"
+	@$(GOVET) ./pkg/notifyhub ./pkg/queue ./pkg/logger ./internal/platform
 	@echo "$(GREEN)✓ go vet completed$(NC)"
 
 .PHONY: vet-all
@@ -118,9 +119,9 @@ staticcheck: ## Run staticcheck
 	fi
 
 .PHONY: test
-test: ## Run tests on refactored packages
-	@echo "$(YELLOW)Running tests on refactored packages...$(NC)"
-	@$(GOTEST) -v ./pkg/notifyhub ./internal/platform ./examples/elegant_api
+test: ## Run tests on v3.0 core packages
+	@echo "$(YELLOW)Running tests on v3.0 core packages...$(NC)"
+	@$(GOTEST) -v ./pkg/notifyhub ./pkg/queue ./pkg/logger ./internal/platform
 	@echo "$(GREEN)✓ Tests completed$(NC)"
 
 .PHONY: test-all
@@ -163,13 +164,38 @@ test-integration: ## Run integration tests
 	@echo "$(GREEN)✓ Integration tests completed$(NC)"
 
 .PHONY: test-validation
-test-validation: ## Run validation tests (_tests directory)
+test-validation: ## Run validation tests (tests directory)
 	@echo "$(YELLOW)Running validation tests...$(NC)"
-	@cd _tests && $(GOTEST) -v ./...
+	@$(GOTEST) -v ./tests
 	@echo "$(GREEN)✓ Validation tests completed$(NC)"
 
 .PHONY: test-all
 test-all: test test-integration test-validation ## Run all tests
+
+.PHONY: test-architecture
+test-architecture: ## Run architecture validation tests
+	@echo "$(YELLOW)Running architecture validation tests...$(NC)"
+	@$(GOTEST) -v ./tests -run TestDualInterfaceElimination
+	@$(GOTEST) -v ./tests -run TestAsyncProcessingReality
+	@$(GOTEST) -v ./tests -run TestStrongTypedConfigurations
+	@$(GOTEST) -v ./tests -run TestSimpleGlobalStateElimination
+	@$(GOTEST) -v ./tests -run TestPlatformCapabilityNegotiation
+	@$(GOTEST) -v ./tests -run TestPerformanceImprovements
+	@$(GOTEST) -v ./tests -run TestBackwardCompatibility
+	@echo "$(GREEN)✓ Architecture validation completed$(NC)"
+
+.PHONY: test-performance
+test-performance: ## Run performance validation tests
+	@echo "$(YELLOW)Running performance validation tests...$(NC)"
+	@$(GOTEST) -v ./tests -run TestPerformanceImprovements
+	@echo "$(GREEN)✓ Performance validation completed$(NC)"
+
+.PHONY: test-compatibility
+test-compatibility: ## Run backward compatibility tests
+	@echo "$(YELLOW)Running backward compatibility tests...$(NC)"
+	@$(GOTEST) -v ./tests -run TestBackwardCompatibility
+	@$(GOTEST) -v ./tests -run TestDeprecationWarnings
+	@echo "$(GREEN)✓ Compatibility tests completed$(NC)"
 
 .PHONY: bench
 bench: ## Run benchmarks
@@ -177,10 +203,16 @@ bench: ## Run benchmarks
 	@$(GOTEST) -bench=. -benchmem ./...
 	@echo "$(GREEN)✓ Benchmarks completed$(NC)"
 
+.PHONY: bench-performance
+bench-performance: ## Run performance benchmarks
+	@echo "$(YELLOW)Running performance benchmarks...$(NC)"
+	@$(GOTEST) -bench=BenchmarkArchitecturePerformance -benchmem ./tests
+	@echo "$(GREEN)✓ Performance benchmarks completed$(NC)"
+
 .PHONY: build
-build: ## Build refactored packages
-	@echo "$(YELLOW)Building refactored packages...$(NC)"
-	@$(GOBUILD) -v ./pkg/notifyhub ./internal/platform ./examples/elegant_api
+build: ## Build v3.0 core packages
+	@echo "$(YELLOW)Building v3.0 core packages...$(NC)"
+	@$(GOBUILD) -v ./pkg/notifyhub ./pkg/queue ./pkg/logger ./internal/platform
 	@echo "$(GREEN)✓ Build completed$(NC)"
 
 .PHONY: build-all
@@ -317,6 +349,50 @@ ci: check test-coverage ## Run CI pipeline
 
 .PHONY: release-check
 release-check: clean fmt-check lint staticcheck test-all build-all ## Complete release check
+
+.PHONY: v3-check
+v3-check: fmt-check vet lint test test-architecture test-performance test-compatibility ## Complete v3.0 validation check
+
+.PHONY: v3-quick
+v3-quick: fmt test ## Quick v3.0 development check
+
+.PHONY: migration-test
+migration-test: ## Test migration scenarios
+	@echo "$(YELLOW)Testing migration scenarios...$(NC)"
+	@$(GOTEST) -v ./tests -run TestBackwardCompatibility
+	@$(GOTEST) -v ./tests -run TestDeprecationWarnings
+	@echo "$(GREEN)✓ Migration tests completed$(NC)"
+
+.PHONY: docs-generate
+docs-generate: ## Generate v3.0 documentation
+	@echo "$(YELLOW)Generating v3.0 documentation...$(NC)"
+	@mkdir -p $(DOCS_DIR)/v3
+	@$(GOCMD) doc -all ./pkg/notifyhub > $(DOCS_DIR)/v3/notifyhub-api.txt
+	@echo "  Platforms are now embedded in individual platform packages"
+	@$(GOCMD) doc -all ./pkg/queue > $(DOCS_DIR)/v3/queue-api.txt
+	@$(GOCMD) doc -all ./pkg/logger > $(DOCS_DIR)/v3/logger-api.txt
+	@echo "$(GREEN)✓ v3.0 documentation generated: $(DOCS_DIR)/v3/$(NC)"
+
+.PHONY: show-v3-status
+show-v3-status: ## Show v3.0 architecture status
+	@echo "$(BLUE)NotifyHub v3.0 Architecture Status:$(NC)"
+	@echo "$(GREEN)✓ Unified Platform interface$(NC)"
+	@echo "$(GREEN)✓ Strong-typed configuration$(NC)"
+	@echo "$(GREEN)✓ True async processing$(NC)"
+	@echo "$(GREEN)✓ Global state elimination$(NC)"
+	@echo "$(GREEN)✓ Middleware system$(NC)"
+	@echo "$(GREEN)✓ Backward compatibility$(NC)"
+	@echo ""
+	@echo "$(YELLOW)Core packages:$(NC)"
+	@echo "  - pkg/notifyhub/     # Main Hub implementation"
+	@echo "  - pkg/platforms/     # Platform adapters (integrated into main hub)"
+	@echo "  - pkg/queue/         # Queue system"
+	@echo "  - pkg/logger/        # Logging interface"
+	@echo "  - internal/platform/ # Platform internals"
+	@echo ""
+	@echo "$(YELLOW)Test suites:$(NC)"
+	@echo "  - tests/             # Architecture validation"
+	@echo "  - examples/          # Usage examples"
 
 # Default target
 .DEFAULT_GOAL := help

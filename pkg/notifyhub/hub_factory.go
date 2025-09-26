@@ -9,23 +9,26 @@ import (
 	"time"
 
 	"github.com/kart-io/notifyhub/pkg/logger"
+	"github.com/kart-io/notifyhub/pkg/notifyhub/config"
 	"github.com/kart-io/notifyhub/pkg/notifyhub/core"
+	"github.com/kart-io/notifyhub/pkg/notifyhub/message"
+	"github.com/kart-io/notifyhub/pkg/notifyhub/receipt"
 )
 
 // Client is the unified interface for NotifyHub
 // This is the main entry point for interacting with the notification system
 type Client interface {
 	// Send sends a single message
-	Send(ctx context.Context, message *Message) (*Receipt, error)
+	Send(ctx context.Context, message *message.Message) (*receipt.Receipt, error)
 
-	// SendBatch sends multiple messagesßßßßß
-	SendBatch(ctx context.Context, messages []*Message) ([]*Receipt, error)
+	// SendBatch sends multiple messages
+	SendBatch(ctx context.Context, messages []*message.Message) ([]*receipt.Receipt, error)
 
 	// SendAsync sends a message asynchronously (non-blocking)
-	SendAsync(ctx context.Context, message *Message) (<-chan *Receipt, error)
+	SendAsync(ctx context.Context, message *message.Message) (<-chan *receipt.Receipt, error)
 
 	// Health checks system health status
-	Health(ctx context.Context) (*HealthStatus, error)
+	Health(ctx context.Context) (*core.HealthStatus, error)
 
 	// GetPlatformStatus gets the status of a specific platform
 	GetPlatformStatus(ctx context.Context, platform string) (*PlatformStatus, error)
@@ -45,7 +48,7 @@ type PlatformStatus struct {
 // Option represents a configuration option for creating a client/hub
 // Options are used with the functional options pattern to configure
 // notification clients in a flexible and extensible way
-type Option func(*HubConfig) error
+type Option func(*config.Config) error
 
 // HubOption is an alias for backward compatibility
 // It can be used interchangeably with Option
@@ -57,16 +60,16 @@ type HubOption = Option
 // Example:
 //
 //	client, err := New(
-//	    WithPlatform("feishu", feishuConfig),
+//	    WithPlatform("email", emailConfig),
 //	    WithTimeout(30*time.Second),
 //	)
 func New(opts ...Option) (Client, error) {
-	cfg := &HubConfig{
-		Platforms:        make(map[string]PlatformConfig),
+	cfg := &config.Config{
+		Platforms:        make(map[string]map[string]interface{}),
 		DefaultTimeout:   30 * time.Second,
 		Logger:           logger.Discard, // Initialize with a silent logger by default
 		ValidationErrors: make([]error, 0),
-		RetryPolicy: RetryPolicy{
+		RetryPolicy: config.RetryPolicy{
 			MaxRetries:      3,
 			InitialInterval: 1 * time.Second,
 			Multiplier:      2.0,
@@ -109,7 +112,7 @@ func New(opts ...Option) (Client, error) {
 }
 
 // NewFromConfig creates a client from a complete configuration
-func NewFromConfig(config HubConfig) (Client, error) {
+func NewFromConfig(config config.Config) (Client, error) {
 	// Validate configuration
 	if err := validateConfig(&config); err != nil {
 		return nil, fmt.Errorf("invalid configuration: %w", err)
@@ -144,11 +147,9 @@ func NewFromConfig(config HubConfig) (Client, error) {
 // Example:
 //
 //	// Create a hub with platform packages
-//	import "github.com/kart-io/notifyhub/pkg/platforms/feishu"
 //	import "github.com/kart-io/notifyhub/pkg/platforms/email"
 //
 //	hub, err := NewHub(
-//	    feishu.WithFeishu("webhook-url", feishu.WithFeishuSecret("secret")),
 //	    email.WithEmail("smtp.example.com", 587, "from@example.com"),
 //	    WithTimeout(30*time.Second),
 //	)
@@ -171,11 +172,9 @@ func NewFromConfig(config HubConfig) (Client, error) {
 // Example:
 //
 //	// Create a hub with platform packages
-//	import "github.com/kart-io/notifyhub/pkg/platforms/feishu"
 //	import "github.com/kart-io/notifyhub/pkg/platforms/email"
 //
 //	hub, err := NewHub(
-//	    feishu.WithFeishu("webhook-url", feishu.WithFeishuSecret("secret")),
 //	    email.WithEmail("smtp.example.com", 587, "from@example.com"),
 //	    WithTimeout(30*time.Second),
 //	)
@@ -183,13 +182,13 @@ func NewFromConfig(config HubConfig) (Client, error) {
 //	    log.Fatal(err)
 //	}
 //	defer hub.Close(context.Background())
-func NewHub(opts ...HubOption) (Hub, error) {
-	cfg := &HubConfig{
-		Platforms:        make(map[string]PlatformConfig),
+func NewHub(opts ...HubOption) (core.Hub, error) {
+	cfg := &config.Config{
+		Platforms:        make(map[string]map[string]interface{}),
 		DefaultTimeout:   30 * time.Second,
 		Logger:           logger.Discard, // Initialize with a silent logger by default
 		ValidationErrors: make([]error, 0),
-		RetryPolicy: RetryPolicy{
+		RetryPolicy: config.RetryPolicy{
 			MaxRetries:      3,
 			InitialInterval: 1 * time.Second,
 			Multiplier:      2.0,
@@ -226,19 +225,19 @@ func NewHub(opts ...HubOption) (Hub, error) {
 // Configuration option functions
 
 // WithPlatform configures a platform (generic interface, no need to import platform packages)
-func WithPlatform(name string, config map[string]interface{}) Option {
-	return func(c *HubConfig) error {
+func WithPlatform(name string, platformConfig map[string]interface{}) Option {
+	return func(c *config.Config) error {
 		if c.Platforms == nil {
-			c.Platforms = make(map[string]PlatformConfig)
+			c.Platforms = make(map[string]map[string]interface{})
 		}
-		c.Platforms[name] = PlatformConfig(config)
+		c.Platforms[name] = map[string]interface{}(platformConfig)
 		return nil
 	}
 }
 
 // WithYAML loads configuration from a YAML file
 func WithYAML(path string) Option {
-	return func(c *HubConfig) error {
+	return func(c *config.Config) error {
 		data, err := os.ReadFile(path)
 		if err != nil {
 			return fmt.Errorf("failed to read YAML file: %w", err)
@@ -259,7 +258,7 @@ func WithYAML(path string) Option {
 
 // WithJSON loads configuration from JSON data
 func WithJSON(data []byte) Option {
-	return func(c *HubConfig) error {
+	return func(c *config.Config) error {
 		// JSON parsing logic will be implemented
 		// json.Unmarshal(data, &jsonConfig)
 		// mergeConfig(c, &jsonConfig)
@@ -269,7 +268,7 @@ func WithJSON(data []byte) Option {
 
 // WithEnv loads configuration from environment variables
 func WithEnv() Option {
-	return func(c *HubConfig) error {
+	return func(c *config.Config) error {
 		// Read environment variables and configure
 		// e.g., NOTIFYHUB_FEISHU_WEBHOOK, NOTIFYHUB_EMAIL_HOST
 		return nil
@@ -278,13 +277,13 @@ func WithEnv() Option {
 
 // Convenience configuration options
 
-// WithFeishu configures Feishu (no need to import feishu package)
-func WithFeishu(webhook string, secret ...string) Option {
-	return WithPlatform("feishu", map[string]interface{}{
-		"webhook": webhook,
-		"secret":  firstOrEmpty(secret),
-	})
-}
+// WithFeishu is deprecated - feishu package has been removed
+// func WithFeishu(webhook string, secret ...string) Option {
+// 	return WithPlatform("feishu", map[string]interface{}{
+// 		"webhook": webhook,
+// 		"secret":  firstOrEmpty(secret),
+// 	})
+// }
 
 // WithEmail configures Email (no need to import email package)
 func WithEmail(host string, port int, from string, opts ...map[string]interface{}) Option {
@@ -354,7 +353,7 @@ func WithSlack(token string, opts ...map[string]interface{}) Option {
 //	    WithTimeout(45*time.Second),
 //	)
 func WithTimeout(timeout time.Duration) HubOption {
-	return func(cfg *HubConfig) error {
+	return func(cfg *config.Config) error {
 		cfg.DefaultTimeout = timeout
 		return nil
 	}
@@ -364,7 +363,7 @@ func WithTimeout(timeout time.Duration) HubOption {
 //
 // This is a low-level function for configuring platforms when you need
 // full control over the configuration map. For most use cases, use the
-// platform-specific packages (e.g., feishu.WithFeishu, email.WithEmail).
+// platform-specific packages (e.g., email.WithEmail).
 //
 // Parameters:
 //   - platformName: Name of the platform to configure
@@ -381,9 +380,9 @@ func WithTimeout(timeout time.Duration) HubOption {
 //	        "endpoint": "https://api.custom.com",
 //	    }),
 //	)
-func WithPlatformConfig(platformName string, config map[string]interface{}) HubOption {
-	return func(cfg *HubConfig) error {
-		cfg.Platforms[platformName] = PlatformConfig(config)
+func WithPlatformConfig(platformName string, platformConfig map[string]interface{}) HubOption {
+	return func(cfg *config.Config) error {
+		cfg.Platforms[platformName] = map[string]interface{}(platformConfig)
 		return nil
 	}
 }
@@ -401,7 +400,7 @@ func WithPlatformConfig(platformName string, config map[string]interface{}) HubO
 //
 // Example:
 //
-//	policy := RetryPolicy{
+//	policy := config.RetryPolicy{
 //	    MaxRetries:      5,
 //	    InitialInterval: 2 * time.Second,
 //	    Multiplier:      2.0,
@@ -410,8 +409,8 @@ func WithPlatformConfig(platformName string, config map[string]interface{}) HubO
 //	hub, err := NewHub(
 //	    WithRetryPolicy(policy),
 //	)
-func WithRetryPolicy(policy RetryPolicy) HubOption {
-	return func(cfg *HubConfig) error {
+func WithRetryPolicy(policy config.RetryPolicy) HubOption {
+	return func(cfg *config.Config) error {
 		cfg.RetryPolicy = policy
 		return nil
 	}
@@ -429,8 +428,8 @@ func WithRetryPolicy(policy RetryPolicy) HubOption {
 //
 //	hub, err := NewHub(WithTestDefaults())
 func WithTestDefaults() HubOption {
-	return func(cfg *HubConfig) error {
-		cfg.Platforms["test"] = PlatformConfig{
+	return func(cfg *config.Config) error {
+		cfg.Platforms["test"] = map[string]interface{}{
 			"type": "mock",
 		}
 		return nil
@@ -461,7 +460,7 @@ func WithTestDefaults() HubOption {
 //	    WithLogger(logger.Default.LogMode(logger.Debug)),
 //	)
 func WithLogger(l logger.Logger) Option {
-	return func(cfg *HubConfig) error {
+	return func(cfg *config.Config) error {
 		cfg.Logger = l
 		return nil
 	}
@@ -482,7 +481,7 @@ func WithLogger(l logger.Logger) Option {
 // Example:
 //
 //	// Used by platform packages internally
-//	return WithCustomPlatform("feishu", config)
+//	return WithCustomPlatform("email", config)
 func WithCustomPlatform(platformName string, config map[string]interface{}) HubOption {
 	return WithPlatform(platformName, config)
 }
@@ -508,7 +507,7 @@ func GetAvailablePlatforms() []PlatformInfo {
 
 // Helper functions
 
-func validateConfig(config *HubConfig) error {
+func validateConfig(config *config.Config) error {
 	// Validate at least one platform is configured
 	if len(config.Platforms) == 0 {
 		return fmt.Errorf("at least one platform must be configured")
@@ -530,69 +529,70 @@ func validateConfig(config *HubConfig) error {
 	return nil
 }
 
-func firstOrEmpty(s []string) string {
-	if len(s) > 0 {
-		return s[0]
-	}
-	return ""
-}
+// firstOrEmpty is removed as unused
+// func firstOrEmpty(s []string) string {
+// 	if len(s) > 0 {
+// 		return s[0]
+// 	}
+// 	return ""
+// }
 
 // clientAdapter adapts Hub interface to Client interface
 type clientAdapter struct {
-	hub Hub
+	hub core.Hub
 }
 
-func (c *clientAdapter) Send(ctx context.Context, message *Message) (*Receipt, error) {
+func (c *clientAdapter) Send(ctx context.Context, message *message.Message) (*receipt.Receipt, error) {
 	return c.hub.Send(ctx, message)
 }
 
-func (c *clientAdapter) SendBatch(ctx context.Context, messages []*Message) ([]*Receipt, error) {
+func (c *clientAdapter) SendBatch(ctx context.Context, messages []*message.Message) ([]*receipt.Receipt, error) {
 	// Hub interface doesn't have SendBatch, so we implement it using Send
-	receipts := make([]*Receipt, 0, len(messages))
+	receipts := make([]*receipt.Receipt, 0, len(messages))
 	for _, msg := range messages {
-		receipt, err := c.hub.Send(ctx, msg)
+		result, err := c.hub.Send(ctx, msg)
 		if err != nil {
 			// Continue sending other messages even if one fails
 			// Store error information in receipt
-			receipts = append(receipts, &Receipt{
+			receipts = append(receipts, &receipt.Receipt{
 				MessageID: msg.ID,
 				Status:    "failed",
 				Error:     err,
 			})
 		} else {
-			receipts = append(receipts, receipt)
+			receipts = append(receipts, result)
 		}
 	}
 	return receipts, nil
 }
 
-func (c *clientAdapter) SendAsync(ctx context.Context, message *Message) (<-chan *Receipt, error) {
-	// Hub.SendAsync returns *AsyncReceipt, we need to adapt it
+func (c *clientAdapter) SendAsync(ctx context.Context, message *message.Message) (<-chan *receipt.Receipt, error) {
+	// Hub.SendAsync returns *receipt.AsyncReceipt, we need to adapt it
 	asyncReceipt, err := c.hub.SendAsync(ctx, message)
 	if err != nil {
 		return nil, err
 	}
 
 	// Create a channel to return
-	ch := make(chan *Receipt, 1)
+	ch := make(chan *receipt.Receipt, 1)
 
 	// Start a goroutine to convert AsyncReceipt to Receipt
 	go func() {
 		defer close(ch)
 		// Convert AsyncReceipt to Receipt
 		// Since AsyncReceipt doesn't have a Wait method, we create a receipt immediately
-		receipt := &Receipt{
+		result := &receipt.Receipt{
 			MessageID: asyncReceipt.MessageID,
 			Status:    asyncReceipt.Status,
 			Timestamp: asyncReceipt.QueuedAt,
 		}
-		ch <- receipt
+		ch <- result
 	}()
 
 	return ch, nil
 }
 
-func (c *clientAdapter) Health(ctx context.Context) (*HealthStatus, error) {
+func (c *clientAdapter) Health(ctx context.Context) (*core.HealthStatus, error) {
 	return c.hub.Health(ctx)
 }
 

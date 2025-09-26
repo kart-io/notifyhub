@@ -14,7 +14,7 @@ import (
 
 // memoryQueue implements an in-memory queue with priority and delay support
 type memoryQueue struct {
-	messages        chan *Message
+	messages        chan *QueueMessage
 	priorityHeap    *priorityHeap
 	delayedMessages *delayHeap
 	capacity        int
@@ -36,7 +36,7 @@ func NewMemoryQueue(capacity int, log logger.Logger) Queue {
 	}
 
 	q := &memoryQueue{
-		messages:        make(chan *Message, capacity),
+		messages:        make(chan *QueueMessage, capacity),
 		priorityHeap:    newPriorityHeap(),
 		delayedMessages: newDelayHeap(),
 		capacity:        capacity,
@@ -65,7 +65,7 @@ func NewMemoryQueue(capacity int, log logger.Logger) Queue {
 }
 
 // Enqueue adds a message to the queue
-func (q *memoryQueue) Enqueue(ctx context.Context, msg *Message) error {
+func (q *memoryQueue) Enqueue(ctx context.Context, msg *QueueMessage) error {
 	if atomic.LoadInt32(&q.closed) == 1 {
 		q.logger.Error("Attempted to enqueue to closed queue")
 		return ErrQueueClosed
@@ -121,7 +121,7 @@ func (q *memoryQueue) Enqueue(ctx context.Context, msg *Message) error {
 }
 
 // EnqueueBatch adds multiple messages to the queue
-func (q *memoryQueue) EnqueueBatch(ctx context.Context, msgs []*Message) error {
+func (q *memoryQueue) EnqueueBatch(ctx context.Context, msgs []*QueueMessage) error {
 	if atomic.LoadInt32(&q.closed) == 1 {
 		return ErrQueueClosed
 	}
@@ -144,7 +144,7 @@ func (q *memoryQueue) EnqueueBatch(ctx context.Context, msgs []*Message) error {
 }
 
 // Dequeue retrieves and removes a message from the queue
-func (q *memoryQueue) Dequeue(ctx context.Context) (*Message, error) {
+func (q *memoryQueue) Dequeue(ctx context.Context) (*QueueMessage, error) {
 	if atomic.LoadInt32(&q.closed) == 1 {
 		return nil, ErrQueueClosed
 	}
@@ -152,7 +152,7 @@ func (q *memoryQueue) Dequeue(ctx context.Context) (*Message, error) {
 	// Check priority queue first
 	q.mutex.Lock()
 	if q.priorityHeap.Len() > 0 {
-		msg := heap.Pop(q.priorityHeap).(*Message)
+		msg := heap.Pop(q.priorityHeap).(*QueueMessage)
 		q.mutex.Unlock()
 		atomic.AddInt64(&q.stats.DequeuedCount, 1)
 		q.logger.Debug("Priority message dequeued", "messageID", msg.ID, "priority", msg.Priority)
@@ -176,14 +176,14 @@ func (q *memoryQueue) Dequeue(ctx context.Context) (*Message, error) {
 }
 
 // DequeueBatch retrieves and removes multiple messages from the queue
-func (q *memoryQueue) DequeueBatch(ctx context.Context, count int) ([]*Message, error) {
+func (q *memoryQueue) DequeueBatch(ctx context.Context, count int) ([]*QueueMessage, error) {
 	if atomic.LoadInt32(&q.closed) == 1 {
 		return nil, ErrQueueClosed
 	}
 
 	q.logger.Debug("Dequeueing batch", "requestedCount", count)
 
-	messages := make([]*Message, 0, count)
+	messages := make([]*QueueMessage, 0, count)
 	for i := 0; i < count; i++ {
 		msg, err := q.Dequeue(ctx)
 		if err != nil {
@@ -204,7 +204,7 @@ func (q *memoryQueue) DequeueBatch(ctx context.Context, count int) ([]*Message, 
 }
 
 // Peek retrieves a message without removing it from the queue
-func (q *memoryQueue) Peek(ctx context.Context) (*Message, error) {
+func (q *memoryQueue) Peek(ctx context.Context) (*QueueMessage, error) {
 	if atomic.LoadInt32(&q.closed) == 1 {
 		return nil, ErrQueueClosed
 	}
@@ -338,7 +338,7 @@ func (q *memoryQueue) processReadyDelayedMessages() {
 }
 
 // Priority heap implementation
-type priorityHeap []*Message
+type priorityHeap []*QueueMessage
 
 func newPriorityHeap() *priorityHeap {
 	h := &priorityHeap{}
@@ -360,7 +360,7 @@ func (h priorityHeap) Less(i, j int) bool {
 func (h priorityHeap) Swap(i, j int) { h[i], h[j] = h[j], h[i] }
 
 func (h *priorityHeap) Push(x interface{}) {
-	*h = append(*h, x.(*Message))
+	*h = append(*h, x.(*QueueMessage))
 }
 
 func (h *priorityHeap) Pop() interface{} {
@@ -372,7 +372,7 @@ func (h *priorityHeap) Pop() interface{} {
 }
 
 // Delay heap implementation
-type delayHeap []*Message
+type delayHeap []*QueueMessage
 
 func newDelayHeap() *delayHeap {
 	h := &delayHeap{}
@@ -396,7 +396,7 @@ func (h delayHeap) Less(i, j int) bool {
 func (h delayHeap) Swap(i, j int) { h[i], h[j] = h[j], h[i] }
 
 func (h *delayHeap) Push(x interface{}) {
-	*h = append(*h, x.(*Message))
+	*h = append(*h, x.(*QueueMessage))
 }
 
 func (h *delayHeap) Pop() interface{} {
@@ -430,7 +430,7 @@ func (q *memoryQueue) GetMetrics() *QueueMetrics {
 }
 
 // Subscribe registers a callback for queue events (ObservableQueue interface)
-func (q *memoryQueue) Subscribe(event string, callback func(msg *Message)) {
+func (q *memoryQueue) Subscribe(event string, callback func(msg *QueueMessage)) {
 	q.metrics.Subscribe(event, callback)
 }
 

@@ -7,7 +7,9 @@ import (
 	"sync"
 
 	"github.com/kart-io/notifyhub/pkg/logger"
+	"github.com/kart-io/notifyhub/pkg/notifyhub/message"
 	"github.com/kart-io/notifyhub/pkg/notifyhub/platform"
+	"github.com/kart-io/notifyhub/pkg/notifyhub/target"
 )
 
 // PublicPlatformManager manages platform senders using only public interfaces
@@ -17,8 +19,8 @@ type PublicPlatformManager struct {
 	logger  logger.Logger
 }
 
-// NewPlatformManager creates a new public platform manager
-func NewPlatformManager() *PublicPlatformManager {
+// NewPublicPlatformManager creates a new public platform manager (deprecated)
+func NewPublicPlatformManager() *PublicPlatformManager {
 	return &PublicPlatformManager{
 		senders: make(map[string]platform.ExternalSender),
 		logger:  logger.New(), // Default to nop logger
@@ -104,7 +106,7 @@ func (m *PublicPlatformManager) ListSenders() []string {
 
 // LocalSendResult is a local copy of SendResult to avoid import issues
 type LocalSendResult struct {
-	Target    platform.Target        `json:"target"`
+	Target    target.Target          `json:"target"`
 	Success   bool                   `json:"success"`
 	MessageID string                 `json:"message_id,omitempty"`
 	Error     string                 `json:"error,omitempty"`
@@ -113,11 +115,11 @@ type LocalSendResult struct {
 }
 
 // SendToAll sends a message to all targets across all relevant platforms
-func (m *PublicPlatformManager) SendToAll(ctx context.Context, msg *platform.Message, targets []platform.Target) ([]*LocalSendResult, error) {
+func (m *PublicPlatformManager) SendToAll(ctx context.Context, msg *message.Message, targets []target.Target) ([]*LocalSendResult, error) {
 	m.logger.Debug("Starting SendToAll", "messageID", msg.ID, "targetCount", len(targets))
 
 	// Group targets by platform
-	platformTargets := make(map[string][]platform.Target)
+	platformTargets := make(map[string][]target.Target)
 	for _, target := range targets {
 		platformName := target.Platform
 		platformTargets[platformName] = append(platformTargets[platformName], target)
@@ -140,7 +142,7 @@ func (m *PublicPlatformManager) SendToAll(ctx context.Context, msg *platform.Mes
 
 	for platformName, platformTargetList := range platformTargets {
 		wg.Add(1)
-		go func(platform string, targets []platform.Target) {
+		go func(platform string, targets []target.Target) {
 			defer wg.Done()
 
 			sender, exists := m.GetSender(platform)

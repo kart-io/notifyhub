@@ -10,7 +10,9 @@ import (
 	"time"
 
 	"github.com/kart-io/notifyhub/pkg/logger"
+	"github.com/kart-io/notifyhub/pkg/notifyhub/message"
 	"github.com/kart-io/notifyhub/pkg/notifyhub/platform"
+	"github.com/kart-io/notifyhub/pkg/notifyhub/target"
 )
 
 // SlackSender implements the ExternalSender interface for Slack
@@ -100,7 +102,7 @@ func (s *SlackSender) Name() string {
 }
 
 // Send sends a message to Slack
-func (s *SlackSender) Send(ctx context.Context, msg *platform.Message, targets []platform.Target) ([]*platform.SendResult, error) {
+func (s *SlackSender) Send(ctx context.Context, msg *message.Message, targets []target.Target) ([]*platform.SendResult, error) {
 	if s.logger == nil {
 		s.logger = logger.Discard
 	}
@@ -108,31 +110,31 @@ func (s *SlackSender) Send(ctx context.Context, msg *platform.Message, targets [
 
 	results := make([]*platform.SendResult, len(targets))
 
-	for i, target := range targets {
+	for i, tgt := range targets {
 		startTime := time.Now()
 		result := &platform.SendResult{
-			Target:  target,
+			Target:  tgt,
 			Success: false,
 		}
 
 		// Validate target
-		if err := s.ValidateTarget(target); err != nil {
-			s.logger.Error("Invalid Slack target", "target", target.Value, "error", err)
+		if err := s.ValidateTarget(tgt); err != nil {
+			s.logger.Error("Invalid Slack target", "target", tgt.Value, "error", err)
 			result.Error = err.Error()
 			results[i] = result
 			continue
 		}
 
-		s.logger.Debug("Building Slack message", "target", target.Value)
+		s.logger.Debug("Building Slack message", "target", tgt.Value)
 		// Build Slack message
-		slackMsg := s.buildSlackMessage(msg, target)
+		slackMsg := s.buildSlackMessage(msg, tgt)
 
 		// Send message
 		if err := s.sendToSlack(ctx, slackMsg); err != nil {
-			s.logger.Error("Failed to send Slack message", "target", target.Value, "error", err)
+			s.logger.Error("Failed to send Slack message", "target", tgt.Value, "error", err)
 			result.Error = err.Error()
 		} else {
-			s.logger.Info("Slack message sent successfully", "target", target.Value, "messageID", msg.ID)
+			s.logger.Info("Slack message sent successfully", "target", tgt.Value, "messageID", msg.ID)
 			result.Success = true
 			result.MessageID = fmt.Sprintf("slack_%d", time.Now().UnixNano())
 			result.Response = "Message sent successfully"
@@ -144,7 +146,7 @@ func (s *SlackSender) Send(ctx context.Context, msg *platform.Message, targets [
 		}
 
 		results[i] = result
-		s.logger.Debug("Slack send attempt completed", "target", target.Value, "success", result.Success, "duration_ms", time.Since(startTime).Milliseconds())
+		s.logger.Debug("Slack send attempt completed", "target", tgt.Value, "success", result.Success, "duration_ms", time.Since(startTime).Milliseconds())
 	}
 
 	s.logger.Debug("Slack batch send completed", "messageID", msg.ID, "totalTargets", len(targets))
@@ -152,13 +154,13 @@ func (s *SlackSender) Send(ctx context.Context, msg *platform.Message, targets [
 }
 
 // ValidateTarget validates a target for Slack
-func (s *SlackSender) ValidateTarget(target platform.Target) error {
-	if target.Type != "channel" && target.Type != "user" && target.Type != "webhook" {
-		s.logger.Debug("Invalid target type for Slack", "type", target.Type)
-		return fmt.Errorf("slack supports channel, user, and webhook targets, got %s", target.Type)
+func (s *SlackSender) ValidateTarget(tgt target.Target) error {
+	if tgt.Type != "channel" && tgt.Type != "user" && tgt.Type != "webhook" {
+		s.logger.Debug("Invalid target type for Slack", "type", tgt.Type)
+		return fmt.Errorf("slack supports channel, user, and webhook targets, got %s", tgt.Type)
 	}
 
-	if target.Value == "" {
+	if tgt.Value == "" {
 		s.logger.Debug("Empty target value")
 		return fmt.Errorf("target value cannot be empty")
 	}
@@ -204,13 +206,13 @@ func (s *SlackSender) Close() error {
 }
 
 // buildSlackMessage builds a Slack message from the platform message
-func (s *SlackSender) buildSlackMessage(msg *platform.Message, target platform.Target) *SlackMessage {
-	s.logger.Debug("Building Slack message", "messageID", msg.ID, "targetType", target.Type)
+func (s *SlackSender) buildSlackMessage(msg *message.Message, tgt target.Target) *SlackMessage {
+	s.logger.Debug("Building Slack message", "messageID", msg.ID, "targetType", tgt.Type)
 	slackMsg := &SlackMessage{}
 
 	// Set channel if specified
-	if target.Type == "channel" {
-		slackMsg.Channel = target.Value
+	if tgt.Type == "channel" {
+		slackMsg.Channel = tgt.Value
 	}
 
 	// Check for rich content in platform data
@@ -278,4 +280,10 @@ func (s *SlackSender) sendToSlack(ctx context.Context, msg *SlackMessage) error 
 
 	s.logger.Info("Slack message sent successfully")
 	return nil
+}
+
+// init registers the slack platform automatically
+func init() {
+	// Register slack platform creator with the global registry
+	platform.RegisterPlatform("slack", NewSlackSender)
 }

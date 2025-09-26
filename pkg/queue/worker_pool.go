@@ -135,7 +135,7 @@ func (p *workerPool) Stop() error {
 }
 
 // Scale adjusts the number of workers
-func (p *workerPool) Scale(count int) error {
+func (p *workerPool) Scale(ctx context.Context, count int) error {
 	if count < p.minWorkers || count > p.maxWorkers {
 		return fmt.Errorf("worker count must be between %d and %d", p.minWorkers, p.maxWorkers)
 	}
@@ -149,7 +149,6 @@ func (p *workerPool) Scale(count int) error {
 
 	if count > currentCount {
 		// Add workers
-		ctx := context.Background()
 		for i := currentCount; i < count; i++ {
 			if err := p.addWorker(ctx); err != nil {
 				p.logger.Error("Failed to add worker during scaling", "error", err)
@@ -292,7 +291,7 @@ func (p *workerPool) addWorker(ctx context.Context) error {
 
 // wrapHandler wraps the message handler with statistics tracking
 func (p *workerPool) wrapHandler() MessageHandler {
-	return func(ctx context.Context, msg *Message) error {
+	return func(ctx context.Context, msg *QueueMessage) error {
 		startTime := time.Now()
 
 		err := p.handler(ctx, msg)
@@ -372,7 +371,7 @@ func (p *workerPool) checkAndScale(ctx context.Context) {
 			"scaleUpThreshold", scalePolicy.ScaleUpThreshold,
 			"scaleDownThreshold", scalePolicy.ScaleDownThreshold)
 
-		if err := p.Scale(desiredWorkers); err != nil {
+		if err := p.Scale(ctx, desiredWorkers); err != nil {
 			p.logger.Error("Failed to auto-scale workers", "error", err)
 			// Record health error
 			p.recordHealthError("scaling_failed", err.Error(), "error")
@@ -471,7 +470,7 @@ func (w *basicWorker) Stop() error {
 }
 
 // Process handles a single message
-func (w *basicWorker) Process(ctx context.Context, msg *Message) error {
+func (w *basicWorker) Process(ctx context.Context, msg *QueueMessage) error {
 	return w.handler(ctx, msg)
 }
 

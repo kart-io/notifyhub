@@ -31,7 +31,7 @@ func TestMemoryQueue(t *testing.T) {
 		}
 
 		// Test enqueue
-		msg := &Message{
+		msg := &QueueMessage{
 			ID:      fmt.Sprintf("test-%d", time.Now().UnixNano()),
 			Payload: "test payload",
 		}
@@ -72,17 +72,17 @@ func TestMemoryQueue(t *testing.T) {
 		ctx := context.Background()
 
 		// Fill queue to capacity
-		err := q.Enqueue(ctx, &Message{ID: "1", Payload: "msg1"})
+		err := q.Enqueue(ctx, &QueueMessage{ID: "1", Payload: "msg1"})
 		if err != nil {
 			t.Fatal(err)
 		}
-		err = q.Enqueue(ctx, &Message{ID: "2", Payload: "msg2"})
+		err = q.Enqueue(ctx, &QueueMessage{ID: "2", Payload: "msg2"})
 		if err != nil {
 			t.Fatal(err)
 		}
 
 		// Try to exceed capacity
-		err = q.Enqueue(ctx, &Message{ID: "3", Payload: "msg3"})
+		err = q.Enqueue(ctx, &QueueMessage{ID: "3", Payload: "msg3"})
 		if err != ErrQueueFull {
 			t.Errorf("Expected ErrQueueFull, got %v", err)
 		}
@@ -99,10 +99,10 @@ func TestMemoryQueue(t *testing.T) {
 		ctx := context.Background()
 
 		// Enqueue messages with different priorities
-		msg1 := &Message{ID: "1", Priority: PriorityLow, Payload: "low"}
-		msg2 := &Message{ID: "2", Priority: PriorityHigh, Payload: "high"}
-		msg3 := &Message{ID: "3", Priority: PriorityNormal, Payload: "normal"}
-		msg4 := &Message{ID: "4", Priority: PriorityUrgent, Payload: "urgent"}
+		msg1 := &QueueMessage{ID: "1", Priority: PriorityLow, Payload: "low"}
+		msg2 := &QueueMessage{ID: "2", Priority: PriorityHigh, Payload: "high"}
+		msg3 := &QueueMessage{ID: "3", Priority: PriorityNormal, Payload: "normal"}
+		msg4 := &QueueMessage{ID: "4", Priority: PriorityUrgent, Payload: "urgent"}
 
 		if err := q.Enqueue(ctx, msg1); err != nil {
 			t.Fatal(err)
@@ -147,7 +147,7 @@ func TestMemoryQueue(t *testing.T) {
 
 		// Enqueue delayed message
 		futureTime := time.Now().Add(200 * time.Millisecond)
-		msg := &Message{
+		msg := &QueueMessage{
 			ID:          "delayed",
 			Payload:     "delayed message",
 			ScheduledAt: &futureTime,
@@ -194,7 +194,7 @@ func TestMemoryQueue(t *testing.T) {
 			wg.Add(1)
 			go func(id int) {
 				defer wg.Done()
-				msg := &Message{
+				msg := &QueueMessage{
 					ID:      fmt.Sprintf("msg-%d-%d", id, time.Now().UnixNano()),
 					Payload: id,
 				}
@@ -242,7 +242,7 @@ func TestMemoryQueue(t *testing.T) {
 
 		// Add some messages
 		for i := 0; i < 5; i++ {
-			if err := q.Enqueue(ctx, &Message{ID: string(rune('a' + i)), Payload: i}); err != nil {
+			if err := q.Enqueue(ctx, &QueueMessage{ID: string(rune('a' + i)), Payload: i}); err != nil {
 				t.Logf("Failed to enqueue: %v", err)
 			}
 		}
@@ -279,7 +279,7 @@ func TestRetryQueue(t *testing.T) {
 
 		ctx := context.Background()
 
-		msg := &Message{
+		msg := &QueueMessage{
 			ID:         "retry-test",
 			Payload:    "test",
 			RetryCount: 0,
@@ -323,7 +323,7 @@ func TestWorkerPool(t *testing.T) {
 		}()
 
 		var processedCount int32
-		handler := func(ctx context.Context, msg *Message) error {
+		handler := func(ctx context.Context, msg *QueueMessage) error {
 			atomic.AddInt32(&processedCount, 1)
 			return nil
 		}
@@ -338,7 +338,7 @@ func TestWorkerPool(t *testing.T) {
 
 		// Add messages
 		for i := 0; i < 10; i++ {
-			if err := q.Enqueue(ctx, &Message{ID: string(rune('a' + i)), Payload: i}); err != nil {
+			if err := q.Enqueue(ctx, &QueueMessage{ID: string(rune('a' + i)), Payload: i}); err != nil {
 				t.Logf("Failed to enqueue: %v", err)
 			}
 		}
@@ -365,7 +365,7 @@ func TestWorkerPool(t *testing.T) {
 			}
 		}()
 
-		handler := func(ctx context.Context, msg *Message) error {
+		handler := func(ctx context.Context, msg *QueueMessage) error {
 			time.Sleep(10 * time.Millisecond) // Simulate work
 			return nil
 		}
@@ -389,7 +389,7 @@ func TestWorkerPool(t *testing.T) {
 		}
 
 		// Scale up
-		err = pool.Scale(3)
+		err = pool.Scale(ctx, 3)
 		if err != nil {
 			t.Fatal(err)
 		}
@@ -398,7 +398,7 @@ func TestWorkerPool(t *testing.T) {
 		}
 
 		// Scale down
-		err = pool.Scale(2)
+		err = pool.Scale(ctx, 2)
 		if err != nil {
 			t.Fatal(err)
 		}
@@ -407,7 +407,7 @@ func TestWorkerPool(t *testing.T) {
 		}
 
 		// Invalid scale (exceeds max)
-		err = pool.Scale(10)
+		err = pool.Scale(ctx, 10)
 		if err == nil {
 			t.Error("Expected error for invalid scale")
 		}
@@ -497,7 +497,7 @@ func BenchmarkMemoryQueueEnqueue(b *testing.B) {
 	}()
 
 	ctx := context.Background()
-	msg := &Message{
+	msg := &QueueMessage{
 		ID:      "bench",
 		Payload: "benchmark payload",
 	}
@@ -523,7 +523,7 @@ func BenchmarkMemoryQueueDequeue(b *testing.B) {
 
 	// Pre-fill queue
 	for i := 0; i < b.N; i++ {
-		if err := q.Enqueue(ctx, &Message{ID: string(rune(i)), Payload: i}); err != nil {
+		if err := q.Enqueue(ctx, &QueueMessage{ID: string(rune(i)), Payload: i}); err != nil {
 			// Expected error in benchmark, ignore but acknowledge
 			_ = err
 		}
@@ -552,7 +552,7 @@ func BenchmarkConcurrentOperations(b *testing.B) {
 		counter := 0
 		for pb.Next() {
 			counter++
-			msg := &Message{
+			msg := &QueueMessage{
 				ID:      fmt.Sprintf("concurrent-%d-%d", counter, time.Now().UnixNano()),
 				Payload: "concurrent",
 			}

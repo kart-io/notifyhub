@@ -9,49 +9,62 @@ import (
 	"github.com/kart-io/notifyhub/pkg/logger"
 	"github.com/kart-io/notifyhub/pkg/notifyhub/config"
 	"github.com/kart-io/notifyhub/pkg/notifyhub/message"
-	"github.com/kart-io/notifyhub/pkg/notifyhub/platform"
 	"github.com/kart-io/notifyhub/pkg/notifyhub/receipt"
-	"github.com/kart-io/notifyhub/pkg/notifyhub/target"
-	// Note: Internal platform registration is handled during NewHub creation
-	// No need to import internal packages here
+
+	// Auto-register internal platforms
+	_ "github.com/kart-io/notifyhub/pkg/platforms/email"
+	_ "github.com/kart-io/notifyhub/pkg/platforms/feishu"
+	_ "github.com/kart-io/notifyhub/pkg/platforms/slack"
 )
 
 // No special initialization needed - platforms register themselves
 
 // hubImpl implements the Hub interface using the public platform manager
 type hubImpl struct {
-	config  *config.HubConfig
+	config  *config.Config
 	manager *PublicPlatformManager
 	logger  logger.Logger
 }
 
 // NewHub creates a new Hub implementation with the given configuration
-func NewHub(cfg *config.HubConfig) (Hub, error) {
-	cfg.Logger.Debug("Creating new hub", "platformCount", len(cfg.Platforms))
+func NewHub(cfg *config.Config) (Hub, error) {
+	if cfg.Logger != nil {
+		cfg.Logger.Debug("Creating new hub", "platformCount", len(cfg.Platforms))
+	}
 
 	// Ensure internal platforms are registered
 	ensureInternalPlatformsRegistered()
 
 	// Create public platform manager
-	manager := NewPlatformManager()
-	manager.SetLogger(cfg.Logger)
+	manager := NewPublicPlatformManager()
+	if cfg.Logger != nil {
+		manager.SetLogger(cfg.Logger)
+	}
 
 	// Register senders for each configured platform
 	for platformName, platformConfig := range cfg.Platforms {
-		cfg.Logger.Debug("Creating sender", "platform", platformName)
-		sender, err := manager.CreateSender(platformName, map[string]interface{}(platformConfig), cfg.Logger)
+		if cfg.Logger != nil {
+			cfg.Logger.Debug("Creating sender", "platform", platformName)
+		}
+		sender, err := manager.CreateSender(platformName, platformConfig, cfg.Logger)
 		if err != nil {
-			cfg.Logger.Error("Failed to create sender", "platform", platformName, "error", err)
+			if cfg.Logger != nil {
+				cfg.Logger.Error("Failed to create sender", "platform", platformName, "error", err)
+			}
 			return nil, fmt.Errorf("failed to create %s sender: %w", platformName, err)
 		}
 
 		if err := manager.RegisterSender(sender); err != nil {
-			cfg.Logger.Error("Failed to register sender", "platform", platformName, "error", err)
+			if cfg.Logger != nil {
+				cfg.Logger.Error("Failed to register sender", "platform", platformName, "error", err)
+			}
 			return nil, fmt.Errorf("failed to register %s sender: %w", platformName, err)
 		}
 	}
 
-	cfg.Logger.Info("Hub created successfully", "platformCount", len(cfg.Platforms))
+	if cfg.Logger != nil {
+		cfg.Logger.Info("Hub created successfully", "platformCount", len(cfg.Platforms))
+	}
 	return &hubImpl{
 		config:  cfg,
 		manager: manager,
@@ -63,17 +76,9 @@ func NewHub(cfg *config.HubConfig) (Hub, error) {
 func (h *hubImpl) Send(ctx context.Context, msg *message.Message) (*receipt.Receipt, error) {
 	h.logger.Debug("Sending message", "messageID", msg.ID, "title", msg.Title, "targetCount", len(msg.Targets))
 
-	// Convert public message to platform message format
-	platformMsg := h.convertToPlatformMessage(msg)
-	h.logger.Debug("Converted message to platform format", "messageID", msg.ID)
-
-	// Convert targets to platform target format
-	platformTargets := h.convertToPlatformTargets(msg.Targets)
-	h.logger.Debug("Converted targets to platform format", "messageID", msg.ID, "platformTargetCount", len(platformTargets))
-
-	// Send through platform manager
+	// Send directly using unified types (no conversion needed)
 	h.logger.Debug("Dispatching message to platform manager", "messageID", msg.ID)
-	results, err := h.manager.SendToAll(ctx, platformMsg, platformTargets)
+	results, err := h.manager.SendToAll(ctx, msg, msg.Targets)
 	h.logger.Debug("Received results from platform manager", "messageID", msg.ID, "resultCount", len(results), "error", err)
 
 	// Convert results to receipt
@@ -164,40 +169,6 @@ func (h *hubImpl) Close(ctx context.Context) error {
 }
 
 // Helper methods for conversion
-
-func (h *hubImpl) convertToPlatformMessage(msg *message.Message) *platform.Message {
-	platformMsg := &platform.Message{
-		ID:           msg.ID,
-		Title:        msg.Title,
-		Body:         msg.Body,
-		Format:       msg.Format,
-		Priority:     int(msg.Priority),
-		Metadata:     msg.Metadata,
-		Variables:    msg.Variables,
-		PlatformData: make(map[string]interface{}),
-	}
-
-	// Copy platform-specific data
-	if msg.PlatformData != nil {
-		for key, value := range msg.PlatformData {
-			platformMsg.PlatformData[key] = value
-		}
-	}
-
-	return platformMsg
-}
-
-func (h *hubImpl) convertToPlatformTargets(targets []target.Target) []platform.Target {
-	platformTargets := make([]platform.Target, len(targets))
-	for i, t := range targets {
-		platformTargets[i] = platform.Target{
-			Type:     t.Type,
-			Value:    t.Value,
-			Platform: t.Platform,
-		}
-	}
-	return platformTargets
-}
 
 func (h *hubImpl) convertToReceipt(messageID string, results []*LocalSendResult) *receipt.Receipt {
 	platformResults := make([]receipt.PlatformResult, len(results))

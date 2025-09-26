@@ -16,8 +16,9 @@ type MessageBuilder struct {
 func NewMessage(title ...string) *MessageBuilder {
 	msg := &Message{
 		ID:           generateMessageID(),
-		Format:       "text",
+		Format:       FormatText,
 		Priority:     PriorityNormal,
+		CreatedAt:    time.Now(),
 		Targets:      make([]target.Target, 0),
 		Metadata:     make(map[string]interface{}),
 		Variables:    make(map[string]interface{}),
@@ -59,21 +60,21 @@ func (b *MessageBuilder) WithText(text string) *MessageBuilder {
 }
 
 // WithFormat sets the message format
-func (b *MessageBuilder) WithFormat(format string) *MessageBuilder {
+func (b *MessageBuilder) WithFormat(format Format) *MessageBuilder {
 	b.message.Format = format
 	return b
 }
 
 // WithMarkdown sets the message format to markdown and sets the body
 func (b *MessageBuilder) WithMarkdown(content string) *MessageBuilder {
-	b.message.Format = "markdown"
+	b.message.Format = FormatMarkdown
 	b.message.Body = content
 	return b
 }
 
 // WithHTML sets the message format to HTML and sets the body
 func (b *MessageBuilder) WithHTML(content string) *MessageBuilder {
-	b.message.Format = "html"
+	b.message.Format = FormatHTML
 	b.message.Body = content
 	return b
 }

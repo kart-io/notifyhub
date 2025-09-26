@@ -112,7 +112,7 @@ func NewRedisQueue(opts *RedisOptions, capacity int, log logger.Logger) (Queue, 
 }
 
 // Enqueue adds a message to the queue
-func (q *redisQueue) Enqueue(ctx context.Context, msg *Message) error {
+func (q *redisQueue) Enqueue(ctx context.Context, msg *QueueMessage) error {
 	if atomic.LoadInt32(&q.closed) == 1 {
 		q.logger.Error("Attempted to enqueue to closed queue")
 		return ErrQueueClosed
@@ -193,7 +193,7 @@ func (q *redisQueue) Enqueue(ctx context.Context, msg *Message) error {
 }
 
 // EnqueueBatch adds multiple messages to the queue
-func (q *redisQueue) EnqueueBatch(ctx context.Context, msgs []*Message) error {
+func (q *redisQueue) EnqueueBatch(ctx context.Context, msgs []*QueueMessage) error {
 	if atomic.LoadInt32(&q.closed) == 1 {
 		return ErrQueueClosed
 	}
@@ -248,7 +248,7 @@ func (q *redisQueue) EnqueueBatch(ctx context.Context, msgs []*Message) error {
 }
 
 // Dequeue retrieves and removes a message from the queue
-func (q *redisQueue) Dequeue(ctx context.Context) (*Message, error) {
+func (q *redisQueue) Dequeue(ctx context.Context) (*QueueMessage, error) {
 	if atomic.LoadInt32(&q.closed) == 1 {
 		return nil, ErrQueueClosed
 	}
@@ -287,14 +287,14 @@ func (q *redisQueue) Dequeue(ctx context.Context) (*Message, error) {
 }
 
 // DequeueBatch retrieves and removes multiple messages from the queue
-func (q *redisQueue) DequeueBatch(ctx context.Context, count int) ([]*Message, error) {
+func (q *redisQueue) DequeueBatch(ctx context.Context, count int) ([]*QueueMessage, error) {
 	if atomic.LoadInt32(&q.closed) == 1 {
 		return nil, ErrQueueClosed
 	}
 
 	q.logger.Debug("Dequeueing batch", "requestedCount", count)
 
-	messages := make([]*Message, 0, count)
+	messages := make([]*QueueMessage, 0, count)
 
 	// Try priority queue first
 	for i := 0; i < count && len(messages) < count; i++ {
@@ -351,7 +351,7 @@ func (q *redisQueue) DequeueBatch(ctx context.Context, count int) ([]*Message, e
 }
 
 // Peek retrieves a message without removing it from the queue
-func (q *redisQueue) Peek(ctx context.Context) (*Message, error) {
+func (q *redisQueue) Peek(ctx context.Context) (*QueueMessage, error) {
 	if atomic.LoadInt32(&q.closed) == 1 {
 		return nil, ErrQueueClosed
 	}
@@ -446,8 +446,8 @@ func (q *redisQueue) getSize(ctx context.Context) (int, error) {
 	return total, nil
 }
 
-func (q *redisQueue) deserializeMessage(data []byte) (*Message, error) {
-	var msg Message
+func (q *redisQueue) deserializeMessage(data []byte) (*QueueMessage, error) {
+	var msg QueueMessage
 	if err := json.Unmarshal(data, &msg); err != nil {
 		return nil, fmt.Errorf("failed to deserialize message: %w", err)
 	}
@@ -532,7 +532,7 @@ func (q *redisQueue) GetMetrics() *QueueMetrics {
 }
 
 // Subscribe registers a callback for queue events (ObservableQueue interface)
-func (q *redisQueue) Subscribe(event string, callback func(msg *Message)) {
+func (q *redisQueue) Subscribe(event string, callback func(msg *QueueMessage)) {
 	q.metrics.Subscribe(event, callback)
 }
 

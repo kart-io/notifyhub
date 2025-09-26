@@ -6,6 +6,7 @@ import (
 	"reflect"
 	"sync"
 
+	"github.com/kart-io/notifyhub/pkg/notifyhub/config"
 	"github.com/kart-io/notifyhub/pkg/notifyhub/platform"
 )
 
@@ -82,44 +83,44 @@ func IsExtensionRegistered(name string) bool {
 }
 
 // WithExtension creates a HubOption for an external platform using generic configuration
-func WithExtension(platformName string, config map[string]interface{}) HubOption {
-	return func(cfg *HubConfig) error {
+func WithExtension(platformName string, platformConfig map[string]interface{}) HubOption {
+	return func(cfg *config.Config) error {
 		// Validate configuration if validator exists
 		if ext, exists := GetExtension(platformName); exists && ext.Validator != nil {
-			if err := ext.Validator(config); err != nil {
+			if err := ext.Validator(platformConfig); err != nil {
 				// Return validation error
 				return fmt.Errorf("validation failed for platform %s: %w", platformName, err)
 			}
 		}
 
-		cfg.Platforms[platformName] = PlatformConfig(config)
+		cfg.Platforms[platformName] = map[string]interface{}(platformConfig)
 		return nil
 	}
 }
 
 // WithExtensionDefaults creates a HubOption for an external platform using default configuration
 func WithExtensionDefaults(platformName string, overrides ...map[string]interface{}) HubOption {
-	return func(cfg *HubConfig) error {
+	return func(cfg *config.Config) error {
 		ext, exists := GetExtension(platformName)
 		if !exists {
 			return fmt.Errorf("platform %s is not registered", platformName)
 		}
 
 		// Start with defaults
-		config := make(map[string]interface{})
+		platformConfig := make(map[string]interface{})
 		if ext.DefaultOpts != nil {
-			config = ext.DefaultOpts()
+			platformConfig = ext.DefaultOpts()
 		}
 
 		// Apply overrides
 		for _, override := range overrides {
 			for k, v := range override {
-				config[k] = v
+				platformConfig[k] = v
 			}
 		}
 
 		// Use WithExtension to apply configuration with validation
-		return WithExtension(platformName, config)(cfg)
+		return WithExtension(platformName, platformConfig)(cfg)
 	}
 }
 

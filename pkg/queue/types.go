@@ -6,6 +6,9 @@ import (
 	"context"
 	"errors"
 	"time"
+
+	"github.com/kart-io/notifyhub/pkg/notifyhub/message"
+	"github.com/kart-io/notifyhub/pkg/utils/idgen"
 )
 
 var (
@@ -35,10 +38,11 @@ const (
 	PriorityUrgent Priority = 3
 )
 
-// Message represents a queue message
-type Message struct {
+// QueueMessage represents a queue message wrapper for any payload
+// This is distinct from notifyhub.Message which represents notification content
+type QueueMessage struct {
 	ID          string                 `json:"id"`
-	Payload     interface{}            `json:"payload"`
+	Payload     interface{}            `json:"payload"` // Can be *message.Message or other types
 	Priority    Priority               `json:"priority"`
 	Metadata    map[string]interface{} `json:"metadata,omitempty"`
 	Timestamp   time.Time              `json:"timestamp"`
@@ -52,19 +56,19 @@ type Message struct {
 // Queue defines the interface for message queue implementations
 type Queue interface {
 	// Enqueue adds a message to the queue
-	Enqueue(ctx context.Context, msg *Message) error
+	Enqueue(ctx context.Context, msg *QueueMessage) error
 
 	// EnqueueBatch adds multiple messages to the queue
-	EnqueueBatch(ctx context.Context, msgs []*Message) error
+	EnqueueBatch(ctx context.Context, msgs []*QueueMessage) error
 
 	// Dequeue retrieves and removes a message from the queue
-	Dequeue(ctx context.Context) (*Message, error)
+	Dequeue(ctx context.Context) (*QueueMessage, error)
 
 	// DequeueBatch retrieves and removes multiple messages from the queue
-	DequeueBatch(ctx context.Context, count int) ([]*Message, error)
+	DequeueBatch(ctx context.Context, count int) ([]*QueueMessage, error)
 
 	// Peek retrieves a message without removing it from the queue
-	Peek(ctx context.Context) (*Message, error)
+	Peek(ctx context.Context) (*QueueMessage, error)
 
 	// Size returns the number of messages in the queue
 	Size() int
@@ -84,10 +88,10 @@ type DelayQueue interface {
 	Queue
 
 	// EnqueueDelayed adds a message to be processed after a delay
-	EnqueueDelayed(ctx context.Context, msg *Message, delay time.Duration) error
+	EnqueueDelayed(ctx context.Context, msg *QueueMessage, delay time.Duration) error
 
 	// EnqueueScheduled adds a message to be processed at a specific time
-	EnqueueScheduled(ctx context.Context, msg *Message, scheduledAt time.Time) error
+	EnqueueScheduled(ctx context.Context, msg *QueueMessage, scheduledAt time.Time) error
 }
 
 // PriorityQueue extends Queue with priority-based processing
@@ -95,10 +99,10 @@ type PriorityQueue interface {
 	Queue
 
 	// EnqueueWithPriority adds a message with a specific priority
-	EnqueueWithPriority(ctx context.Context, msg *Message, priority Priority) error
+	EnqueueWithPriority(ctx context.Context, msg *QueueMessage, priority Priority) error
 
 	// DequeueByPriority retrieves the highest priority message
-	DequeueByPriority(ctx context.Context) (*Message, error)
+	DequeueByPriority(ctx context.Context) (*QueueMessage, error)
 }
 
 // RetryQueue extends Queue with retry functionality
@@ -106,10 +110,10 @@ type RetryQueue interface {
 	Queue
 
 	// Retry moves a message back to the queue with incremented retry count
-	Retry(ctx context.Context, msg *Message) error
+	Retry(ctx context.Context, msg *QueueMessage) error
 
 	// MoveToDeadLetter moves a message to the dead letter queue
-	MoveToDeadLetter(ctx context.Context, msg *Message) error
+	MoveToDeadLetter(ctx context.Context, msg *QueueMessage) error
 
 	// GetDeadLetterQueue returns the dead letter queue
 	GetDeadLetterQueue() Queue
@@ -138,7 +142,7 @@ type ObservableQueue interface {
 	GetMetrics() *QueueMetrics
 
 	// Subscribe registers a callback for queue events
-	Subscribe(event string, callback func(msg *Message))
+	Subscribe(event string, callback func(msg *QueueMessage))
 
 	// Unsubscribe removes a callback for queue events
 	Unsubscribe(event string)
@@ -245,7 +249,7 @@ type Worker interface {
 	Stop() error
 
 	// Process handles a single message
-	Process(ctx context.Context, msg *Message) error
+	Process(ctx context.Context, msg *QueueMessage) error
 
 	// GetID returns the worker ID
 	GetID() string
@@ -263,7 +267,7 @@ type WorkerPool interface {
 	Stop() error
 
 	// Scale adjusts the number of workers
-	Scale(count int) error
+	Scale(ctx context.Context, count int) error
 
 	// GetWorkerCount returns the number of workers
 	GetWorkerCount() int
@@ -282,7 +286,69 @@ type WorkerPool interface {
 }
 
 // MessageHandler defines the interface for message processing
-type MessageHandler func(ctx context.Context, msg *Message) error
+type MessageHandler func(ctx context.Context, msg *QueueMessage) error
 
 // Middleware defines queue middleware
 type Middleware func(next MessageHandler) MessageHandler
+
+// Helper functions for message conversion
+
+// NewQueueMessage creates a new queue message from a notification message
+func NewQueueMessage(notifyMsg *message.Message) *QueueMessage {
+	now := time.Now()
+
+	// Copy metadata to avoid shared references
+	metadata := make(map[string]interface{})
+	for k, v := range notifyMsg.Metadata {
+		metadata[k] = v
+	}
+
+	return &QueueMessage{
+		ID:          idgen.GenerateMessageID(),
+		Payload:     notifyMsg,
+		Priority:    convertPriority(notifyMsg.Priority),
+		Metadata:    metadata,
+		Timestamp:   now,
+		CreatedAt:   now,
+		UpdatedAt:   now,
+		ScheduledAt: notifyMsg.ScheduledAt,
+	}
+}
+
+// NewQueueMessageWithPayload creates a queue message with arbitrary payload
+func NewQueueMessageWithPayload(payload interface{}, priority Priority) *QueueMessage {
+	now := time.Now()
+	return &QueueMessage{
+		ID:        idgen.GenerateMessageID(),
+		Payload:   payload,
+		Priority:  priority,
+		Metadata:  make(map[string]interface{}),
+		Timestamp: now,
+		CreatedAt: now,
+		UpdatedAt: now,
+	}
+}
+
+// GetNotificationMessage extracts notification message from queue message payload
+func (qm *QueueMessage) GetNotificationMessage() (*message.Message, bool) {
+	if notifyMsg, ok := qm.Payload.(*message.Message); ok {
+		return notifyMsg, true
+	}
+	return nil, false
+}
+
+// convertPriority converts notification priority to queue priority
+func convertPriority(notifyPriority message.Priority) Priority {
+	switch notifyPriority {
+	case message.PriorityLow:
+		return PriorityLow
+	case message.PriorityNormal:
+		return PriorityNormal
+	case message.PriorityHigh:
+		return PriorityHigh
+	case message.PriorityUrgent:
+		return PriorityUrgent
+	default:
+		return PriorityNormal
+	}
+}

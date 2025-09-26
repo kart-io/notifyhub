@@ -8,15 +8,18 @@ import (
 	"time"
 
 	"github.com/kart-io/notifyhub/pkg/logger"
+	"github.com/kart-io/notifyhub/pkg/notifyhub/core"
+	"github.com/kart-io/notifyhub/pkg/notifyhub/message"
+	"github.com/kart-io/notifyhub/pkg/notifyhub/receipt"
 	"github.com/kart-io/notifyhub/pkg/queue"
 )
 
 // AsyncHub extends the Hub interface with asynchronous message processing
 type AsyncHub interface {
-	Hub
+	core.Hub
 
 	// SendQueued enqueues a message for async processing
-	SendQueued(ctx context.Context, message *Message) (*AsyncReceipt, error)
+	SendQueued(ctx context.Context, message *message.Message) (*receipt.AsyncReceipt, error)
 
 	// GetQueueStats returns queue statistics
 	GetQueueStats() map[string]interface{}
@@ -39,7 +42,7 @@ type AsyncHub interface {
 
 // asyncHub implements AsyncHub with queue support
 type asyncHub struct {
-	Hub
+	core.Hub
 	queue         queue.Queue
 	workerPool    queue.WorkerPool
 	healthChecker *queue.HealthChecker
@@ -49,7 +52,7 @@ type asyncHub struct {
 }
 
 // NewAsyncHub creates a new async hub with queue support
-func NewAsyncHub(baseHub Hub, queueConfig *queue.Config, log logger.Logger) (AsyncHub, error) {
+func NewAsyncHub(baseHub core.Hub, queueConfig *queue.Config, log logger.Logger) (AsyncHub, error) {
 	if log == nil {
 		log = logger.Discard
 	}
@@ -95,7 +98,7 @@ func NewAsyncHub(baseHub Hub, queueConfig *queue.Config, log logger.Logger) (Asy
 }
 
 // SendQueued enqueues a message for async processing
-func (ah *asyncHub) SendQueued(ctx context.Context, message *Message) (*AsyncReceipt, error) {
+func (ah *asyncHub) SendQueued(ctx context.Context, message *message.Message) (*receipt.AsyncReceipt, error) {
 	if message == nil {
 		return nil, fmt.Errorf("message cannot be nil")
 	}
@@ -105,15 +108,8 @@ func (ah *asyncHub) SendQueued(ctx context.Context, message *Message) (*AsyncRec
 		message.ID = fmt.Sprintf("msg-%d", time.Now().UnixNano())
 	}
 
-	// Create queue message
-	queueMsg := &queue.Message{
-		ID:        message.ID,
-		Payload:   message,
-		Priority:  queue.Priority(message.Priority),
-		Timestamp: time.Now(),
-		CreatedAt: time.Now(),
-		UpdatedAt: time.Now(),
-	}
+	// Create queue message using helper function
+	queueMsg := queue.NewQueueMessage(message)
 
 	// Set scheduled time if specified
 	if message.ScheduledAt != nil {
@@ -127,7 +123,7 @@ func (ah *asyncHub) SendQueued(ctx context.Context, message *Message) (*AsyncRec
 	}
 
 	// Create async receipt
-	receipt := &AsyncReceipt{
+	asyncReceipt := &receipt.AsyncReceipt{
 		MessageID: message.ID,
 		Status:    "queued",
 		QueuedAt:  time.Now(),
@@ -137,7 +133,7 @@ func (ah *asyncHub) SendQueued(ctx context.Context, message *Message) (*AsyncRec
 		"messageID", message.ID,
 		"priority", message.Priority)
 
-	return receipt, nil
+	return asyncReceipt, nil
 }
 
 // GetQueueStats returns queue statistics
@@ -298,9 +294,9 @@ func (ah *asyncHub) Close(ctx context.Context) error {
 
 // createMessageHandler creates a message handler for the worker pool
 func (ah *asyncHub) createMessageHandler() queue.MessageHandler {
-	return func(ctx context.Context, queueMsg *queue.Message) error {
-		// Extract the original message
-		msg, ok := queueMsg.Payload.(*Message)
+	return func(ctx context.Context, queueMsg *queue.QueueMessage) error {
+		// Extract the original message using the helper method
+		msg, ok := queueMsg.GetNotificationMessage()
 		if !ok {
 			ah.logger.Error("Invalid message payload type", "messageID", queueMsg.ID)
 			return fmt.Errorf("invalid message payload")
@@ -381,7 +377,7 @@ func WithDeadLetterQueue(enabled bool) QueuedHubOption {
 }
 
 // NewAsyncHubWithOptions creates an async hub with options
-func NewAsyncHubWithOptions(baseHub Hub, logger logger.Logger, opts ...QueuedHubOption) (AsyncHub, error) {
+func NewAsyncHubWithOptions(baseHub core.Hub, logger logger.Logger, opts ...QueuedHubOption) (AsyncHub, error) {
 	// Default configuration
 	config := &queuedHubConfig{
 		QueueType:       "memory",

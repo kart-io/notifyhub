@@ -14,7 +14,7 @@ type MetricsCollector struct {
 	healthStatus    *HealthStatus
 	startTime       time.Time
 	lastProcessTime time.Time
-	subscribers     map[string][]func(msg *Message)
+	subscribers     map[string][]func(msg *QueueMessage)
 	mutex           sync.RWMutex
 
 	// Internal counters
@@ -54,12 +54,12 @@ func NewMetricsCollector() *MetricsCollector {
 		},
 		startTime:       now,
 		lastProcessTime: now,
-		subscribers:     make(map[string][]func(msg *Message)),
+		subscribers:     make(map[string][]func(msg *QueueMessage)),
 	}
 }
 
 // RecordEnqueue records a message enqueue operation
-func (mc *MetricsCollector) RecordEnqueue(msg *Message) {
+func (mc *MetricsCollector) RecordEnqueue(msg *QueueMessage) {
 	atomic.AddInt64(&mc.queueMetrics.EnqueuedCount, 1)
 	atomic.AddInt64(&mc.queueMetrics.Size, 1)
 	mc.notifySubscribers("enqueue", msg)
@@ -67,7 +67,7 @@ func (mc *MetricsCollector) RecordEnqueue(msg *Message) {
 }
 
 // RecordDequeue records a message dequeue operation
-func (mc *MetricsCollector) RecordDequeue(msg *Message) {
+func (mc *MetricsCollector) RecordDequeue(msg *QueueMessage) {
 	atomic.AddInt64(&mc.queueMetrics.DequeuedCount, 1)
 	atomic.AddInt64(&mc.queueMetrics.Size, -1)
 	mc.notifySubscribers("dequeue", msg)
@@ -75,19 +75,19 @@ func (mc *MetricsCollector) RecordDequeue(msg *Message) {
 }
 
 // RecordRetry records a retry operation
-func (mc *MetricsCollector) RecordRetry(msg *Message) {
+func (mc *MetricsCollector) RecordRetry(msg *QueueMessage) {
 	atomic.AddInt64(&mc.queueMetrics.RetryCount, 1)
 	mc.notifySubscribers("retry", msg)
 }
 
 // RecordDeadLetter records a message moved to dead letter queue
-func (mc *MetricsCollector) RecordDeadLetter(msg *Message) {
+func (mc *MetricsCollector) RecordDeadLetter(msg *QueueMessage) {
 	atomic.AddInt64(&mc.queueMetrics.DeadLetterCount, 1)
 	mc.notifySubscribers("dead_letter", msg)
 }
 
 // RecordProcessing records message processing metrics
-func (mc *MetricsCollector) RecordProcessing(msg *Message, duration time.Duration, err error) {
+func (mc *MetricsCollector) RecordProcessing(msg *QueueMessage, duration time.Duration, err error) {
 	atomic.AddInt64(&mc.workerMetrics.ProcessedCount, 1)
 	atomic.AddInt64(&mc.totalProcessingTime, duration.Nanoseconds())
 	atomic.AddInt64(&mc.processingCount, 1)
@@ -187,12 +187,12 @@ func (mc *MetricsCollector) GetHealthStatus() *HealthStatus {
 }
 
 // Subscribe registers a callback for queue events
-func (mc *MetricsCollector) Subscribe(event string, callback func(msg *Message)) {
+func (mc *MetricsCollector) Subscribe(event string, callback func(msg *QueueMessage)) {
 	mc.mutex.Lock()
 	defer mc.mutex.Unlock()
 
 	if mc.subscribers[event] == nil {
-		mc.subscribers[event] = make([]func(msg *Message), 0)
+		mc.subscribers[event] = make([]func(msg *QueueMessage), 0)
 	}
 	mc.subscribers[event] = append(mc.subscribers[event], callback)
 }
@@ -213,14 +213,14 @@ func (mc *MetricsCollector) updateLastProcessTime() {
 	mc.lastProcessTime = time.Now()
 }
 
-func (mc *MetricsCollector) notifySubscribers(event string, msg *Message) {
+func (mc *MetricsCollector) notifySubscribers(event string, msg *QueueMessage) {
 	mc.mutex.RLock()
 	callbacks := mc.subscribers[event]
 	mc.mutex.RUnlock()
 
 	// Execute callbacks asynchronously to avoid blocking
 	for _, callback := range callbacks {
-		go func(cb func(msg *Message), m *Message) {
+		go func(cb func(msg *QueueMessage), m *QueueMessage) {
 			defer func() {
 				if r := recover(); r != nil {
 					// Recover from callback panic to avoid crashing the queue

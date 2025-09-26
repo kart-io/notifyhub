@@ -12,108 +12,100 @@ import (
 	"time"
 
 	"github.com/kart-io/notifyhub/pkg/logger"
+	"github.com/kart-io/notifyhub/pkg/notifyhub/config"
+	"github.com/kart-io/notifyhub/pkg/notifyhub/message"
 	"github.com/kart-io/notifyhub/pkg/notifyhub/platform"
+	"github.com/kart-io/notifyhub/pkg/notifyhub/target"
 )
 
-// EmailSender implements the ExternalSender interface for email notifications
-type EmailSender struct {
+// EmailPlatform implements the unified Platform interface for email notifications
+type EmailPlatform struct {
+	config *config.EmailConfig
+	auth   smtp.Auth
+	logger logger.Logger
+
+	// SMTP connection settings
 	smtpHost     string
 	smtpPort     int
+	smtpFrom     string
 	smtpUsername string
 	smtpPassword string
-	smtpFrom     string
 	smtpTLS      bool
 	smtpSSL      bool
 	timeout      time.Duration
-	auth         smtp.Auth
-	logger       logger.Logger
 }
 
-// NewEmailSender creates a new Email sender
-func NewEmailSender(config map[string]interface{}, logger logger.Logger) (platform.ExternalSender, error) {
-	smtpHost, ok := config["smtp_host"].(string)
-	if !ok || smtpHost == "" {
+// NewEmailPlatform creates a new Email platform with strong-typed configuration
+func NewEmailPlatform(emailConfig *config.EmailConfig, logger logger.Logger) (platform.Platform, error) {
+	if emailConfig == nil {
+		return nil, fmt.Errorf("email configuration cannot be nil")
+	}
+
+	// Validate required fields
+	if emailConfig.SMTPHost == "" {
 		return nil, fmt.Errorf("smtp_host is required for Email platform")
 	}
-
-	smtpPort, ok := config["smtp_port"].(int)
-	if !ok {
+	if emailConfig.SMTPPort == 0 {
 		return nil, fmt.Errorf("smtp_port is required for Email platform")
 	}
-
-	smtpFrom, ok := config["smtp_from"].(string)
-	if !ok || smtpFrom == "" {
+	if emailConfig.SMTPFrom == "" {
 		return nil, fmt.Errorf("smtp_from is required for Email platform")
 	}
 
-	sender := &EmailSender{
-		smtpHost: smtpHost,
-		smtpPort: smtpPort,
-		smtpFrom: smtpFrom,
-		smtpTLS:  true, // Default to TLS
-		timeout:  30 * time.Second,
-		logger:   logger, // Assign logger directly
+	platform := &EmailPlatform{
+		config:       emailConfig,
+		logger:       logger,
+		smtpHost:     emailConfig.SMTPHost,
+		smtpPort:     emailConfig.SMTPPort,
+		smtpFrom:     emailConfig.SMTPFrom,
+		smtpUsername: emailConfig.SMTPUsername,
+		smtpPassword: emailConfig.SMTPPassword,
+		smtpTLS:      emailConfig.SMTPTLS,
+		smtpSSL:      emailConfig.SMTPSSL,
+		timeout:      emailConfig.Timeout,
 	}
 
-	// Configure authentication
-	if username, ok := config["smtp_username"].(string); ok {
-		sender.smtpUsername = username
-	}
-
-	if password, ok := config["smtp_password"].(string); ok {
-		sender.smtpPassword = password
+	// Use default timeout if not specified
+	if platform.timeout == 0 {
+		platform.timeout = 30 * time.Second
 	}
 
 	// Setup SMTP authentication if both username and password are provided
-	if sender.smtpUsername != "" && sender.smtpPassword != "" {
-		sender.auth = smtp.PlainAuth("", sender.smtpUsername, sender.smtpPassword, sender.smtpHost)
+	if platform.smtpUsername != "" && platform.smtpPassword != "" {
+		platform.auth = smtp.PlainAuth("", platform.smtpUsername, platform.smtpPassword, platform.smtpHost)
 	}
 
-	// Configure TLS/SSL
-	if tls, ok := config["smtp_tls"].(bool); ok {
-		sender.smtpTLS = tls
-	}
-
-	if ssl, ok := config["smtp_ssl"].(bool); ok {
-		sender.smtpSSL = ssl
-	}
-
-	// Configure timeout
-	if timeout, ok := config["timeout"].(time.Duration); ok {
-		sender.timeout = timeout
-	}
-
-	return sender, nil
+	return platform, nil
 }
 
 // Name returns the platform name
-func (e *EmailSender) Name() string {
+func (e *EmailPlatform) Name() string {
 	return "email"
 }
 
 // Send sends a message to Email
-func (e *EmailSender) Send(ctx context.Context, msg *platform.Message, targets []platform.Target) ([]*platform.SendResult, error) {
+func (e *EmailPlatform) Send(ctx context.Context, msg *message.Message, targets []target.Target) ([]*platform.SendResult, error) {
 	results := make([]*platform.SendResult, len(targets))
 
-	for i, target := range targets {
+	for i, tgt := range targets {
 		startTime := time.Now()
 		result := &platform.SendResult{
-			Target:  target,
+			Target:  tgt,
 			Success: false,
 		}
 
 		// Validate target
-		if err := e.ValidateTarget(target); err != nil {
+		if err := e.ValidateTarget(tgt); err != nil {
 			result.Error = err.Error()
 			results[i] = result
 			continue
 		}
 
 		// Build email message
-		emailMsg := e.buildEmailMessage(msg, target)
+		emailMsg := e.buildEmailMessage(msg, tgt)
 
 		// Send email
-		if err := e.sendEmail(ctx, target.Value, emailMsg); err != nil {
+		if err := e.sendEmail(ctx, tgt.Value, emailMsg); err != nil {
 			result.Error = err.Error()
 		} else {
 			result.Success = true
@@ -134,28 +126,28 @@ func (e *EmailSender) Send(ctx context.Context, msg *platform.Message, targets [
 }
 
 // ValidateTarget validates a target for Email
-func (e *EmailSender) ValidateTarget(target platform.Target) error {
-	switch target.Type {
+func (e *EmailPlatform) ValidateTarget(tgt target.Target) error {
+	switch tgt.Type {
 	case "email":
 		// Valid target type for Email
 	default:
-		return fmt.Errorf("email supports email targets, got %s", target.Type)
+		return fmt.Errorf("email supports email targets, got %s", tgt.Type)
 	}
 
-	if target.Value == "" {
+	if tgt.Value == "" {
 		return fmt.Errorf("email address cannot be empty")
 	}
 
 	// Basic email validation
-	if !isValidEmail(target.Value) {
-		return fmt.Errorf("invalid email address: %s", target.Value)
+	if !isValidEmail(tgt.Value) {
+		return fmt.Errorf("invalid email address: %s", tgt.Value)
 	}
 
 	return nil
 }
 
 // GetCapabilities returns Email platform capabilities
-func (e *EmailSender) GetCapabilities() platform.Capabilities {
+func (e *EmailPlatform) GetCapabilities() platform.Capabilities {
 	return platform.Capabilities{
 		Name:                 "email",
 		SupportedTargetTypes: []string{"email"},
@@ -170,7 +162,7 @@ func (e *EmailSender) GetCapabilities() platform.Capabilities {
 }
 
 // IsHealthy checks if Email SMTP server is accessible
-func (e *EmailSender) IsHealthy(ctx context.Context) error {
+func (e *EmailPlatform) IsHealthy(ctx context.Context) error {
 	if e.smtpHost == "" {
 		return fmt.Errorf("SMTP host is not configured")
 	}
@@ -203,17 +195,17 @@ func (e *EmailSender) IsHealthy(ctx context.Context) error {
 }
 
 // Close cleans up resources
-func (e *EmailSender) Close() error {
+func (e *EmailPlatform) Close() error {
 	return nil
 }
 
 // buildEmailMessage builds an email message from the platform message
-func (e *EmailSender) buildEmailMessage(msg *platform.Message, target platform.Target) string {
+func (e *EmailPlatform) buildEmailMessage(msg *message.Message, tgt target.Target) string {
 	var content string
 
 	// Build headers
 	content += fmt.Sprintf("From: %s\r\n", e.smtpFrom)
-	content += fmt.Sprintf("To: %s\r\n", target.Value)
+	content += fmt.Sprintf("To: %s\r\n", tgt.Value)
 
 	// Add CC and BCC from platform data
 	if ccList, ok := msg.PlatformData["email_cc"].([]string); ok && len(ccList) > 0 {
@@ -260,7 +252,7 @@ func (e *EmailSender) buildEmailMessage(msg *platform.Message, target platform.T
 }
 
 // sendEmail sends the email using SMTP
-func (e *EmailSender) sendEmail(ctx context.Context, to, content string) error {
+func (e *EmailPlatform) sendEmail(ctx context.Context, to, content string) error {
 	if e.logger == nil {
 		e.logger = logger.Discard
 	}
@@ -313,7 +305,7 @@ func (e *EmailSender) sendEmail(ctx context.Context, to, content string) error {
 }
 
 // sendWithSTARTTLS sends email using STARTTLS (port 587)
-func (e *EmailSender) sendWithSTARTTLS(addr string, recipients []string, content string) error {
+func (e *EmailPlatform) sendWithSTARTTLS(addr string, recipients []string, content string) error {
 	// Connect to SMTP server
 	conn, err := net.DialTimeout("tcp", addr, 10*time.Second)
 	if err != nil {
@@ -376,7 +368,7 @@ func (e *EmailSender) sendWithSTARTTLS(addr string, recipients []string, content
 }
 
 // sendWithSSL sends email using SSL/TLS (port 465)
-func (e *EmailSender) sendWithSSL(addr string, recipients []string, content string) error {
+func (e *EmailPlatform) sendWithSSL(addr string, recipients []string, content string) error {
 	tlsConfig := &tls.Config{
 		ServerName: e.smtpHost,
 		MinVersion: tls.VersionTLS12,
@@ -426,4 +418,52 @@ func (e *EmailSender) sendWithSSL(addr string, recipients []string, content stri
 	}
 
 	return c.Quit()
+}
+
+// isValidEmail performs basic email address validation
+func isValidEmail(email string) bool {
+	// Basic email validation - contains @ and has parts before and after
+	parts := strings.Split(email, "@")
+	if len(parts) != 2 {
+		return false
+	}
+
+	local, domain := parts[0], parts[1]
+
+	// Check local part (before @)
+	if len(local) == 0 || len(local) > 64 {
+		return false
+	}
+
+	// Check domain part (after @)
+	if len(domain) == 0 || len(domain) > 255 {
+		return false
+	}
+
+	// Domain should contain at least one dot
+	if !strings.Contains(domain, ".") {
+		return false
+	}
+
+	return true
+}
+
+// init registers the email platform automatically
+func init() {
+	// Register email platform creator with the global registry
+	platform.RegisterPlatform("email", func(cfg map[string]interface{}, logger logger.Logger) (platform.Platform, error) {
+		// Convert config to EmailConfig
+		emailConfig := &config.EmailConfig{}
+		if host, ok := cfg["host"].(string); ok {
+			emailConfig.SMTPHost = host
+		}
+		if port, ok := cfg["port"].(int); ok {
+			emailConfig.SMTPPort = port
+		}
+		if from, ok := cfg["from"].(string); ok {
+			emailConfig.SMTPFrom = from
+		}
+
+		return NewEmailPlatform(emailConfig, logger)
+	})
 }

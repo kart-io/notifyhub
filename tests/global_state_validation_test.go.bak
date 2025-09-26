@@ -1,0 +1,601 @@
+// Package tests provides global state elimination validation tests for NotifyHub
+package tests
+
+import (
+	"context"
+	"fmt"
+	"go/ast"
+	"go/parser"
+	"go/token"
+	"os"
+	"path/filepath"
+	"strings"
+	"sync"
+	"testing"
+	"time"
+
+	"github.com/kart-io/notifyhub/pkg/notifyhub"
+	"github.com/kart-io/notifyhub/pkg/notifyhub/config"
+	"github.com/kart-io/notifyhub/pkg/notifyhub/message"
+	"github.com/kart-io/notifyhub/pkg/notifyhub/target"
+)
+
+// TestGlobalStateElimination validates that no global state exists in the system
+func TestGlobalStateElimination(t *testing.T) {
+	t.Run("NoGlobalPlatformRegistry", func(t *testing.T) {
+		// Scan codebase for global registry variables
+		globalRegistryCount := countGlobalRegistries(t)
+
+		if globalRegistryCount > 0 {
+			t.Errorf("Found %d global platform registries. All platform management should be hub-level", globalRegistryCount)
+		}
+
+		t.Logf("Global platform registry check passed: %d found", globalRegistryCount)
+	})
+
+	t.Run("NoGlobalSingletonPattern", func(t *testing.T) {
+		// Check for singleton patterns in codebase
+		singletonCount := countSingletonPatterns(t)
+
+		// Allow some system-level singletons (logger, metrics) but not platform-related ones
+		maxAllowedSingletons := 5
+		if singletonCount > maxAllowedSingletons {
+			t.Errorf("Found %d singleton patterns. Excessive singleton usage indicates global state issues", singletonCount)
+		}
+
+		t.Logf("Singleton pattern check passed: %d found (max: %d)", singletonCount, maxAllowedSingletons)
+	})
+
+	t.Run("NoGlobalVariables", func(t *testing.T) {
+		// Scan for global variables that could indicate global state
+		globalVarCount := countGlobalVariables(t)
+
+		// Allow some global variables for constants, loggers, but not mutable state
+		maxAllowedGlobalVars := 10
+		if globalVarCount > maxAllowedGlobalVars {
+			t.Errorf("Found %d global variables. Excessive global variables indicate global state issues", globalVarCount)
+		}
+
+		t.Logf("Global variables check passed: %d found (max: %d)", globalVarCount, maxAllowedGlobalVars)
+	})
+}
+
+// TestHubLevelPlatformManagement validates that platform management is hub-level
+func TestHubLevelPlatformManagement(t *testing.T) {
+	t.Run("IndependentHubPlatforms", func(t *testing.T) {
+		// Create first hub with email platform
+		emailConfig1 := &config.EmailConfig{
+			SMTPHost: "smtp1.test.com",
+			SMTPPort: 587,
+			SMTPFrom: "test1@test.com",
+			Timeout:  10 * time.Second,
+		}
+
+		hub1, err := notifyhub.New(config.WithEmail(emailConfig1))
+		if err != nil {
+			t.Fatalf("Failed to create first hub: %v", err)
+		}
+		defer hub1.Close()
+
+		// Create second hub with different email platform
+		emailConfig2 := &config.EmailConfig{
+			SMTPHost: "smtp2.test.com",
+			SMTPPort: 465,
+			SMTPFrom: "test2@test.com",
+			Timeout:  20 * time.Second,
+		}
+
+		hub2, err := notifyhub.New(config.WithEmail(emailConfig2))
+		if err != nil {
+			t.Fatalf("Failed to create second hub: %v", err)
+		}
+		defer hub2.Close()
+
+		// Verify hubs have different configurations
+		config1 := hub1.GetConfig()
+		config2 := hub2.GetConfig()
+
+		if config1.Email.SMTPHost == config2.Email.SMTPHost {
+			t.Error("Hub configurations are not isolated - same SMTP host")
+		}
+
+		if config1.Email.SMTPPort == config2.Email.SMTPPort {
+			t.Error("Hub configurations are not isolated - same SMTP port")
+		}
+
+		if config1.Email.Timeout == config2.Email.Timeout {
+			t.Error("Hub configurations are not isolated - same timeout")
+		}
+
+		t.Logf("Hub isolation verified: Hub1 SMTP=%s:%d, Hub2 SMTP=%s:%d",
+			config1.Email.SMTPHost, config1.Email.SMTPPort,
+			config2.Email.SMTPHost, config2.Email.SMTPPort)
+	})
+
+	t.Run("HubSpecificPlatformRegistration", func(t *testing.T) {
+		// Create hub with multiple platforms
+		emailConfig := &config.EmailConfig{
+			SMTPHost: "smtp.test.com",
+			SMTPPort: 587,
+			SMTPFrom: "test@test.com",
+			Timeout:  10 * time.Second,
+		}
+
+		feishuConfig := &config.FeishuConfig{
+			WebhookURL: "https://open.feishu.cn/open-apis/bot/v2/hook/test",
+			AuthType:   "webhook",
+			Timeout:    15 * time.Second,
+		}
+
+		hub, err := notifyhub.New(
+			config.WithEmail(emailConfig),
+			config.WithFeishu(feishuConfig),
+		)
+		if err != nil {
+			t.Fatalf("Failed to create hub: %v", err)
+		}
+		defer hub.Close()
+
+		// Verify platforms are registered at hub level
+		config := hub.GetConfig()
+		if config.Email == nil {
+			t.Error("Email platform not registered at hub level")
+		}
+
+		if config.Feishu == nil {
+			t.Error("Feishu platform not registered at hub level")
+		}
+
+		// Verify platform-specific configuration is maintained
+		if config.Email.SMTPHost != "smtp.test.com" {
+			t.Error("Email configuration not maintained correctly")
+		}
+
+		if config.Feishu.WebhookURL != "https://open.feishu.cn/open-apis/bot/v2/hook/test" {
+			t.Error("Feishu configuration not maintained correctly")
+		}
+
+		t.Log("Hub-level platform registration verified successfully")
+	})
+}
+
+// TestConcurrentHubInstances validates that multiple hubs work independently
+func TestConcurrentHubInstances(t *testing.T) {
+	t.Run("ConcurrentHubCreation", func(t *testing.T) {
+		const numHubs = 10
+		const numGoroutines = 5
+
+		var wg sync.WaitGroup
+		hubs := make([]*notifyhub.NotifyHub, numHubs)
+		errors := make([]error, numHubs)
+
+		// Create hubs concurrently
+		for i := 0; i < numGoroutines; i++ {
+			wg.Add(1)
+			go func(startIdx int) {
+				defer wg.Done()
+
+				for j := 0; j < numHubs/numGoroutines; j++ {
+					idx := startIdx + j
+
+					emailConfig := &config.EmailConfig{
+						SMTPHost: fmt.Sprintf("smtp%d.test.com", idx),
+						SMTPPort: 587 + idx,
+						SMTPFrom: fmt.Sprintf("test%d@test.com", idx),
+						Timeout:  time.Duration(10+idx) * time.Second,
+					}
+
+					hub, err := notifyhub.New(config.WithEmail(emailConfig))
+					if err != nil {
+						errors[idx] = err
+						return
+					}
+					hubs[idx] = hub
+				}
+			}(i * numHubs / numGoroutines)
+		}
+
+		wg.Wait()
+
+		// Check for errors
+		for i, err := range errors {
+			if err != nil {
+				t.Errorf("Hub %d creation failed: %v", i, err)
+			}
+		}
+
+		// Verify hub independence
+		for i, hub := range hubs {
+			if hub == nil {
+				continue
+			}
+
+			config := hub.GetConfig()
+			expectedHost := fmt.Sprintf("smtp%d.test.com", i)
+			if config.Email.SMTPHost != expectedHost {
+				t.Errorf("Hub %d has wrong SMTP host: expected %s, got %s", i, expectedHost, config.Email.SMTPHost)
+			}
+
+			expectedPort := 587 + i
+			if config.Email.SMTPPort != expectedPort {
+				t.Errorf("Hub %d has wrong SMTP port: expected %d, got %d", i, expectedPort, config.Email.SMTPPort)
+			}
+
+			hub.Close()
+		}
+
+		t.Logf("Concurrent hub creation test passed: %d hubs created independently", numHubs)
+	})
+
+	t.Run("ConcurrentMessageSending", func(t *testing.T) {
+		// Create multiple hubs with different configurations
+		hub1, err := notifyhub.New(config.WithEmail(&config.EmailConfig{
+			SMTPHost: "smtp1.test.com",
+			SMTPPort: 587,
+			SMTPFrom: "test1@test.com",
+			Timeout:  10 * time.Second,
+		}))
+		if err != nil {
+			t.Fatalf("Failed to create hub1: %v", err)
+		}
+		defer hub1.Close()
+
+		hub2, err := notifyhub.New(config.WithEmail(&config.EmailConfig{
+			SMTPHost: "smtp2.test.com",
+			SMTPPort: 465,
+			SMTPFrom: "test2@test.com",
+			Timeout:  20 * time.Second,
+		}))
+		if err != nil {
+			t.Fatalf("Failed to create hub2: %v", err)
+		}
+		defer hub2.Close()
+
+		const numMessages = 20
+		var wg sync.WaitGroup
+		results := make([]bool, numMessages)
+
+		// Send messages concurrently from both hubs
+		for i := 0; i < numMessages; i++ {
+			wg.Add(1)
+			go func(messageIdx int) {
+				defer wg.Done()
+
+				msg := &message.Message{
+					ID:     fmt.Sprintf("concurrent-test-%d", messageIdx),
+					Title:  "Concurrent Test",
+					Body:   fmt.Sprintf("Testing concurrent message %d", messageIdx),
+					Format: "text",
+					Targets: []target.Target{
+						{Type: "email", Value: "user@test.com"},
+					},
+				}
+
+				var hub *notifyhub.NotifyHub
+				if messageIdx%2 == 0 {
+					hub = hub1
+				} else {
+					hub = hub2
+				}
+
+				_, err := hub.Send(context.Background(), msg)
+				// We expect errors in test environment, but the important thing is no panics
+				results[messageIdx] = (err != nil) // Store that we got a result
+			}(i)
+		}
+
+		wg.Wait()
+
+		// Verify all operations completed (no deadlocks or panics)
+		completedCount := 0
+		for _, completed := range results {
+			if completed {
+				completedCount++
+			}
+		}
+
+		if completedCount == 0 {
+			t.Error("No concurrent operations completed - possible deadlock")
+		}
+
+		t.Logf("Concurrent message sending test passed: %d/%d operations completed", completedCount, numMessages)
+	})
+}
+
+// TestNoSharedMutableState validates no shared mutable state between hubs
+func TestNoSharedMutableState(t *testing.T) {
+	t.Run("IndependentStateModification", func(t *testing.T) {
+		// Create hub with initial configuration
+		originalConfig := &config.EmailConfig{
+			SMTPHost: "original.test.com",
+			SMTPPort: 587,
+			SMTPFrom: "original@test.com",
+			Timeout:  10 * time.Second,
+		}
+
+		hub1, err := notifyhub.New(config.WithEmail(originalConfig))
+		if err != nil {
+			t.Fatalf("Failed to create hub1: %v", err)
+		}
+		defer hub1.Close()
+
+		// Create another hub with same configuration
+		sameConfig := &config.EmailConfig{
+			SMTPHost: "original.test.com",
+			SMTPPort: 587,
+			SMTPFrom: "original@test.com",
+			Timeout:  10 * time.Second,
+		}
+
+		hub2, err := notifyhub.New(config.WithEmail(sameConfig))
+		if err != nil {
+			t.Fatalf("Failed to create hub2: %v", err)
+		}
+		defer hub2.Close()
+
+		// Modify original configuration object
+		originalConfig.SMTPHost = "modified.test.com"
+		originalConfig.SMTPPort = 465
+
+		// Verify hub configurations are not affected by external modification
+		config1 := hub1.GetConfig()
+		config2 := hub2.GetConfig()
+
+		if config1.Email.SMTPHost == "modified.test.com" {
+			t.Error("Hub1 configuration was affected by external modification - shared mutable state detected")
+		}
+
+		if config2.Email.SMTPHost == "modified.test.com" {
+			t.Error("Hub2 configuration was affected by external modification - shared mutable state detected")
+		}
+
+		if config1.Email.SMTPHost != "original.test.com" {
+			t.Errorf("Hub1 SMTP host changed unexpectedly: %s", config1.Email.SMTPHost)
+		}
+
+		if config2.Email.SMTPHost != "original.test.com" {
+			t.Errorf("Hub2 SMTP host changed unexpectedly: %s", config2.Email.SMTPHost)
+		}
+
+		t.Log("Independent state modification test passed - no shared mutable state detected")
+	})
+
+	t.Run("HubShutdownIndependence", func(t *testing.T) {
+		// Create multiple hubs
+		hub1, err := notifyhub.New(config.WithEmail(&config.EmailConfig{
+			SMTPHost: "smtp1.test.com",
+			SMTPPort: 587,
+			SMTPFrom: "test1@test.com",
+			Timeout:  10 * time.Second,
+		}))
+		if err != nil {
+			t.Fatalf("Failed to create hub1: %v", err)
+		}
+
+		hub2, err := notifyhub.New(config.WithEmail(&config.EmailConfig{
+			SMTPHost: "smtp2.test.com",
+			SMTPPort: 587,
+			SMTPFrom: "test2@test.com",
+			Timeout:  10 * time.Second,
+		}))
+		if err != nil {
+			t.Fatalf("Failed to create hub2: %v", err)
+		}
+
+		// Close first hub
+		err = hub1.Close()
+		if err != nil {
+			t.Errorf("Hub1 close failed: %v", err)
+		}
+
+		// Verify second hub is still functional
+		msg := &message.Message{
+			ID:     "shutdown-independence-test",
+			Title:  "Shutdown Test",
+			Body:   "Testing hub independence after shutdown",
+			Format: "text",
+			Targets: []target.Target{
+				{Type: "email", Value: "user@test.com"},
+			},
+		}
+
+		// This should work without errors related to global state
+		_, err = hub2.Send(context.Background(), msg)
+		// We expect connection errors, but not global state related errors
+		if err != nil && strings.Contains(err.Error(), "global") {
+			t.Errorf("Hub2 operation affected by Hub1 shutdown - global state issue: %v", err)
+		}
+
+		// Close second hub
+		err = hub2.Close()
+		if err != nil {
+			t.Errorf("Hub2 close failed: %v", err)
+		}
+
+		t.Log("Hub shutdown independence test passed")
+	})
+}
+
+// Helper functions for code analysis
+
+// countGlobalRegistries scans codebase for global registry patterns
+func countGlobalRegistries(t *testing.T) int {
+	count := 0
+
+	// Packages to scan
+	packages := []string{
+		"pkg/notifyhub",
+		"pkg/platforms",
+		"pkg/notifyhub/platform",
+	}
+
+	for _, pkg := range packages {
+		count += countGlobalRegistriesInPackage(pkg)
+	}
+
+	return count
+}
+
+// countGlobalRegistriesInPackage scans a specific package for global registries
+func countGlobalRegistriesInPackage(packagePath string) int {
+	count := 0
+
+	err := filepath.Walk(packagePath, func(path string, info os.FileInfo, err error) error {
+		if err != nil {
+			return nil // Skip errors
+		}
+
+		if !strings.HasSuffix(path, ".go") || strings.Contains(path, "_test.go") {
+			return nil
+		}
+
+		fset := token.NewFileSet()
+		file, err := parser.ParseFile(fset, path, nil, parser.ParseComments)
+		if err != nil {
+			return nil
+		}
+
+		ast.Inspect(file, func(n ast.Node) bool {
+			if genDecl, ok := n.(*ast.GenDecl); ok && genDecl.Tok == token.VAR {
+				for _, spec := range genDecl.Specs {
+					if valueSpec, ok := spec.(*ast.ValueSpec); ok {
+						for _, name := range valueSpec.Names {
+							varName := strings.ToLower(name.Name)
+							if strings.Contains(varName, "registry") ||
+							   strings.Contains(varName, "globalplatform") ||
+							   strings.Contains(varName, "platformregistry") {
+								count++
+							}
+						}
+					}
+				}
+			}
+			return true
+		})
+
+		return nil
+	})
+
+	if err != nil {
+		return 0
+	}
+
+	return count
+}
+
+// countSingletonPatterns scans for singleton patterns in the codebase
+func countSingletonPatterns(t *testing.T) int {
+	count := 0
+
+	// Look for getInstance, GetInstance, Once patterns, etc.
+	patterns := []string{"getinstance", "once", "singleton", "instance"}
+
+	packages := []string{
+		"pkg/notifyhub",
+		"pkg/platforms",
+	}
+
+	for _, pkg := range packages {
+		count += countPatternInPackage(pkg, patterns)
+	}
+
+	return count
+}
+
+// countGlobalVariables scans for global variables that could indicate global state
+func countGlobalVariables(t *testing.T) int {
+	count := 0
+
+	packages := []string{
+		"pkg/notifyhub",
+		"pkg/platforms",
+	}
+
+	for _, pkg := range packages {
+		count += countGlobalVarsInPackage(pkg)
+	}
+
+	return count
+}
+
+// countPatternInPackage counts occurrences of specific patterns in package
+func countPatternInPackage(packagePath string, patterns []string) int {
+	count := 0
+
+	err := filepath.Walk(packagePath, func(path string, info os.FileInfo, err error) error {
+		if err != nil {
+			return nil
+		}
+
+		if !strings.HasSuffix(path, ".go") || strings.Contains(path, "_test.go") {
+			return nil
+		}
+
+		fset := token.NewFileSet()
+		file, err := parser.ParseFile(fset, path, nil, parser.ParseComments)
+		if err != nil {
+			return nil
+		}
+
+		ast.Inspect(file, func(n ast.Node) bool {
+			if funcDecl, ok := n.(*ast.FuncDecl); ok {
+				funcName := strings.ToLower(funcDecl.Name.Name)
+				for _, pattern := range patterns {
+					if strings.Contains(funcName, pattern) {
+						count++
+						break
+					}
+				}
+			}
+			return true
+		})
+
+		return nil
+	})
+
+	if err != nil {
+		return 0
+	}
+
+	return count
+}
+
+// countGlobalVarsInPackage counts global variables in a package
+func countGlobalVarsInPackage(packagePath string) int {
+	count := 0
+
+	err := filepath.Walk(packagePath, func(path string, info os.FileInfo, err error) error {
+		if err != nil {
+			return nil
+		}
+
+		if !strings.HasSuffix(path, ".go") || strings.Contains(path, "_test.go") {
+			return nil
+		}
+
+		fset := token.NewFileSet()
+		file, err := parser.ParseFile(fset, path, nil, parser.ParseComments)
+		if err != nil {
+			return nil
+		}
+
+		// Count global variable declarations
+		for _, decl := range file.Decls {
+			if genDecl, ok := decl.(*ast.GenDecl); ok && genDecl.Tok == token.VAR {
+				for _, spec := range genDecl.Specs {
+					if valueSpec, ok := spec.(*ast.ValueSpec); ok {
+						count += len(valueSpec.Names)
+					}
+				}
+			}
+		}
+
+		return nil
+	})
+
+	if err != nil {
+		return 0
+	}
+
+	return count
+}
