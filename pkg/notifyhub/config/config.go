@@ -20,11 +20,12 @@ type Config struct {
 	EnableTracing  bool          `json:"enable_tracing" yaml:"enable_tracing"`
 
 	// Platform configurations (strongly typed)
-	Email   *EmailConfig   `json:"email,omitempty" yaml:"email,omitempty"`
-	Feishu  *FeishuConfig  `json:"feishu,omitempty" yaml:"feishu,omitempty"`
-	SMS     *SMSConfig     `json:"sms,omitempty" yaml:"sms,omitempty"`
-	Slack   *SlackConfig   `json:"slack,omitempty" yaml:"slack,omitempty"`
-	Webhook *WebhookConfig `json:"webhook,omitempty" yaml:"webhook,omitempty"`
+	Email    *EmailConfig    `json:"email,omitempty" yaml:"email,omitempty"`
+	Feishu   *FeishuConfig   `json:"feishu,omitempty" yaml:"feishu,omitempty"`
+	DingTalk *DingTalkConfig `json:"dingtalk,omitempty" yaml:"dingtalk,omitempty"`
+	SMS      *SMSConfig      `json:"sms,omitempty" yaml:"sms,omitempty"`
+	Slack    *SlackConfig    `json:"slack,omitempty" yaml:"slack,omitempty"`
+	Webhook  *WebhookConfig  `json:"webhook,omitempty" yaml:"webhook,omitempty"`
 
 	// Legacy platform support (for backward compatibility)
 	Platforms map[string]map[string]interface{} `json:"platforms,omitempty" yaml:"platforms,omitempty"`
@@ -212,6 +213,16 @@ type FeishuConfig struct {
 	RateLimit  int           `json:"rate_limit" yaml:"rate_limit" validate:"min=0"` // messages per minute
 	SignVerify bool          `json:"sign_verify" yaml:"sign_verify"`
 	Keywords   []string      `json:"keywords" yaml:"keywords"` // 自定义关键词列表
+}
+
+// DingTalkConfig represents DingTalk platform configuration
+type DingTalkConfig struct {
+	WebhookURL string        `json:"webhook_url" yaml:"webhook_url" validate:"required,url"`
+	Secret     string        `json:"secret" yaml:"secret"`
+	Keywords   []string      `json:"keywords" yaml:"keywords"` // 自定义关键词列表
+	Timeout    time.Duration `json:"timeout" yaml:"timeout" validate:"min=1s"`
+	MaxRetries int           `json:"max_retries" yaml:"max_retries" validate:"min=0,max=10"`
+	RateLimit  int           `json:"rate_limit" yaml:"rate_limit" validate:"min=0"` // messages per minute
 }
 
 // SMSConfig represents SMS platform configuration

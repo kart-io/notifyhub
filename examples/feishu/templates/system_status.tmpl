@@ -1,0 +1,33 @@
+{{/* 系统状态报告模板 */}}
+📊 **系统状态报告** - {{.report_date}}
+
+## 服务概览
+{{range .services}}
+{{if eq .status "healthy"}}✅{{else if eq .status "warning"}}⚠️{{else}}❌{{end}} **{{.name}}**: {{.status}}
+   - 响应时间: {{.response_time}}ms
+   - 错误率: {{.error_rate}}%
+   {{if .uptime}}- 运行时间: {{.uptime}}{{end}}
+{{end}}
+
+## 系统资源
+**服务器**: {{.server.name}}
+- **CPU**: {{.server.cpu_usage}}%
+- **内存**: {{.server.memory_usage}}% ({{.server.memory_used}}/{{.server.memory_total}})
+- **磁盘**: {{.server.disk_usage}}% ({{.server.disk_used}}/{{.server.disk_total}})
+- **网络**: ↑{{.server.network_tx}} ↓{{.server.network_rx}}
+
+## 关键指标
+{{range .metrics}}
+- **{{.name}}**: {{.value}}{{.unit}} {{if .trend}}({{.trend}} {{.change}}){{end}}
+{{end}}
+
+{{if .incidents}}
+## 近期事件
+{{range .incidents}}
+- **{{.timestamp}}**: {{.title}} ({{.severity}})
+{{end}}
+{{end}}
+
+---
+🕐 报告生成时间: {{.generated_at}}
+🔗 [详细监控]({{.monitoring_url}}) | 📈 [性能趋势]({{.trends_url}})

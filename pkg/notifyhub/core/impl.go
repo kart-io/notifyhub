@@ -12,6 +12,7 @@ import (
 	"github.com/kart-io/notifyhub/pkg/notifyhub/receipt"
 
 	// Auto-register internal platforms
+	_ "github.com/kart-io/notifyhub/pkg/platforms/dingtalk"
 	_ "github.com/kart-io/notifyhub/pkg/platforms/email"
 	_ "github.com/kart-io/notifyhub/pkg/platforms/feishu"
 	_ "github.com/kart-io/notifyhub/pkg/platforms/slack"

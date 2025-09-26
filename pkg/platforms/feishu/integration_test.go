@@ -34,6 +34,7 @@ func TestFeishuIntegration(t *testing.T) {
 	// Test the corrected signature algorithm
 	if secret != "" {
 		t.Logf("Testing with signature verification enabled using corrected algorithm")
+	}
 
 	feishuConfig := &config.FeishuConfig{
 		WebhookURL: webhookURL,
@@ -41,11 +42,7 @@ func TestFeishuIntegration(t *testing.T) {
 		Timeout:    30 * time.Second,
 	}
 
-	sender, err := NewFeishuPlatform(feishuConfig, logger.New(logger.Config{
-		Level:  "debug",
-		Engine: "zap",
-		Format: "console",
-	}))
+	sender, err := NewFeishuPlatform(feishuConfig, logger.New().LogMode(logger.Debug))
 	if err != nil {
 		t.Fatalf("Failed to create feishu platform: %v", err)
 	}

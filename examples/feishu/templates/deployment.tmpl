@@ -1,0 +1,55 @@
+{{/* 部署通知模板 */}}
+🚀 **部署通知**
+
+**项目**: {{.project_name}}
+**环境**: {{.environment}}
+**版本**: {{.version}}
+
+{{if eq .status "started"}}
+⏳ **部署开始**
+- 部署人: {{.deployer}}
+- 开始时间: {{.start_time}}
+- 预计耗时: {{.estimated_duration}}
+
+**变更内容**:
+{{range .changes}}
+- {{.type}}: {{.description}}
+{{end}}
+
+{{else if eq .status "success"}}
+✅ **部署成功**
+- 完成时间: {{.end_time}}
+- 实际耗时: {{.actual_duration}}
+- 部署环境: {{.deployment_url}}
+
+**版本对比**:
+- 旧版本: {{.old_version}}
+- 新版本: {{.new_version}}
+
+**健康检查**:
+{{range .health_checks}}
+- {{.name}}: {{if .passed}}✅ 通过{{else}}❌ 失败{{end}}
+{{end}}
+
+{{else if eq .status "failed"}}
+❌ **部署失败**
+- 失败时间: {{.end_time}}
+- 错误信息: {{.error_message}}
+
+**失败步骤**: {{.failed_step}}
+
+**回滚状态**: {{if .rollback_initiated}}🔄 已启动回滚{{else}}⚠️ 需要手动处理{{end}}
+
+{{else if eq .status "rolled_back"}}
+🔄 **回滚完成**
+- 回滚时间: {{.rollback_time}}
+- 回滚到版本: {{.rollback_version}}
+- 回滚原因: {{.rollback_reason}}
+{{end}}
+
+{{if .approver}}
+👤 **审核人**: {{.approver}}
+{{end}}
+
+---
+📝 [部署日志]({{.logs_url}}) | 🔍 [监控面板]({{.monitoring_url}})
