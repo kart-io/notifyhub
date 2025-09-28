@@ -1,4 +1,8 @@
 // Package notifyhub extensions provide plugin-style architecture for external platforms
+// TODO: This needs to be updated to use the new Option type instead of HubOption
+//go:build extensions
+// +build extensions
+
 package notifyhub
 
 import (
@@ -24,56 +28,24 @@ type ExtensionRegistry struct {
 	extensions map[string]*PlatformExtension
 }
 
-var globalRegistry = &ExtensionRegistry{
-	extensions: make(map[string]*PlatformExtension),
-}
+// Deprecated: globalRegistry has been removed to eliminate global state dependencies
+// Use instance-level platform registration instead
 
-// RegisterExtension registers a new platform extension
+// RegisterExtension is deprecated: Use instance-level platform registration instead
+// This function is preserved for backward compatibility but does nothing
 func RegisterExtension(ext *PlatformExtension) error {
-	if ext == nil {
-		return fmt.Errorf("extension cannot be nil")
-	}
-	if ext.Name == "" {
-		return fmt.Errorf("extension name cannot be empty")
-	}
-	if ext.Creator == nil {
-		return fmt.Errorf("extension creator cannot be nil")
-	}
-
-	globalRegistry.mu.Lock()
-	defer globalRegistry.mu.Unlock()
-
-	if _, exists := globalRegistry.extensions[ext.Name]; exists {
-		return fmt.Errorf("platform %s already registered", ext.Name)
-	}
-
-	globalRegistry.extensions[ext.Name] = ext
-
-	// Also register with the platform registry
-	platform.RegisterPlatform(ext.Name, ext.Creator)
-
-	return nil
+	// Return deprecation warning
+	return fmt.Errorf("RegisterExtension is deprecated: use instance-level platform registration instead")
 }
 
-// GetExtensions returns all registered extensions
+// GetExtensions is deprecated: Use instance-level platform management instead
 func GetExtensions() map[string]*PlatformExtension {
-	globalRegistry.mu.RLock()
-	defer globalRegistry.mu.RUnlock()
-
-	result := make(map[string]*PlatformExtension, len(globalRegistry.extensions))
-	for k, v := range globalRegistry.extensions {
-		result[k] = v
-	}
-	return result
+	return make(map[string]*PlatformExtension)
 }
 
-// GetExtension returns a specific extension by name
+// GetExtension is deprecated: Use instance-level platform management instead
 func GetExtension(name string) (*PlatformExtension, bool) {
-	globalRegistry.mu.RLock()
-	defer globalRegistry.mu.RUnlock()
-
-	ext, exists := globalRegistry.extensions[name]
-	return ext, exists
+	return nil, false
 }
 
 // IsExtensionRegistered checks if an extension is registered

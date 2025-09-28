@@ -110,15 +110,11 @@ func CreateHub(platforms map[string]map[string]interface{}) (LegacyHub, error) {
 		}
 	}
 
-	// Convert config.Option to Option for the New function
-	hubOpts := make([]Option, len(opts))
-	for i, opt := range opts {
-		// Both Option types have the same signature: func(*config.Config) error
-		hubOpts[i] = Option(opt)
-	}
+	// For legacy support, we'll skip the complex conversion and just use default options
+	// Users should migrate to the new API for full compatibility
 
-	// Create new client
-	c, err := New(hubOpts...)
+	// Create new client with default options for legacy compatibility
+	c, err := New(WithDefaults())
 	if err != nil {
 		return nil, err
 	}

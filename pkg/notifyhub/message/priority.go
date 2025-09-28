@@ -5,10 +5,10 @@ package message
 type Priority int
 
 const (
-	PriorityLow    Priority = 1
-	PriorityNormal Priority = 2
-	PriorityHigh   Priority = 3
-	PriorityUrgent Priority = 4
+	PriorityLow    Priority = 0
+	PriorityNormal Priority = 1
+	PriorityHigh   Priority = 2
+	PriorityUrgent Priority = 3
 )
 
 // String returns the string representation of priority

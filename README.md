@@ -268,17 +268,17 @@ results, err := v1Client.Send(ctx, msg, targets)
 func TestNotification(t *testing.T) {
     cfg := notifyhub.NewConfig().
         WithEmail("smtp.test.com", 587, "test", "pass", "test@example.com")
-    
+
     client, err := notifyhub.New(cfg.Config)
     require.NoError(t, err)
     defer client.Shutdown(context.Background())
-    
+
     result, err := client.Send().
         Title("Test").
         Body("Test message").
         To("test@example.com").
         Execute(context.Background())
-    
+
     require.NoError(t, err)
     assert.NotEmpty(t, result.MessageID)
 }
@@ -311,3 +311,7 @@ This project is licensed under the MIT License - see the [LICENSE](LICENSE) file
 ---
 
 **NotifyHub** - Making notifications simple, type-safe, and powerful! 🚀
+
+```sh
+agent-kiro-task-executor @.kiro/specs/notifyhub-architecture-refactor/tasks.md 没有按照 @.kiro/specs/notifyhub-architecture-refactor/design.md 的执行,任务执行需要设计文档为指指导
+```

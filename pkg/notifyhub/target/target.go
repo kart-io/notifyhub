@@ -8,9 +8,9 @@ import (
 // Target represents a notification target (email, user, group, etc.)
 // This structure encapsulates target information for different platforms
 type Target struct {
-	Type     string `json:"type"`     // "email", "user", "group", "channel", "webhook", "phone"
-	Value    string `json:"value"`    // email address, user ID, phone number, etc.
-	Platform string `json:"platform"` // "feishu", "email", "sms", "webhook"
+	Type     string `json:"type" validate:"required,oneof=email phone user group channel webhook"`     // "email", "user", "group", "channel", "webhook", "phone"
+	Value    string `json:"value" validate:"required,min=1,max=500"`    // email address, user ID, phone number, etc.
+	Platform string `json:"platform" validate:"oneof=feishu email sms webhook auto ''"` // "feishu", "email", "sms", "webhook"
 }
 
 // TargetType constants for type safety

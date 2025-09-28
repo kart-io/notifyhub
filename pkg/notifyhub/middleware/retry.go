@@ -5,6 +5,7 @@ import (
 	"context"
 	"math"
 	"math/rand"
+	"sync"
 	"time"
 
 	"github.com/kart-io/notifyhub/pkg/logger"
@@ -17,8 +18,12 @@ import (
 // RetryMiddleware provides intelligent retry logic with exponential backoff
 type RetryMiddleware struct {
 	BaseMiddleware
-	strategy RetryStrategy
-	logger   logger.Logger
+	strategy       RetryStrategy
+	logger         logger.Logger
+	statistics     *errors.RetryStatistics
+	performanceMonitor *errors.PerformanceMonitor
+	circuitBreakers    map[string]*errors.CircuitBreaker
+	mu                 sync.RWMutex
 }
 
 // RetryStrategy defines the retry behavior
@@ -141,34 +146,53 @@ func NewRetryMiddleware(strategy RetryStrategy, l logger.Logger) *RetryMiddlewar
 	}
 
 	return &RetryMiddleware{
-		BaseMiddleware: NewBaseMiddleware("retry"),
-		strategy:       strategy,
-		logger:         l,
+		BaseMiddleware:      NewBaseMiddleware("retry"),
+		strategy:           strategy,
+		logger:             l,
+		statistics:         errors.NewRetryStatistics(),
+		performanceMonitor: errors.NewPerformanceMonitor(),
+		circuitBreakers:    make(map[string]*errors.CircuitBreaker),
 	}
 }
 
-// HandleSend implements retry logic with exponential backoff
+// HandleSend implements retry logic with exponential backoff and performance monitoring
 func (rm *RetryMiddleware) HandleSend(ctx context.Context, msg *message.Message, targets []target.Target, next SendHandler) (*receipt.Receipt, error) {
 	var lastErr error
 	var lastReceipt *receipt.Receipt
+	startTime := time.Now()
+
+	// Determine primary platform for metrics
+	platform := rm.extractPlatformFromTargets(targets)
+
+	// Check circuit breaker for platform
+	if rm.shouldSkipDueToCircuitBreaker(platform) {
+		return nil, errors.NewPlatformError(errors.ErrPlatformUnavailable, platform, "circuit breaker open")
+	}
 
 	for attempt := 0; attempt < rm.strategy.GetMaxAttempts(); attempt++ {
 		// Check context cancellation before each attempt
 		select {
 		case <-ctx.Done():
+			rm.recordAttempt(platform, time.Since(startTime), lastErr, false)
 			return lastReceipt, errors.NewSystemError(errors.ErrSystemTimeout, "retry_middleware", "context cancelled during retry")
 		default:
 		}
 
 		// Execute the operation
+		attemptStart := time.Now()
 		receipt, err := next(ctx, msg, targets)
+		attemptDuration := time.Since(attemptStart)
 
 		// If successful, return immediately
 		if err == nil {
+			rm.recordAttempt(platform, attemptDuration, nil, true)
+			rm.recordCircuitBreakerSuccess(platform)
 			if attempt > 0 {
 				rm.logger.Info("Message send successful after retries",
 					"message_id", msg.ID,
-					"attempts", attempt+1)
+					"platform", platform,
+					"attempts", attempt+1,
+					"total_duration", time.Since(startTime))
 			}
 			return receipt, nil
 		}
@@ -176,11 +200,13 @@ func (rm *RetryMiddleware) HandleSend(ctx context.Context, msg *message.Message,
 		// Store the error for potential return
 		lastErr = err
 		lastReceipt = receipt
+		rm.recordCircuitBreakerFailure(platform)
 
 		// Check if we should retry
 		if !rm.strategy.ShouldRetry(ctx, err, attempt) {
 			rm.logger.Debug("Error not retryable or max attempts reached",
 				"message_id", msg.ID,
+				"platform", platform,
 				"attempt", attempt+1,
 				"error", err.Error())
 			break
@@ -191,10 +217,14 @@ func (rm *RetryMiddleware) HandleSend(ctx context.Context, msg *message.Message,
 
 		rm.logger.Warn("Message send failed, retrying",
 			"message_id", msg.ID,
+			"platform", platform,
 			"attempt", attempt+1,
 			"max_attempts", rm.strategy.GetMaxAttempts(),
 			"delay", delay,
 			"error", err.Error())
+
+		// Record failed attempt
+		rm.recordAttempt(platform, attemptDuration, err, false)
 
 		// Wait for delay or context cancellation
 		select {
@@ -206,9 +236,14 @@ func (rm *RetryMiddleware) HandleSend(ctx context.Context, msg *message.Message,
 	}
 
 	// All retry attempts exhausted
+	totalDuration := time.Since(startTime)
+	rm.recordAttempt(platform, totalDuration, lastErr, false)
+
 	rm.logger.Error("Message send failed after all retry attempts",
 		"message_id", msg.ID,
+		"platform", platform,
 		"attempts", rm.strategy.GetMaxAttempts(),
+		"total_duration", totalDuration,
 		"last_error", lastErr.Error())
 
 	return lastReceipt, errors.Wrap(lastErr, errors.ErrSystemTimeout, "message send failed after all retry attempts")
@@ -336,4 +371,118 @@ func (l *LinearBackoffStrategy) GetDelay(attempt int) time.Duration {
 // GetMaxAttempts returns the maximum number of retry attempts
 func (l *LinearBackoffStrategy) GetMaxAttempts() int {
 	return l.MaxAttempts
+}
+
+// Helper methods for RetryMiddleware
+
+// extractPlatformFromTargets extracts the primary platform from targets
+func (rm *RetryMiddleware) extractPlatformFromTargets(targets []target.Target) string {
+	if len(targets) == 0 {
+		return "unknown"
+	}
+
+	// Return the platform of the first target
+	return targets[0].Platform
+}
+
+// shouldSkipDueToCircuitBreaker checks if operation should be skipped due to circuit breaker
+func (rm *RetryMiddleware) shouldSkipDueToCircuitBreaker(platform string) bool {
+	rm.mu.RLock()
+	defer rm.mu.RUnlock()
+
+	if cb, exists := rm.circuitBreakers[platform]; exists {
+		return !cb.ShouldAllow()
+	}
+	return false
+}
+
+// recordAttempt records a retry attempt with performance monitoring
+func (rm *RetryMiddleware) recordAttempt(platform string, duration time.Duration, err error, success bool) {
+	rm.mu.Lock()
+	defer rm.mu.Unlock()
+
+	// Record in statistics
+	rm.statistics.RecordAttempt(platform, duration, err, success)
+
+	// Record in performance monitor
+	rm.performanceMonitor.RecordOperation(platform, duration, success)
+}
+
+// recordCircuitBreakerSuccess records a successful operation for circuit breaker
+func (rm *RetryMiddleware) recordCircuitBreakerSuccess(platform string) {
+	rm.mu.Lock()
+	defer rm.mu.Unlock()
+
+	if cb, exists := rm.circuitBreakers[platform]; exists {
+		cb.RecordSuccess()
+	}
+}
+
+// recordCircuitBreakerFailure records a failed operation for circuit breaker
+func (rm *RetryMiddleware) recordCircuitBreakerFailure(platform string) {
+	rm.mu.Lock()
+	defer rm.mu.Unlock()
+
+	// Create circuit breaker if it doesn't exist
+	if _, exists := rm.circuitBreakers[platform]; !exists {
+		// Default circuit breaker configuration: 5 failures, 30 second timeout
+		rm.circuitBreakers[platform] = errors.NewCircuitBreaker(5, 30*time.Second)
+	}
+
+	rm.circuitBreakers[platform].RecordFailure()
+}
+
+// GetStatistics returns retry statistics
+func (rm *RetryMiddleware) GetStatistics() *errors.RetryStatistics {
+	rm.mu.RLock()
+	defer rm.mu.RUnlock()
+	return rm.statistics
+}
+
+// GetPerformanceMetrics returns performance metrics
+func (rm *RetryMiddleware) GetPerformanceMetrics() *errors.PerformanceMonitor {
+	rm.mu.RLock()
+	defer rm.mu.RUnlock()
+	return rm.performanceMonitor
+}
+
+// GetCircuitBreakerStatus returns circuit breaker status for a platform
+func (rm *RetryMiddleware) GetCircuitBreakerStatus(platform string) errors.CircuitBreakerState {
+	rm.mu.RLock()
+	defer rm.mu.RUnlock()
+
+	if cb, exists := rm.circuitBreakers[platform]; exists {
+		return cb.GetState()
+	}
+	return errors.CircuitClosed
+}
+
+// OptimizePlatformConfig optimizes retry configuration for a platform based on performance
+func (rm *RetryMiddleware) OptimizePlatformConfig(platform string, currentConfig *errors.PlatformRetryConfig) *errors.PlatformRetryConfig {
+	rm.mu.RLock()
+	defer rm.mu.RUnlock()
+
+	return rm.performanceMonitor.OptimizeStrategy(platform, currentConfig)
+}
+
+// GetRecommendations returns performance-based recommendations
+func (rm *RetryMiddleware) GetRecommendations() []string {
+	rm.mu.RLock()
+	defer rm.mu.RUnlock()
+
+	return rm.performanceMonitor.GetRecommendations()
+}
+
+// Reset resets all retry statistics and circuit breakers
+func (rm *RetryMiddleware) Reset() {
+	rm.mu.Lock()
+	defer rm.mu.Unlock()
+
+	rm.statistics.Reset()
+	rm.performanceMonitor.Reset()
+
+	// Reset all circuit breakers
+	for _, cb := range rm.circuitBreakers {
+		cb.Reset()
+	}
 }

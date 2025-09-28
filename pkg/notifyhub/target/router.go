@@ -153,15 +153,16 @@ func (r *SmartRouter) selectPlatform(target Target) (string, error) {
 	// Auto-detect target type if not specified
 	targetType := target.Type
 	if targetType == "" {
-		targetType, _ = detectTargetTypeAndPlatform(target.Value)
+		detectedTarget := DefaultResolver.AutoDetectTarget(target.Value)
+		targetType = detectedTarget.Type
 	}
 
 	// Get routing rule for target type
 	rule, exists := r.rules[targetType]
 	if !exists {
 		// Fallback to auto-detection
-		_, platform := detectTargetTypeAndPlatform(target.Value)
-		return platform, nil
+		detectedTarget := DefaultResolver.AutoDetectTarget(target.Value)
+		return detectedTarget.Platform, nil
 	}
 
 	// Select from primary platforms using load balancing

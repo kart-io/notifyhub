@@ -1,5 +1,11 @@
+// DEPRECATED: This file contains the old factory implementation and is deprecated.
+// Use the new factory.go implementation instead for the simplified 3-layer architecture.
+// This file is kept for backward compatibility and will be removed in a future version.
+//
+//go:build deprecated
+// +build deprecated
+
 // Package notifyhub provides hub factory functions for creating notification hubs.
-// This file contains the core hub creation functionality using the functional options pattern.
 package notifyhub
 
 import (
@@ -15,9 +21,10 @@ import (
 	"github.com/kart-io/notifyhub/pkg/notifyhub/receipt"
 )
 
-// Client is the unified interface for NotifyHub
+// DeprecatedClient is the unified interface for NotifyHub (DEPRECATED)
+// DEPRECATED: Use the new Client interface from factory.go instead.
 // This is the main entry point for interacting with the notification system
-type Client interface {
+type DeprecatedClient interface {
 	// Send sends a single message
 	Send(ctx context.Context, message *message.Message) (*receipt.Receipt, error)
 
@@ -45,25 +52,28 @@ type PlatformStatus struct {
 	Details   map[string]string
 }
 
-// Option represents a configuration option for creating a client/hub
+// DeprecatedOption represents a configuration option for creating a client/hub (DEPRECATED)
+// DEPRECATED: Use the new Option type from config.go instead.
 // Options are used with the functional options pattern to configure
 // notification clients in a flexible and extensible way
-type Option func(*config.Config) error
+type DeprecatedOption func(*config.Config) error
 
-// HubOption is an alias for backward compatibility
-// It can be used interchangeably with Option
-type HubOption = Option
+// HubOption is an alias for backward compatibility (DEPRECATED)
+// DEPRECATED: Use the new Option type from config.go instead.
+// It can be used interchangeably with DeprecatedOption
+type HubOption = DeprecatedOption
 
-// New creates a new NotifyHub client (unified entry point)
-// This is the recommended way to create a NotifyHub instance in v2+
+// NewDeprecated creates a new NotifyHub client (DEPRECATED)
+// DEPRECATED: Use New() from factory.go instead for the new 3-layer architecture.
+// This is the old way to create a NotifyHub instance using the 6-layer calling chain.
 //
 // Example:
 //
-//	client, err := New(
+//	client, err := NewDeprecated(
 //	    WithPlatform("email", emailConfig),
 //	    WithTimeout(30*time.Second),
 //	)
-func New(opts ...Option) (Client, error) {
+func NewDeprecated(opts ...DeprecatedOption) (DeprecatedClient, error) {
 	cfg := &config.Config{
 		Platforms:        make(map[string]map[string]interface{}),
 		DefaultTimeout:   30 * time.Second,

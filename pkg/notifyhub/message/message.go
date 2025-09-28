@@ -35,16 +35,16 @@ func (f Format) IsValid() bool {
 // Message represents a unified notification message structure
 // This is the canonical Message definition that replaces all other Message types in the codebase
 type Message struct {
-	ID           string                 `json:"id"`
-	Title        string                 `json:"title"`
-	Body         string                 `json:"body"`
-	Format       Format                 `json:"format"`
-	Priority     Priority               `json:"priority"`
-	Targets      []target.Target        `json:"targets"`
+	ID           string                 `json:"id" validate:"required,min=1"`
+	Title        string                 `json:"title" validate:"required,max=200"`
+	Body         string                 `json:"body" validate:"required,max=4096"`
+	Format       Format                 `json:"format" validate:"required,oneof=text markdown html"`
+	Priority     Priority               `json:"priority" validate:"min=0,max=3"`
+	Targets      []target.Target        `json:"targets" validate:"required,min=1,max=100,dive"`
 	Metadata     map[string]interface{} `json:"metadata,omitempty"`
 	Variables    map[string]interface{} `json:"variables,omitempty"`
 	PlatformData map[string]interface{} `json:"platform_data,omitempty"`
-	CreatedAt    time.Time              `json:"created_at"`
+	CreatedAt    time.Time              `json:"created_at" validate:"required"`
 	ScheduledAt  *time.Time             `json:"scheduled_at,omitempty"`
 }
 
