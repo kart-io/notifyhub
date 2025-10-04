@@ -1,0 +1,136 @@
+Subject: 欢迎加入 {{.Variables.company}}！
+
+<!DOCTYPE html>
+<html>
+<head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>欢迎邮件</title>
+    <style>
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            line-height: 1.6;
+            color: #333;
+            max-width: 600px;
+            margin: 0 auto;
+            padding: 20px;
+            background-color: #f4f4f4;
+        }
+        .container {
+            background: white;
+            padding: 30px;
+            border-radius: 10px;
+            box-shadow: 0 0 20px rgba(0,0,0,0.1);
+        }
+        .header {
+            text-align: center;
+            padding-bottom: 30px;
+            border-bottom: 2px solid #007bff;
+            margin-bottom: 30px;
+        }
+        .logo {
+            font-size: 28px;
+            font-weight: bold;
+            color: #007bff;
+            margin-bottom: 10px;
+        }
+        .welcome {
+            font-size: 24px;
+            color: #007bff;
+            margin-bottom: 20px;
+        }
+        .content {
+            margin: 20px 0;
+        }
+        .highlight {
+            background-color: #e7f3ff;
+            padding: 15px;
+            border-left: 4px solid #007bff;
+            margin: 20px 0;
+        }
+        .button {
+            display: inline-block;
+            background-color: #007bff;
+            color: white;
+            padding: 12px 30px;
+            text-decoration: none;
+            border-radius: 5px;
+            font-weight: bold;
+            margin: 20px 0;
+        }
+        .footer {
+            margin-top: 40px;
+            padding-top: 20px;
+            border-top: 1px solid #eee;
+            text-align: center;
+            color: #666;
+            font-size: 14px;
+        }
+        .social {
+            margin: 20px 0;
+        }
+        .social a {
+            color: #007bff;
+            text-decoration: none;
+            margin: 0 10px;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <div class="header">
+            <div class="logo">{{.Variables.company}}</div>
+            <div>创新 • 专业 • 可靠</div>
+        </div>
+
+        <h1 class="welcome">欢迎，{{.Variables.user_name}}！</h1>
+
+        <div class="content">
+            <p>我们很高兴您加入 <strong>{{.Variables.company}}</strong> 大家庭！</p>
+
+            <p>{{.Body}}</p>
+
+            <div class="highlight">
+                <strong>🎉 您的账户已激活</strong><br>
+                您现在可以开始使用我们的服务了。
+            </div>
+
+            <p>接下来您可以：</p>
+            <ul>
+                <li>完善您的个人资料</li>
+                <li>浏览我们的产品和服务</li>
+                <li>参加新用户培训</li>
+                <li>联系客服获取帮助</li>
+            </ul>
+
+            {{if .Variables.activation_url}}
+            <p style="text-align: center;">
+                <a href="{{.Variables.activation_url}}" class="button">立即开始使用</a>
+            </p>
+            {{end}}
+        </div>
+
+        <div class="footer">
+            <p><strong>需要帮助？</strong></p>
+            <p>
+                📧 邮箱: {{.Variables.support_email}}<br>
+                📞 电话: {{.Variables.support_phone}}<br>
+                🌐 网站: {{.Variables.website}}
+            </p>
+
+            <div class="social">
+                关注我们:
+                {{if .Variables.facebook_url}}<a href="{{.Variables.facebook_url}}">Facebook</a>{{end}}
+                {{if .Variables.twitter_url}}<a href="{{.Variables.twitter_url}}">Twitter</a>{{end}}
+                {{if .Variables.linkedin_url}}<a href="{{.Variables.linkedin_url}}">LinkedIn</a>{{end}}
+            </div>
+
+            <p style="font-size: 12px; color: #999;">
+                发送时间: {{.Timestamp}}<br>
+                此邮件由 NotifyHub 自动发送<br>
+                如不想接收此类邮件，请<a href="{{.Variables.unsubscribe_url}}">点击退订</a>
+            </p>
+        </div>
+    </div>
+</body>
+</html>

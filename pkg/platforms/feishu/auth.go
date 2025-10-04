@@ -11,7 +11,7 @@ import (
 	"strings"
 	"time"
 
-	"github.com/kart-io/notifyhub/pkg/notifyhub/message"
+	"github.com/kart/notifyhub/pkg/message"
 )
 
 // SecurityMode represents different Feishu security configurations
@@ -38,17 +38,17 @@ func (e *AuthError) Error() string {
 
 // AuthHandler handles authentication logic for Feishu platform
 type AuthHandler struct {
-	secret   string
-	keywords []string
-	mode     SecurityMode
+	secret        string
+	keywords      []string
+	mode          SecurityMode
 	timeoutWindow time.Duration
 }
 
 // NewAuthHandler creates a new authentication handler
 func NewAuthHandler(secret string, keywords []string) *AuthHandler {
 	handler := &AuthHandler{
-		secret:   secret,
-		keywords: keywords,
+		secret:        secret,
+		keywords:      keywords,
 		timeoutWindow: 5 * time.Minute, // Default 5-minute window for timestamp validation
 	}
 	handler.mode = handler.determineSecurityMode()
@@ -58,8 +58,8 @@ func NewAuthHandler(secret string, keywords []string) *AuthHandler {
 // NewAuthHandlerWithTimeout creates a new authentication handler with custom timeout
 func NewAuthHandlerWithTimeout(secret string, keywords []string, timeout time.Duration) *AuthHandler {
 	handler := &AuthHandler{
-		secret:   secret,
-		keywords: keywords,
+		secret:        secret,
+		keywords:      keywords,
 		timeoutWindow: timeout,
 	}
 	handler.mode = handler.determineSecurityMode()
@@ -292,12 +292,12 @@ func (a *AuthHandler) getTextPreview(text string, maxLength int) string {
 // GetDiagnosticInfo returns diagnostic information about the auth handler
 func (a *AuthHandler) GetDiagnosticInfo() map[string]interface{} {
 	return map[string]interface{}{
-		"security_mode":         a.mode,
-		"has_secret":            a.secret != "",
-		"secret_length":         len(a.secret),
-		"keywords_configured":   a.keywords,
-		"keywords_count":        len(a.keywords),
+		"security_mode":          a.mode,
+		"has_secret":             a.secret != "",
+		"secret_length":          len(a.secret),
+		"keywords_configured":    a.keywords,
+		"keywords_count":         len(a.keywords),
 		"timeout_window_seconds": int(a.timeoutWindow.Seconds()),
-		"supported_modes":       []SecurityMode{SecurityModeNone, SecurityModeSignatureOnly, SecurityModeKeywordsOnly, SecurityModeSignatureKeywords},
+		"supported_modes":        []SecurityMode{SecurityModeNone, SecurityModeSignatureOnly, SecurityModeKeywordsOnly, SecurityModeSignatureKeywords},
 	}
 }

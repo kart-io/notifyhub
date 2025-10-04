@@ -3,27 +3,29 @@
 package feishu
 
 import (
+	"bytes"
 	"context"
+	"encoding/json"
 	"fmt"
+	"io"
 	"net/http"
 	"time"
 
-	"github.com/kart-io/notifyhub/pkg/logger"
-	"github.com/kart-io/notifyhub/pkg/notifyhub/config"
-	"github.com/kart-io/notifyhub/pkg/notifyhub/message"
-	"github.com/kart-io/notifyhub/pkg/notifyhub/platform"
-	"github.com/kart-io/notifyhub/pkg/notifyhub/target"
+	"github.com/kart/notifyhub/pkg/config"
+	"github.com/kart/notifyhub/pkg/message"
+	"github.com/kart/notifyhub/pkg/platform"
+	"github.com/kart/notifyhub/pkg/target"
+	"github.com/kart/notifyhub/pkg/utils/logger"
 )
 
 // FeishuPlatform implements the Platform interface for Feishu webhooks
 // This is the core platform implementation that coordinates all Feishu functionality
 type FeishuPlatform struct {
-	config      *FeishuConfig
-	client      *http.Client
-	auth        *AuthHandler
-	messenger   *MessageBuilder
-	httpClient  *HTTPClient
-	logger      logger.Logger
+	config    *FeishuConfig
+	client    *http.Client
+	auth      *AuthHandler
+	messenger *MessageBuilder
+	logger    logger.Logger
 }
 
 // FeishuConfig holds the configuration for Feishu platform
@@ -61,15 +63,13 @@ func NewFeishuPlatform(feishuConfig *config.FeishuConfig, logger logger.Logger) 
 	// Create specialized components
 	auth := NewAuthHandler(internalConfig.Secret, internalConfig.Keywords)
 	messenger := NewMessageBuilder(internalConfig, logger)
-	httpClient := NewHTTPClient(logger)
 
 	return &FeishuPlatform{
-		config:     internalConfig,
-		client:     client,
-		auth:       auth,
-		messenger:  messenger,
-		httpClient: httpClient,
-		logger:     logger,
+		config:    internalConfig,
+		client:    client,
+		auth:      auth,
+		messenger: messenger,
+		logger:    logger,
 	}, nil
 }
 
@@ -88,7 +88,7 @@ func (f *FeishuPlatform) Send(ctx context.Context, msg *message.Message, targets
 			results[i] = &platform.SendResult{
 				Target:  t,
 				Success: false,
-				Error:   "not a feishu target",
+				Error:   fmt.Errorf("not a feishu target"),
 			}
 			continue
 		}
@@ -99,7 +99,7 @@ func (f *FeishuPlatform) Send(ctx context.Context, msg *message.Message, targets
 			results[i] = &platform.SendResult{
 				Target:  t,
 				Success: false,
-				Error:   err.Error(),
+				Error:   err,
 			}
 		} else {
 			messageID := msg.ID
@@ -143,7 +143,7 @@ func (f *FeishuPlatform) sendSingleMessage(ctx context.Context, msg *message.Mes
 	}
 
 	// Send using HTTP client
-	if err := f.httpClient.SendToWebhook(ctx, f.config.WebhookURL, feishuMsg); err != nil {
+	if err := f.sendToWebhook(ctx, feishuMsg); err != nil {
 		f.logger.Error("Failed to send to Feishu webhook", "error", err)
 		return fmt.Errorf("failed to send to Feishu webhook: %w", err)
 	}
@@ -172,6 +172,38 @@ func (f *FeishuPlatform) IsHealthy(ctx context.Context) error {
 	return nil
 }
 
+// sendToWebhook sends a message to the Feishu webhook
+func (f *FeishuPlatform) sendToWebhook(ctx context.Context, msg *FeishuMessage) error {
+	// Marshal message to JSON
+	data, err := json.Marshal(msg)
+	if err != nil {
+		return fmt.Errorf("failed to marshal message: %w", err)
+	}
+
+	// Create HTTP request
+	req, err := http.NewRequestWithContext(ctx, "POST", f.config.WebhookURL, bytes.NewReader(data))
+	if err != nil {
+		return fmt.Errorf("failed to create request: %w", err)
+	}
+
+	req.Header.Set("Content-Type", "application/json")
+
+	// Send request
+	resp, err := f.client.Do(req)
+	if err != nil {
+		return fmt.Errorf("failed to send request: %w", err)
+	}
+	defer func() { _ = resp.Body.Close() }()
+
+	// Check response status
+	if resp.StatusCode != http.StatusOK {
+		body, _ := io.ReadAll(resp.Body)
+		return fmt.Errorf("webhook returned status %d: %s", resp.StatusCode, string(body))
+	}
+
+	return nil
+}
+
 // Close implements the Platform interface
 func (f *FeishuPlatform) Close() error {
 	f.logger.Info("Closing Feishu platform")
@@ -197,13 +229,15 @@ func (f *FeishuPlatform) isFeishuTarget(target target.Target) bool {
 	return target.Type == "feishu" || target.Type == "webhook"
 }
 
-// CreateFeishuPlatform is the factory function for creating Feishu platforms
-// This replaces the global init() registration to support instance-level dependency injection
-func CreateFeishuPlatform(cfg map[string]interface{}, logger logger.Logger) (platform.Platform, error) {
-	// Convert map config to FeishuConfig using the config helper
-	feishuConfig, err := NewConfigFromMap(cfg)
-	if err != nil {
-		return nil, err
+// NewPlatform is the factory function for creating Feishu platforms
+// This function will be called by the platform registry
+func NewPlatform(cfg interface{}) (platform.Platform, error) {
+	feishuConfig, ok := cfg.(*config.FeishuConfig)
+	if !ok {
+		return nil, fmt.Errorf("invalid feishu configuration type")
 	}
+
+	// TODO: Logger should be injected properly
+	logger := logger.New()
 	return NewFeishuPlatform(feishuConfig, logger)
 }

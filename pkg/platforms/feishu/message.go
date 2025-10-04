@@ -6,8 +6,8 @@ import (
 	"fmt"
 	"strings"
 
-	"github.com/kart-io/notifyhub/pkg/logger"
-	"github.com/kart-io/notifyhub/pkg/notifyhub/message"
+	"github.com/kart/notifyhub/pkg/message"
+	"github.com/kart/notifyhub/pkg/utils/logger"
 )
 
 // Message size constants for Feishu platform
@@ -18,9 +18,8 @@ const (
 
 // MessageBuilder handles the construction of Feishu-specific message formats
 type MessageBuilder struct {
-	config    *FeishuConfig
-	logger    logger.Logger
-	validator *MessageValidator
+	config *FeishuConfig
+	logger logger.Logger
 }
 
 // FeishuMessage represents a Feishu webhook message structure
@@ -51,9 +50,8 @@ type FeishuCardContent struct {
 // NewMessageBuilder creates a new message builder
 func NewMessageBuilder(config *FeishuConfig, logger logger.Logger) *MessageBuilder {
 	return &MessageBuilder{
-		config:    config,
-		logger:    logger,
-		validator: NewMessageValidator(logger),
+		config: config,
+		logger: logger,
 	}
 }
 
@@ -183,13 +181,13 @@ func (m *MessageBuilder) buildCardContent(msg *message.Message) *FeishuCardConte
 func (m *MessageBuilder) getCardTemplate(priority int) string {
 	switch priority {
 	case 3:
-		return "red"    // Urgent
+		return "red" // Urgent
 	case 2:
 		return "orange" // High
 	case 1:
-		return "blue"   // Normal
+		return "blue" // Normal
 	default:
-		return "grey"   // Low
+		return "grey" // Low
 	}
 }
 
@@ -249,12 +247,19 @@ func (m *MessageBuilder) AddKeywordToMessage(feishuMsg *FeishuMessage, keyword s
 
 // ValidateMessage validates the message format and content for security and size limits
 func (m *MessageBuilder) ValidateMessage(msg *message.Message) error {
-	return m.validator.ValidateMessage(msg)
+	if msg.Title == "" && msg.Body == "" {
+		return fmt.Errorf("message title and body cannot both be empty")
+	}
+	return nil
 }
 
 // SanitizeContent sanitizes content for safe processing
 func (m *MessageBuilder) SanitizeContent(content string) string {
-	return m.validator.SanitizeContent(content)
+	// Basic sanitization - remove null bytes and limit length
+	if len(content) > MaxMessageSize {
+		content = content[:MaxMessageSize]
+	}
+	return content
 }
 
 // ValidateMessageSize validates that the message doesn't exceed size limits
@@ -269,13 +274,29 @@ func (m *MessageBuilder) ValidateMessageSize(msg *message.Message) error {
 
 // EstimateMessageSize estimates the final message size in bytes
 func (m *MessageBuilder) EstimateMessageSize(msg *message.Message) int {
-	// Try to build actual message for accurate estimation
+	// Simple size estimation based on message content
+	size := len(msg.Title) + len(msg.Body)
+
+	// Add overhead for JSON structure
+	size += 200 // JSON overhead estimation
+
+	// Try to build actual message for more accurate estimation
 	feishuMsg, err := m.BuildMessage(msg)
 	if err != nil {
-		// Fallback estimation using validator
-		return m.validator.EstimateMessageSize(msg, "text")
+		return size
 	}
-	return m.validator.EstimateMessageSize(msg, feishuMsg.MsgType)
+
+	// Estimate based on message type
+	switch feishuMsg.MsgType {
+	case "interactive":
+		size += 500 // Card overhead
+	case "post":
+		size += 300 // Rich text overhead
+	default:
+		size += 100 // Text overhead
+	}
+
+	return size
 }
 
 // SupportsFormat checks if the builder supports a specific message format

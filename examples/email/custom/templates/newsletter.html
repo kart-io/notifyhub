@@ -1,0 +1,241 @@
+Subject: {{.Variables.newsletter_title}} - {{.Variables.issue_number}}
+
+<!DOCTYPE html>
+<html>
+<head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Newsletter</title>
+    <style>
+        body {
+            font-family: 'Helvetica Neue', Arial, sans-serif;
+            line-height: 1.6;
+            color: #333;
+            margin: 0;
+            padding: 0;
+            background-color: #f4f4f4;
+        }
+        .container {
+            max-width: 600px;
+            margin: 0 auto;
+            background: white;
+        }
+        .header {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+            padding: 40px 30px;
+            text-align: center;
+        }
+        .header h1 {
+            margin: 0;
+            font-size: 28px;
+            font-weight: 300;
+        }
+        .header .issue {
+            margin-top: 10px;
+            opacity: 0.9;
+            font-size: 16px;
+        }
+        .content {
+            padding: 30px;
+        }
+        .article {
+            margin: 30px 0;
+            padding: 20px 0;
+            border-bottom: 1px solid #eee;
+        }
+        .article:last-child {
+            border-bottom: none;
+        }
+        .article h2 {
+            color: #667eea;
+            margin-bottom: 15px;
+            font-size: 20px;
+        }
+        .article .meta {
+            font-size: 14px;
+            color: #999;
+            margin-bottom: 10px;
+        }
+        .article .excerpt {
+            margin: 15px 0;
+        }
+        .read-more {
+            color: #667eea;
+            text-decoration: none;
+            font-weight: bold;
+        }
+        .read-more:hover {
+            text-decoration: underline;
+        }
+        .featured {
+            background: linear-gradient(135deg, #f093fb 0%, #f5576c 100%);
+            color: white;
+            padding: 30px;
+            border-radius: 10px;
+            margin: 30px 0;
+            text-align: center;
+        }
+        .featured h3 {
+            margin-top: 0;
+            font-size: 24px;
+        }
+        .featured .button {
+            display: inline-block;
+            background: white;
+            color: #f5576c;
+            padding: 12px 30px;
+            text-decoration: none;
+            border-radius: 25px;
+            font-weight: bold;
+            margin-top: 15px;
+        }
+        .stats {
+            background: #f8f9fa;
+            padding: 20px;
+            border-radius: 8px;
+            margin: 30px 0;
+            text-align: center;
+        }
+        .stats .stat {
+            display: inline-block;
+            margin: 0 20px;
+            text-align: center;
+        }
+        .stats .number {
+            font-size: 24px;
+            font-weight: bold;
+            color: #667eea;
+        }
+        .stats .label {
+            font-size: 14px;
+            color: #666;
+        }
+        .social {
+            text-align: center;
+            margin: 30px 0;
+        }
+        .social a {
+            display: inline-block;
+            margin: 0 10px;
+            color: #667eea;
+            text-decoration: none;
+            font-weight: bold;
+        }
+        .footer {
+            background: #2c3e50;
+            color: white;
+            padding: 30px;
+            text-align: center;
+            font-size: 14px;
+        }
+        .footer a {
+            color: #3498db;
+            text-decoration: none;
+        }
+        .unsubscribe {
+            margin-top: 20px;
+            padding-top: 20px;
+            border-top: 1px solid #34495e;
+            font-size: 12px;
+            opacity: 0.8;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <div class="header">
+            <h1>{{.Variables.newsletter_title}}</h1>
+            <div class="issue">第 {{.Variables.issue_number}} 期 • {{.Variables.publish_date}}</div>
+        </div>
+
+        <div class="content">
+            <p>Hi {{.Variables.subscriber_name}}，</p>
+            <p>{{.Body}}</p>
+
+            {{if .Variables.featured_article}}
+            <div class="featured">
+                <h3>🌟 本期精选</h3>
+                <p>{{.Variables.featured_article.title}}</p>
+                <p>{{.Variables.featured_article.description}}</p>
+                <a href="{{.Variables.featured_article.url}}" class="button">阅读全文</a>
+            </div>
+            {{end}}
+
+            {{if .Variables.articles}}
+            <h2>📰 本期内容</h2>
+            {{range .Variables.articles}}
+            <div class="article">
+                <h2>{{.title}}</h2>
+                <div class="meta">{{.category}} • {{.author}} • {{.read_time}}</div>
+                <div class="excerpt">{{.excerpt}}</div>
+                <a href="{{.url}}" class="read-more">阅读更多 →</a>
+            </div>
+            {{end}}
+            {{end}}
+
+            {{if .Variables.stats}}
+            <div class="stats">
+                <h3>📊 数据一览</h3>
+                {{range .Variables.stats}}
+                <div class="stat">
+                    <div class="number">{{.value}}</div>
+                    <div class="label">{{.label}}</div>
+                </div>
+                {{end}}
+            </div>
+            {{end}}
+
+            {{if .Variables.upcoming_events}}
+            <h3>📅 即将到来的活动</h3>
+            {{range .Variables.upcoming_events}}
+            <div style="background: #e8f4f8; padding: 15px; border-radius: 5px; margin: 10px 0;">
+                <strong>{{.title}}</strong><br>
+                📅 {{.date}} • 📍 {{.location}}<br>
+                <small>{{.description}}</small>
+            </div>
+            {{end}}
+            {{end}}
+
+            <div class="social">
+                <p><strong>🔗 关注我们</strong></p>
+                {{if .Variables.social_links}}
+                {{range .Variables.social_links}}
+                <a href="{{.url}}">{{.name}}</a>
+                {{end}}
+                {{end}}
+            </div>
+
+            {{if .Variables.sponsor_message}}
+            <div style="background: #fff9c4; padding: 20px; border-radius: 8px; margin: 30px 0; text-align: center;">
+                <p><strong>💼 赞助商信息</strong></p>
+                <p>{{.Variables.sponsor_message}}</p>
+            </div>
+            {{end}}
+        </div>
+
+        <div class="footer">
+            <p><strong>{{.Variables.company}}</strong></p>
+            <p>{{.Variables.company_description}}</p>
+
+            <p style="margin: 20px 0;">
+                <a href="{{.Variables.website}}">官网</a> |
+                <a href="{{.Variables.blog_url}}">博客</a> |
+                <a href="{{.Variables.contact_url}}">联系我们</a>
+            </p>
+
+            <div class="unsubscribe">
+                <p>
+                    您收到此邮件是因为您订阅了我们的新闻简报。<br>
+                    <a href="{{.Variables.unsubscribe_url}}">取消订阅</a> |
+                    <a href="{{.Variables.preferences_url}}">邮件偏好设置</a>
+                </p>
+                <p style="margin-top: 15px;">
+                    {{.Variables.company_address}}<br>
+                    发送时间: {{.Timestamp}} • 由 NotifyHub 提供技术支持
+                </p>
+            </div>
+        </div>
+    </div>
+</body>
+</html>

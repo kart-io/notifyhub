@@ -7,7 +7,7 @@ import (
 	"strings"
 	"time"
 
-	"github.com/kart-io/notifyhub/pkg/notifyhub/config"
+	"github.com/kart/notifyhub/pkg/config"
 )
 
 // ValidateConfig validates the Feishu configuration
@@ -16,25 +16,14 @@ func ValidateConfig(cfg *config.FeishuConfig) error {
 		return fmt.Errorf("feishu config cannot be nil")
 	}
 
-	// Validate authentication configuration based on auth type
-	switch cfg.AuthType {
-	case "", "webhook":
-		if cfg.WebhookURL == "" {
-			return fmt.Errorf("webhook_url is required for webhook authentication")
-		}
-		// Validate webhook URL format
-		if !strings.HasPrefix(cfg.WebhookURL, "http://") && !strings.HasPrefix(cfg.WebhookURL, "https://") {
-			return fmt.Errorf("webhook_url must start with http:// or https://")
-		}
-	case "app":
-		if cfg.AppID == "" {
-			return fmt.Errorf("app_id is required for app authentication")
-		}
-		if cfg.AppSecret == "" {
-			return fmt.Errorf("app_secret is required for app authentication")
-		}
-	default:
-		return fmt.Errorf("invalid auth_type: %s (must be 'webhook' or 'app')", cfg.AuthType)
+	// Validate webhook URL
+	if cfg.WebhookURL == "" {
+		return fmt.Errorf("webhook_url is required for Feishu platform")
+	}
+
+	// Validate webhook URL format
+	if !strings.HasPrefix(cfg.WebhookURL, "http://") && !strings.HasPrefix(cfg.WebhookURL, "https://") {
+		return fmt.Errorf("webhook_url must start with http:// or https://")
 	}
 
 	// Validate timeout
@@ -82,16 +71,7 @@ func SetDefaults(cfg *config.FeishuConfig) {
 		cfg.RateLimit = 60
 	}
 
-	// Set default auth type
-	if cfg.AuthType == "" {
-		if cfg.WebhookURL != "" {
-			cfg.AuthType = "webhook"
-		} else if cfg.AppID != "" {
-			cfg.AuthType = "app"
-		} else {
-			cfg.AuthType = "webhook" // Default to webhook
-		}
-	}
+	// No auth type needed - using webhook only
 
 	// Clean up keywords: trim whitespace and remove empty ones
 	cleanKeywords := make([]string, 0, len(cfg.Keywords))
@@ -116,15 +96,9 @@ func NewConfigFromMap(configMap map[string]interface{}) (*config.FeishuConfig, e
 		cfg.Secret = secret
 	}
 
-	// Extract app configuration
-	if appID, ok := configMap["app_id"].(string); ok {
-		cfg.AppID = appID
-	}
-	if appSecret, ok := configMap["app_secret"].(string); ok {
-		cfg.AppSecret = appSecret
-	}
-	if authType, ok := configMap["auth_type"].(string); ok {
-		cfg.AuthType = authType
+	// Extract keywords
+	if keywords, ok := configMap["keywords"].([]string); ok {
+		cfg.Keywords = keywords
 	}
 
 	// Extract timeout
@@ -152,9 +126,9 @@ func NewConfigFromMap(configMap map[string]interface{}) (*config.FeishuConfig, e
 		cfg.RateLimit = int(rateLimitFloat)
 	}
 
-	// Extract sign verify
-	if signVerify, ok := configMap["sign_verify"].(bool); ok {
-		cfg.SignVerify = signVerify
+	// Extract verify SSL
+	if verifySSL, ok := configMap["verify_ssl"].(bool); ok {
+		cfg.VerifySSL = verifySSL
 	}
 
 	// Extract keywords
@@ -189,6 +163,3 @@ func NewConfigFromMap(configMap map[string]interface{}) (*config.FeishuConfig, e
 
 	return cfg, nil
 }
-
-
-

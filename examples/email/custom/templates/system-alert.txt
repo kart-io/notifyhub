@@ -1,0 +1,103 @@
+Subject: 🚨 系统警报: {{.Variables.alert_type}} - {{.Variables.severity}}
+
+====================================
+系统警报通知
+====================================
+
+警报时间: {{.Timestamp}}
+系统: {{.Variables.system_name}}
+环境: {{.Variables.environment}}
+严重程度: {{.Variables.severity}}
+
+====================================
+警报详情
+====================================
+
+{{.Title}}
+
+{{.Body}}
+
+服务器: {{.Variables.server_name}}
+IP地址: {{.Variables.server_ip}}
+服务: {{.Variables.service_name}}
+
+{{if .Variables.error_details}}
+错误详情:
+{{.Variables.error_details}}
+{{end}}
+
+{{if .Variables.stack_trace}}
+堆栈跟踪:
+{{.Variables.stack_trace}}
+{{end}}
+
+====================================
+影响范围
+====================================
+
+{{if .Variables.affected_users}}
+受影响用户: {{.Variables.affected_users}}
+{{end}}
+
+{{if .Variables.affected_services}}
+受影响服务: {{.Variables.affected_services}}
+{{end}}
+
+{{if .Variables.estimated_downtime}}
+预计恢复时间: {{.Variables.estimated_downtime}}
+{{end}}
+
+====================================
+处理建议
+====================================
+
+{{if .Variables.recommended_actions}}
+{{range .Variables.recommended_actions}}
+• {{.}}
+{{end}}
+{{end}}
+
+{{if .Variables.escalation_required}}
+⚠️ 需要升级处理
+联系人: {{.Variables.escalation_contact}}
+电话: {{.Variables.escalation_phone}}
+{{end}}
+
+====================================
+系统状态
+====================================
+
+CPU使用率: {{.Variables.cpu_usage}}%
+内存使用率: {{.Variables.memory_usage}}%
+磁盘使用率: {{.Variables.disk_usage}}%
+网络状态: {{.Variables.network_status}}
+
+{{if .Variables.recent_changes}}
+最近变更:
+{{range .Variables.recent_changes}}
+• {{.timestamp}} - {{.description}}
+{{end}}
+{{end}}
+
+====================================
+监控链接
+====================================
+
+监控面板: {{.Variables.dashboard_url}}
+日志查看: {{.Variables.logs_url}}
+故障报告: {{.Variables.incident_url}}
+
+====================================
+联系信息
+====================================
+
+运维团队: {{.Variables.ops_email}}
+紧急电话: {{.Variables.emergency_phone}}
+值班群组: {{.Variables.oncall_group}}
+
+---
+此警报由 {{.Variables.monitoring_system}} 自动生成
+发送时间: {{.Timestamp}}
+警报ID: {{.Variables.alert_id}}
+
+如需停止接收此类警报，请联系系统管理员。

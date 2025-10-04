@@ -1,0 +1,185 @@
+Subject: 账单通知 - {{.Variables.invoice_number}}
+
+<!DOCTYPE html>
+<html>
+<head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>账单通知</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            line-height: 1.6;
+            color: #333;
+            max-width: 600px;
+            margin: 0 auto;
+            padding: 20px;
+            background-color: #f8f9fa;
+        }
+        .container {
+            background: white;
+            border-radius: 8px;
+            overflow: hidden;
+            box-shadow: 0 2px 10px rgba(0,0,0,0.1);
+        }
+        .header {
+            background: linear-gradient(135deg, #28a745, #20c997);
+            color: white;
+            padding: 30px;
+            text-align: center;
+        }
+        .content {
+            padding: 30px;
+        }
+        .invoice-info {
+            background: #f8f9fa;
+            padding: 20px;
+            border-radius: 5px;
+            margin: 20px 0;
+        }
+        .amount {
+            text-align: center;
+            font-size: 24px;
+            font-weight: bold;
+            color: #28a745;
+            margin: 20px 0;
+            padding: 20px;
+            background: #e8f5e8;
+            border-radius: 5px;
+        }
+        .details table {
+            width: 100%;
+            border-collapse: collapse;
+            margin: 20px 0;
+        }
+        .details th,
+        .details td {
+            text-align: left;
+            padding: 12px;
+            border-bottom: 1px solid #ddd;
+        }
+        .details th {
+            background-color: #f8f9fa;
+            font-weight: bold;
+        }
+        .button {
+            display: inline-block;
+            background-color: #28a745;
+            color: white;
+            padding: 12px 30px;
+            text-decoration: none;
+            border-radius: 5px;
+            font-weight: bold;
+            margin: 20px 0;
+        }
+        .footer {
+            background: #f8f9fa;
+            padding: 20px;
+            text-align: center;
+            color: #666;
+            font-size: 14px;
+        }
+        .warning {
+            background: #fff3cd;
+            border: 1px solid #ffeaa7;
+            color: #856404;
+            padding: 15px;
+            border-radius: 5px;
+            margin: 20px 0;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <div class="header">
+            <h1>💰 账单通知</h1>
+            <p>{{.Variables.company}}</p>
+        </div>
+
+        <div class="content">
+            <p>亲爱的 {{.Variables.customer_name}}，</p>
+
+            <p>{{.Body}}</p>
+
+            <div class="invoice-info">
+                <h3>📋 账单信息</h3>
+                <p><strong>账单号:</strong> {{.Variables.invoice_number}}</p>
+                <p><strong>账单日期:</strong> {{.Variables.invoice_date}}</p>
+                <p><strong>到期日期:</strong> {{.Variables.due_date}}</p>
+                <p><strong>账单周期:</strong> {{.Variables.billing_period}}</p>
+            </div>
+
+            <div class="amount">
+                应付金额: ¥{{.Variables.total_amount}}
+            </div>
+
+            {{if .Variables.items}}
+            <div class="details">
+                <h3>📝 账单明细</h3>
+                <table>
+                    <thead>
+                        <tr>
+                            <th>项目</th>
+                            <th>数量</th>
+                            <th>单价</th>
+                            <th>小计</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        {{range .Variables.items}}
+                        <tr>
+                            <td>{{.name}}</td>
+                            <td>{{.quantity}}</td>
+                            <td>¥{{.price}}</td>
+                            <td>¥{{.subtotal}}</td>
+                        </tr>
+                        {{end}}
+                    </tbody>
+                </table>
+            </div>
+            {{end}}
+
+            {{if .Variables.is_overdue}}
+            <div class="warning">
+                <strong>⚠️ 逾期提醒</strong><br>
+                此账单已逾期，请尽快付款以避免服务中断。
+            </div>
+            {{end}}
+
+            <div style="text-align: center; margin: 30px 0;">
+                {{if .Variables.payment_url}}
+                <a href="{{.Variables.payment_url}}" class="button">立即付款</a>
+                {{end}}
+            </div>
+
+            <div style="background: #f8f9fa; padding: 20px; border-radius: 5px; margin: 20px 0;">
+                <h4>💳 支付方式</h4>
+                <ul>
+                    <li>在线支付：支持支付宝、微信支付、银行卡</li>
+                    <li>银行转账：转账到指定账户</li>
+                    <li>现金支付：到营业厅现金缴费</li>
+                </ul>
+            </div>
+
+            <div>
+                <h4>📞 联系我们</h4>
+                <p>如有任何问题，请联系我们：</p>
+                <ul>
+                    <li>📧 邮箱: {{.Variables.billing_email}}</li>
+                    <li>📞 电话: {{.Variables.billing_phone}}</li>
+                    <li>💬 在线客服: {{.Variables.support_url}}</li>
+                </ul>
+            </div>
+        </div>
+
+        <div class="footer">
+            <p><strong>{{.Variables.company}}</strong></p>
+            <p>{{.Variables.company_address}}</p>
+            <p style="font-size: 12px; margin-top: 20px;">
+                发送时间: {{.Timestamp}}<br>
+                此邮件由 NotifyHub 自动发送
+            </p>
+        </div>
+    </div>
+</body>
+</html>

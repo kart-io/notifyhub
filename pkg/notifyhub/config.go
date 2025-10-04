@@ -6,7 +6,7 @@ import (
 	"strings"
 	"time"
 
-	"github.com/kart-io/notifyhub/pkg/logger"
+	"github.com/kart/notifyhub/pkg/utils/logger"
 )
 
 // Config represents the unified configuration for NotifyHub
@@ -37,8 +37,8 @@ type Option func(*Config) error
 // FeishuConfig represents Feishu platform configuration
 type FeishuConfig struct {
 	// Webhook configuration
-	WebhookURL string `json:"webhook_url" yaml:"webhook_url" validate:"required,url"`
-	Secret     string `json:"secret" yaml:"secret"`
+	WebhookURL string   `json:"webhook_url" yaml:"webhook_url" validate:"required,url"`
+	Secret     string   `json:"secret" yaml:"secret"`
 	Keywords   []string `json:"keywords" yaml:"keywords"`
 
 	// App-based authentication (alternative to webhook)
@@ -48,8 +48,8 @@ type FeishuConfig struct {
 
 	// Network and retry configuration
 	Timeout    time.Duration `json:"timeout" yaml:"timeout"`
-	MaxRetries int          `json:"max_retries" yaml:"max_retries" validate:"min=0"`
-	RateLimit  int          `json:"rate_limit" yaml:"rate_limit" validate:"min=0"` // requests per minute
+	MaxRetries int           `json:"max_retries" yaml:"max_retries" validate:"min=0"`
+	RateLimit  int           `json:"rate_limit" yaml:"rate_limit" validate:"min=0"` // requests per minute
 
 	// Security configuration
 	SignVerify bool `json:"sign_verify" yaml:"sign_verify"` // Enable signature verification
@@ -57,12 +57,12 @@ type FeishuConfig struct {
 
 // EmailConfig represents email platform configuration
 type EmailConfig struct {
-	Host     string `json:"host" yaml:"host"`
-	Port     int    `json:"port" yaml:"port"`
-	Username string `json:"username" yaml:"username"`
-	Password string `json:"password" yaml:"password"`
-	From     string `json:"from" yaml:"from"`
-	UseTLS   bool   `json:"use_tls" yaml:"use_tls"`
+	Host     string        `json:"host" yaml:"host"`
+	Port     int           `json:"port" yaml:"port"`
+	Username string        `json:"username" yaml:"username"`
+	Password string        `json:"password" yaml:"password"`
+	From     string        `json:"from" yaml:"from"`
+	UseTLS   bool          `json:"use_tls" yaml:"use_tls"`
 	Timeout  time.Duration `json:"timeout" yaml:"timeout"`
 }
 
@@ -356,7 +356,7 @@ func WithTestDefaults() Option {
 
 // Configuration validation
 
-// Validate validates the configuration
+// Validate validates the configuration using basic validation
 func (c *Config) Validate() error {
 	if c.Timeout <= 0 {
 		return fmt.Errorf("timeout must be positive")
@@ -396,6 +396,85 @@ func (c *Config) Validate() error {
 	}
 
 	return nil
+}
+
+// ValidateComprehensive performs comprehensive validation with detailed results
+func (c *Config) ValidateComprehensive() error {
+	// Validate core config
+	if c.Timeout <= 0 {
+		return fmt.Errorf("timeout must be positive, got %v", c.Timeout)
+	}
+
+	if c.MaxRetries < 0 {
+		return fmt.Errorf("max retries must be non-negative, got %d", c.MaxRetries)
+	}
+
+	// Validate platform configurations with basic checks
+	if c.Feishu != nil {
+		if c.Feishu.WebhookURL == "" {
+			return fmt.Errorf("feishu webhook URL is required")
+		}
+	}
+
+	if c.Email != nil {
+		if c.Email.Host == "" {
+			return fmt.Errorf("email host is required")
+		}
+	}
+
+	if c.Webhook != nil {
+		if c.Webhook.URL == "" {
+			return fmt.Errorf("webhook URL is required")
+		}
+	}
+
+	// Validate async configuration
+	if c.Async.Enabled {
+		if c.Async.Workers <= 0 {
+			return fmt.Errorf("async workers must be positive when async is enabled, got %d", c.Async.Workers)
+		}
+	}
+
+	return nil
+}
+
+// GetConfiguredPlatformCount returns the number of configured platforms
+func (c *Config) GetConfiguredPlatformCount() int {
+	count := 0
+	if c.Feishu != nil {
+		count++
+	}
+	if c.Email != nil {
+		count++
+	}
+	if c.Webhook != nil {
+		count++
+	}
+	return count
+}
+
+// GetValidationSummary returns a summary of the configuration
+func (c *Config) GetValidationSummary() map[string]interface{} {
+	summary := make(map[string]interface{})
+
+	summary["platforms_configured"] = c.GetConfiguredPlatformCount()
+	summary["async_enabled"] = c.Async.Enabled
+	summary["timeout"] = c.Timeout.String()
+	summary["max_retries"] = c.MaxRetries
+
+	platforms := make([]string, 0)
+	if c.Feishu != nil {
+		platforms = append(platforms, "feishu")
+	}
+	if c.Email != nil {
+		platforms = append(platforms, "email")
+	}
+	if c.Webhook != nil {
+		platforms = append(platforms, "webhook")
+	}
+	summary["configured_platforms"] = platforms
+
+	return summary
 }
 
 // IsAsyncEnabled returns whether async processing is enabled
