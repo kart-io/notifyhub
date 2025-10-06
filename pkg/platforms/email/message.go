@@ -239,6 +239,66 @@ func (b *MessageBuilder) processPlatformData(emailMsg *Message, msg *message.Mes
 	return nil
 }
 
+// extractAttachmentString safely extracts a string from attachment data
+func extractAttachmentString(data map[string]interface{}, key string) string {
+	if value, exists := data[key]; exists {
+		if str, ok := value.(string); ok {
+			return str
+		}
+	}
+	return ""
+}
+
+// extractAttachmentBool safely extracts a bool from attachment data
+func extractAttachmentBool(data map[string]interface{}, key string) bool {
+	if value, exists := data[key]; exists {
+		if boolVal, ok := value.(bool); ok {
+			return boolVal
+		}
+	}
+	return false
+}
+
+// extractAttachmentContent safely extracts content from attachment data
+func extractAttachmentContent(data map[string]interface{}, key string) ([]byte, error) {
+	value, exists := data[key]
+	if !exists {
+		return nil, nil
+	}
+
+	// Try []byte directly
+	if bytes, ok := value.([]byte); ok {
+		return bytes, nil
+	}
+
+	// Try base64 encoded string
+	if str, ok := value.(string); ok {
+		decoded, err := base64.StdEncoding.DecodeString(str)
+		if err != nil {
+			return nil, fmt.Errorf("failed to decode attachment content: %w", err)
+		}
+		return decoded, nil
+	}
+
+	return nil, nil
+}
+
+// detectContentType detects content type from filename if not provided
+func detectContentType(contentType, filename string) string {
+	if contentType != "" {
+		return contentType
+	}
+
+	if filename != "" {
+		detected := mime.TypeByExtension(filepath.Ext(filename))
+		if detected != "" {
+			return detected
+		}
+	}
+
+	return "application/octet-stream"
+}
+
 // processAttachments processes email attachments
 func (b *MessageBuilder) processAttachments(emailMsg *Message, attachments interface{}) error {
 	attachmentList, ok := attachments.([]interface{})
@@ -252,54 +312,24 @@ func (b *MessageBuilder) processAttachments(emailMsg *Message, attachments inter
 			continue
 		}
 
+		// Extract attachment content
+		content, err := extractAttachmentContent(attachmentData, "content")
+		if err != nil {
+			return err
+		}
+
+		// Build attachment struct
 		att := Attachment{
-			Headers: make(map[string]string),
-		}
-
-		if name, exists := attachmentData["name"]; exists {
-			if str, ok := name.(string); ok {
-				att.Name = str
-			}
-		}
-
-		if contentType, exists := attachmentData["content_type"]; exists {
-			if str, ok := contentType.(string); ok {
-				att.ContentType = str
-			}
-		}
-
-		if content, exists := attachmentData["content"]; exists {
-			if bytes, ok := content.([]byte); ok {
-				att.Content = bytes
-			} else if str, ok := content.(string); ok {
-				// Assume base64 encoded
-				decoded, err := base64.StdEncoding.DecodeString(str)
-				if err != nil {
-					return fmt.Errorf("failed to decode attachment content: %w", err)
-				}
-				att.Content = decoded
-			}
-		}
-
-		if inline, exists := attachmentData["inline"]; exists {
-			if inlineFlag, ok := inline.(bool); ok {
-				att.Inline = inlineFlag
-			}
-		}
-
-		if contentID, exists := attachmentData["content_id"]; exists {
-			if str, ok := contentID.(string); ok {
-				att.ContentID = str
-			}
+			Name:        extractAttachmentString(attachmentData, "name"),
+			ContentType: extractAttachmentString(attachmentData, "content_type"),
+			Content:     content,
+			Inline:      extractAttachmentBool(attachmentData, "inline"),
+			ContentID:   extractAttachmentString(attachmentData, "content_id"),
+			Headers:     make(map[string]string),
 		}
 
 		// Detect content type if not provided
-		if att.ContentType == "" && att.Name != "" {
-			att.ContentType = mime.TypeByExtension(filepath.Ext(att.Name))
-			if att.ContentType == "" {
-				att.ContentType = "application/octet-stream"
-			}
-		}
+		att.ContentType = detectContentType(att.ContentType, att.Name)
 
 		emailMsg.Attachments = append(emailMsg.Attachments, att)
 	}

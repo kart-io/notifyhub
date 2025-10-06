@@ -410,42 +410,61 @@ func ConvertNotifyHubConfig(nhConfig interface{}) (*Config, error) {
 	}
 }
 
+// providerMapping defines email provider detection rules
+type providerMapping struct {
+	patterns  []string
+	name      string
+	portCheck int // 0 means no port check
+}
+
+// getProviderMappings returns the list of provider detection rules
+func getProviderMappings() []providerMapping {
+	return []providerMapping{
+		{patterns: []string{"gmail.com"}, name: "Gmail"},
+		{patterns: []string{"163.com"}, name: "163邮箱"},
+		{patterns: []string{"126.com"}, name: "126邮箱"},
+		{patterns: []string{"yeah.net"}, name: "Yeah邮箱"},
+		{patterns: []string{"exmail.qq.com"}, name: "腾讯企业邮箱"}, // Must be before qq.com
+		{patterns: []string{"qq.com"}, name: "QQ邮箱"},
+		{patterns: []string{"outlook.com", "hotmail"}, name: "Outlook"},
+		{patterns: []string{"yahoo.co.jp"}, name: "Yahoo Japan"}, // Must be before yahoo.com
+		{patterns: []string{"yahoo.com"}, name: "Yahoo"},
+		{patterns: []string{"zoho.com"}, name: "Zoho"},
+		{patterns: []string{"sina.com"}, name: "新浪邮箱"},
+		{patterns: []string{"sohu.com"}, name: "搜狐邮箱"},
+		{patterns: []string{"mxhichina.com"}, name: "阿里云邮箱"},
+		{patterns: []string{"127.0.0.1"}, name: "ProtonMail", portCheck: 1025},
+	}
+}
+
+// matchesProvider checks if host matches any of the patterns for a provider
+func matchesProvider(host string, mapping providerMapping, port int) bool {
+	// Check port if required
+	if mapping.portCheck != 0 && port != mapping.portCheck {
+		return false
+	}
+
+	// Check if any pattern matches
+	for _, pattern := range mapping.patterns {
+		if strings.Contains(host, pattern) {
+			return true
+		}
+	}
+
+	return false
+}
+
 // detectProvider detects the email provider based on SMTP host
 func (s *SMTPSender) detectProvider() string {
 	host := strings.ToLower(s.config.SMTPHost)
 
-	switch {
-	case strings.Contains(host, "gmail.com"):
-		return "Gmail"
-	case strings.Contains(host, "163.com"):
-		return "163邮箱"
-	case strings.Contains(host, "126.com"):
-		return "126邮箱"
-	case strings.Contains(host, "yeah.net"):
-		return "Yeah邮箱"
-	case strings.Contains(host, "qq.com") && !strings.Contains(host, "exmail"):
-		return "QQ邮箱"
-	case strings.Contains(host, "exmail.qq.com"):
-		return "腾讯企业邮箱"
-	case strings.Contains(host, "outlook.com") || strings.Contains(host, "hotmail"):
-		return "Outlook"
-	case strings.Contains(host, "yahoo.com"):
-		return "Yahoo"
-	case strings.Contains(host, "yahoo.co.jp"):
-		return "Yahoo Japan"
-	case strings.Contains(host, "zoho.com"):
-		return "Zoho"
-	case strings.Contains(host, "sina.com"):
-		return "新浪邮箱"
-	case strings.Contains(host, "sohu.com"):
-		return "搜狐邮箱"
-	case strings.Contains(host, "mxhichina.com"):
-		return "阿里云邮箱"
-	case strings.Contains(host, "127.0.0.1") && s.config.SMTPPort == 1025:
-		return "ProtonMail"
-	default:
-		return "通用SMTP"
+	for _, mapping := range getProviderMappings() {
+		if matchesProvider(host, mapping, s.config.SMTPPort) {
+			return mapping.name
+		}
 	}
+
+	return "通用SMTP"
 }
 
 // extractEmailAddress extracts email address from formatted string

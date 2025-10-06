@@ -124,6 +124,136 @@ func NewCustomEmailSender(config *CustomEmailConfig, logger logger.Logger) (*Cus
 	}, nil
 }
 
+// validateRecipients validates all recipients and returns valid ones
+func (ces *CustomEmailSender) validateRecipients(recipients []string, result *CustomEmailResult) []string {
+	validRecipients := make([]string, 0, len(recipients))
+
+	for i, recipient := range recipients {
+		if err := ces.validateRecipient(recipient); err != nil {
+			result.Results[i] = &CustomRecipientResult{
+				Recipient: recipient,
+				Success:   false,
+				Error:     err.Error(),
+			}
+			result.Failed++
+			continue
+		}
+		validRecipients = append(validRecipients, recipient)
+	}
+
+	return validRecipients
+}
+
+// prepareTemplateData prepares template data from options
+func (ces *CustomEmailSender) prepareTemplateData(options *CustomEmailOptions, start time.Time) *TemplateData {
+	return &TemplateData{
+		Title:     options.Subject,
+		Body:      options.Body,
+		Priority:  options.Priority,
+		Variables: options.Variables,
+		Timestamp: start.Format("2006-01-02 15:04:05"),
+		Sender:    ces.config.From,
+		Custom:    options.CustomData,
+	}
+}
+
+// renderMessage renders message using template or creates basic message
+func (ces *CustomEmailSender) renderMessage(options *CustomEmailOptions, templateData *TemplateData) (*message.Message, error) {
+	if options.Template != "" {
+		msg, err := ces.templateMgr.RenderTemplate(options.Template, templateData)
+		if err != nil {
+			return nil, fmt.Errorf("模板渲染失败: %w", err)
+		}
+		return msg, nil
+	}
+
+	// Create basic message
+	msg := message.New()
+	msg.Title = options.Subject
+	msg.Body = options.Body
+	msg.Format = message.FormatText
+	return msg, nil
+}
+
+// addTrackingHeaders adds tracking headers if enabled
+func (ces *CustomEmailSender) addTrackingHeaders(emailData map[string]interface{}) {
+	if !ces.config.EnableTracking {
+		return
+	}
+
+	trackingHeaders := make(map[string]string)
+
+	if ces.config.TrackingDomain != "" {
+		trackingHeaders["List-Unsubscribe"] = fmt.Sprintf("<%s/unsubscribe>", ces.config.TrackingDomain)
+	}
+	if ces.config.UnsubscribeURL != "" {
+		trackingHeaders["List-Unsubscribe"] = fmt.Sprintf("<%s>", ces.config.UnsubscribeURL)
+	}
+
+	if len(trackingHeaders) == 0 {
+		return
+	}
+
+	if emailData["headers"] == nil {
+		emailData["headers"] = trackingHeaders
+	} else {
+		headers := emailData["headers"].(map[string]string)
+		for k, v := range trackingHeaders {
+			headers[k] = v
+		}
+	}
+}
+
+// prepareMessageWithHeaders prepares message with custom headers
+func (ces *CustomEmailSender) prepareMessageWithHeaders(msg *message.Message) {
+	if msg.PlatformData == nil {
+		msg.PlatformData = make(map[string]interface{})
+	}
+
+	emailData := make(map[string]interface{})
+	if ces.config.CustomHeaders != nil {
+		emailData["headers"] = ces.config.CustomHeaders
+	}
+
+	ces.addTrackingHeaders(emailData)
+	msg.PlatformData["email"] = emailData
+}
+
+// sendToRecipient sends email to a single recipient
+func (ces *CustomEmailSender) sendToRecipient(ctx context.Context, msg *message.Message, recipient string, templateData *TemplateData) (*CustomRecipientResult, error) {
+	recipientResult := &CustomRecipientResult{
+		Recipient: recipient,
+	}
+
+	// Create target
+	targets := []target.Target{{Type: "email", Value: recipient}}
+
+	// Update template data for this recipient
+	templateData.Recipient = recipient
+
+	// Send email
+	sendStart := time.Now()
+	err := ces.smtpSender.SendMessage(ctx, msg, targets)
+	duration := time.Since(sendStart)
+
+	recipientResult.Duration = duration
+
+	if err != nil {
+		recipientResult.Success = false
+		recipientResult.Error = err.Error()
+		ces.monitor.RecordFailure(ces.config.Name, recipient, err, duration)
+		ces.logger.Error("自定义邮件发送失败", "recipient", recipient, "error", err)
+		return recipientResult, err
+	}
+
+	recipientResult.Success = true
+	recipientResult.MessageID = fmt.Sprintf("custom_%d_%s", time.Now().UnixNano(), generateShortID())
+	ces.monitor.RecordSending(ces.config.Name, recipient, duration)
+	ces.logger.Info("自定义邮件发送成功", "recipient", recipient, "message_id", recipientResult.MessageID)
+
+	return recipientResult, nil
+}
+
 // SendCustomEmail sends a custom email with template and advanced features
 func (ces *CustomEmailSender) SendCustomEmail(ctx context.Context, options *CustomEmailOptions) (*CustomEmailResult, error) {
 	ces.logger.Info("发送自定义邮件", "template", options.Template, "recipients", len(options.Recipients))
@@ -143,118 +273,27 @@ func (ces *CustomEmailSender) SendCustomEmail(ctx context.Context, options *Cust
 	}
 
 	// Validate recipients
-	validRecipients := make([]string, 0, len(options.Recipients))
-	for i, recipient := range options.Recipients {
-		if err := ces.validateRecipient(recipient); err != nil {
-			result.Results[i] = &CustomRecipientResult{
-				Recipient: recipient,
-				Success:   false,
-				Error:     err.Error(),
-			}
-			result.Failed++
-			continue
-		}
-		validRecipients = append(validRecipients, recipient)
-	}
+	validRecipients := ces.validateRecipients(options.Recipients, result)
 
 	// Prepare template data
-	templateData := &TemplateData{
-		Title:     options.Subject,
-		Body:      options.Body,
-		Priority:  options.Priority,
-		Variables: options.Variables,
-		Timestamp: start.Format("2006-01-02 15:04:05"),
-		Sender:    ces.config.From,
-		Custom:    options.CustomData,
+	templateData := ces.prepareTemplateData(options, start)
+
+	// Render message
+	msg, err := ces.renderMessage(options, templateData)
+	if err != nil {
+		return nil, err
 	}
 
-	// Render message using template
-	var msg *message.Message
-	var err error
+	// Prepare message with headers
+	ces.prepareMessageWithHeaders(msg)
 
-	if options.Template != "" {
-		msg, err = ces.templateMgr.RenderTemplate(options.Template, templateData)
-		if err != nil {
-			return nil, fmt.Errorf("模板渲染失败: %w", err)
-		}
-	} else {
-		// Create basic message
-		msg = message.New()
-		msg.Title = options.Subject
-		msg.Body = options.Body
-		msg.Format = message.FormatText
-	}
-
-	// Add custom headers
-	if msg.PlatformData == nil {
-		msg.PlatformData = make(map[string]interface{})
-	}
-
-	emailData := make(map[string]interface{})
-	if ces.config.CustomHeaders != nil {
-		emailData["headers"] = ces.config.CustomHeaders
-	}
-
-	// Add tracking headers if enabled
-	if ces.config.EnableTracking {
-		trackingHeaders := make(map[string]string)
-		if ces.config.TrackingDomain != "" {
-			trackingHeaders["List-Unsubscribe"] = fmt.Sprintf("<%s/unsubscribe>", ces.config.TrackingDomain)
-		}
-		if ces.config.UnsubscribeURL != "" {
-			trackingHeaders["List-Unsubscribe"] = fmt.Sprintf("<%s>", ces.config.UnsubscribeURL)
-		}
-
-		if len(trackingHeaders) > 0 {
-			if emailData["headers"] == nil {
-				emailData["headers"] = trackingHeaders
-			} else {
-				headers := emailData["headers"].(map[string]string)
-				for k, v := range trackingHeaders {
-					headers[k] = v
-				}
-			}
-		}
-	}
-
-	msg.PlatformData["email"] = emailData
-
-	// Send to each recipient
+	// Send to each valid recipient
 	successCount := 0
 	for _, recipient := range validRecipients {
-		recipientResult := &CustomRecipientResult{
-			Recipient: recipient,
-		}
+		recipientResult, err := ces.sendToRecipient(ctx, msg, recipient, templateData)
 
-		// Create target
-		targets := []target.Target{{Type: "email", Value: recipient}}
-
-		// Update template data for this recipient
-		templateData.Recipient = recipient
-
-		// Send email
-		sendStart := time.Now()
-		err := ces.smtpSender.SendMessage(ctx, msg, targets)
-		duration := time.Since(sendStart)
-
-		if err != nil {
-			recipientResult.Success = false
-			recipientResult.Error = err.Error()
-			recipientResult.Duration = duration
-			result.Failed++
-
-			// Record failure
-			ces.monitor.RecordFailure(ces.config.Name, recipient, err, duration)
-			ces.logger.Error("自定义邮件发送失败", "recipient", recipient, "error", err)
-		} else {
-			recipientResult.Success = true
-			recipientResult.MessageID = fmt.Sprintf("custom_%d_%s", time.Now().UnixNano(), generateShortID())
-			recipientResult.Duration = duration
+		if err == nil {
 			successCount++
-
-			// Record success
-			ces.monitor.RecordSending(ces.config.Name, recipient, duration)
-			ces.logger.Info("自定义邮件发送成功", "recipient", recipient, "message_id", recipientResult.MessageID)
 		}
 
 		// Find the correct index in the original recipients list
