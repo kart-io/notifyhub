@@ -63,17 +63,17 @@ func (e *EmailPlatform) Name() string {
 
 // Send sends an email message
 func (e *EmailPlatform) Send(ctx context.Context, msg *message.Message, targets []target.Target) ([]*platform.SendResult, error) {
-	e.logger.Info("开始发送邮件", "message_title", msg.Title, "targets_count", len(targets), "smtp_host", e.config.Host)
-
-	// Create error analyzer for enhanced error handling
-	errorAnalyzer := NewErrorAnalyzer("email")
-
 	// Pre-validate message
 	if msg == nil {
 		err := fmt.Errorf("message cannot be nil")
 		e.logger.Error("邮件发送失败", "error", err)
 		return nil, err
 	}
+
+	e.logger.Info("开始发送邮件", "message_title", msg.Title, "targets_count", len(targets), "smtp_host", e.config.Host)
+
+	// Create error analyzer for enhanced error handling
+	errorAnalyzer := NewErrorAnalyzer("email")
 
 	if msg.Title == "" {
 		e.logger.Warn("邮件标题为空，使用默认标题")
@@ -201,8 +201,23 @@ func (e *EmailPlatform) IsHealthy(ctx context.Context) error {
 		return fmt.Errorf("email configuration is incomplete")
 	}
 
-	// TODO: Implement actual SMTP health check
-	// For now, just validate configuration
+	// Perform SMTP health check
+	e.logger.Debug("Performing SMTP health check", "host", e.config.Host, "port", e.config.Port)
+
+	// Use SMTPSender's connection test capability
+	if e.smtpSender != nil {
+		// Test SMTP connection
+		testErr := e.smtpSender.TestConnection(ctx)
+		if testErr != nil {
+			e.logger.Warn("SMTP health check failed", "error", testErr)
+			return fmt.Errorf("SMTP server unhealthy: %w", testErr)
+		}
+		e.logger.Debug("SMTP health check passed")
+		return nil
+	}
+
+	// Fallback: basic configuration validation
+	e.logger.Debug("SMTP sender not initialized, validating configuration only")
 	return nil
 }
 
@@ -217,15 +232,13 @@ func (e *EmailPlatform) Close() error {
 
 // NewPlatform is the factory function for creating Email platforms
 // This function will be called by the platform registry
-func NewPlatform(cfg interface{}) (platform.Platform, error) {
+func NewPlatform(cfg interface{}, log logger.Logger) (platform.Platform, error) {
 	emailConfig, ok := cfg.(*config.EmailConfig)
 	if !ok {
 		return nil, fmt.Errorf("invalid email configuration type")
 	}
 
-	// TODO: Logger should be injected properly
-	logger := logger.New()
-	return NewEmailPlatform(emailConfig, logger)
+	return NewEmailPlatform(emailConfig, log)
 }
 
 // isValidEmail performs basic email validation

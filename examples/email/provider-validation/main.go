@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"net"
 	"os"
+	"strconv"
 	"strings"
 	"time"
 
@@ -177,7 +178,7 @@ func testSMTPConnection(logger *common.Logger, providerName string, config *Emai
 	logger.Info("\n🔌 测试 %s SMTP连接", providerName)
 
 	// Test basic TCP connection
-	address := fmt.Sprintf("%s:%d", config.Host, config.Port)
+	address := net.JoinHostPort(config.Host, strconv.Itoa(config.Port))
 	logger.Info("连接地址: %s", address)
 
 	conn, err := net.DialTimeout("tcp", address, 10*time.Second)
@@ -197,7 +198,7 @@ func testSMTPConnection(logger *common.Logger, providerName string, config *Emai
 		}
 		return
 	}
-	defer conn.Close()
+	defer func() { _ = conn.Close() }()
 
 	logger.Success("✅ TCP连接成功")
 
@@ -212,20 +213,17 @@ func testEmailSending(logger *common.Logger, providerName string, config *EmailP
 	logger.Info("\n📧 测试 %s 邮件发送", providerName)
 	logger.Info("收件人: %s", recipient)
 
-	// Create NotifyHub configuration
-	nhConfig := &config.Config{
-		Timeout:    30 * time.Second,
-		MaxRetries: 3,
-		Email: &config.EmailConfig{
-			Host:     config.Host,
-			Port:     config.Port,
-			Username: config.Username,
-			Password: config.Password,
-			From:     config.From,
-			UseTLS:   config.UseTLS,
-			Timeout:  15 * time.Second,
-		},
-	}
+	// Create NotifyHub configuration using common utilities
+	exampleConfig := common.DefaultExampleConfig()
+	exampleConfig.Email.Host = config.Host
+	exampleConfig.Email.Port = config.Port
+	exampleConfig.Email.Username = config.Username
+	exampleConfig.Email.Password = config.Password
+	exampleConfig.Email.From = config.From
+	exampleConfig.Email.UseTLS = config.UseTLS
+	exampleConfig.Email.To = recipient
+
+	nhConfig := exampleConfig.CreateEmailConfig()
 
 	// Create NotifyHub client
 	client, err := notifyhub.NewClient(nhConfig)
@@ -233,7 +231,7 @@ func testEmailSending(logger *common.Logger, providerName string, config *EmailP
 		logger.Error("❌ NotifyHub客户端创建失败: %v", err)
 		return
 	}
-	defer client.Close()
+	defer func() { _ = client.Close() }()
 
 	logger.Success("✅ NotifyHub客户端创建成功")
 
@@ -277,7 +275,7 @@ func testEmailSending(logger *common.Logger, providerName string, config *EmailP
 		logger.Error("❌ 邮件发送部分失败: %d/%d", receipt.Failed, receipt.Total)
 		for _, result := range receipt.Results {
 			if !result.Success {
-				logger.Error("失败详情: Target=%s, Error=%v", result.Target.Value, result.Error)
+				logger.Error("失败详情: Target=%s, Error=%v", result.Target, result.Error)
 			}
 		}
 	} else {
@@ -506,12 +504,12 @@ func testSMTPConnectivity(logger *common.Logger) {
 	for _, server := range servers {
 		logger.Info("测试 %s (%s:%d)...", server.Name, server.Host, server.Port)
 
-		address := fmt.Sprintf("%s:%d", server.Host, server.Port)
+		address := net.JoinHostPort(server.Host, strconv.Itoa(server.Port))
 		conn, err := net.DialTimeout("tcp", address, 5*time.Second)
 		if err != nil {
 			logger.Error("❌ %s 连接失败: %v", server.Name, err)
 		} else {
-			conn.Close()
+			_ = conn.Close()
 			logger.Success("✅ %s 连接成功", server.Name)
 		}
 	}

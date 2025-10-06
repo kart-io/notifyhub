@@ -32,20 +32,20 @@ type CustomEmailConfig struct {
 	AuthMethod     string `json:"auth_method,omitempty"` // plain, login, cram-md5
 
 	// Custom settings
-	Templates      map[string]*EmailTemplate `json:"templates,omitempty"`
-	DefaultTemplate string                   `json:"default_template,omitempty"`
+	Templates       map[string]*EmailTemplate `json:"templates,omitempty"`
+	DefaultTemplate string                    `json:"default_template,omitempty"`
 
 	// Advanced features
-	EnableTracking     bool              `json:"enable_tracking,omitempty"`
-	TrackingDomain     string            `json:"tracking_domain,omitempty"`
-	CustomHeaders      map[string]string `json:"custom_headers,omitempty"`
-	ReplyToAddress     string            `json:"reply_to_address,omitempty"`
-	BounceAddress      string            `json:"bounce_address,omitempty"`
-	UnsubscribeURL     string            `json:"unsubscribe_url,omitempty"`
+	EnableTracking bool              `json:"enable_tracking,omitempty"`
+	TrackingDomain string            `json:"tracking_domain,omitempty"`
+	CustomHeaders  map[string]string `json:"custom_headers,omitempty"`
+	ReplyToAddress string            `json:"reply_to_address,omitempty"`
+	BounceAddress  string            `json:"bounce_address,omitempty"`
+	UnsubscribeURL string            `json:"unsubscribe_url,omitempty"`
 
 	// Rate limiting
-	RateLimit       int           `json:"rate_limit,omitempty"`        // emails per minute
-	BurstLimit      int           `json:"burst_limit,omitempty"`       // burst capacity
+	RateLimit       int           `json:"rate_limit,omitempty"`  // emails per minute
+	BurstLimit      int           `json:"burst_limit,omitempty"` // burst capacity
 	RateLimitWindow time.Duration `json:"rate_limit_window,omitempty"`
 
 	// Retry settings
@@ -54,10 +54,10 @@ type CustomEmailConfig struct {
 	Timeout       time.Duration `json:"timeout,omitempty"`
 
 	// Validation rules
-	AllowedDomains    []string `json:"allowed_domains,omitempty"`    // Only allow sending to these domains
-	BlockedDomains    []string `json:"blocked_domains,omitempty"`    // Block sending to these domains
-	RequireSSL        bool     `json:"require_ssl,omitempty"`        // Require SSL for all connections
-	ValidateRecipients bool    `json:"validate_recipients,omitempty"` // Validate recipient email format
+	AllowedDomains     []string `json:"allowed_domains,omitempty"`     // Only allow sending to these domains
+	BlockedDomains     []string `json:"blocked_domains,omitempty"`     // Block sending to these domains
+	RequireSSL         bool     `json:"require_ssl,omitempty"`         // Require SSL for all connections
+	ValidateRecipients bool     `json:"validate_recipients,omitempty"` // Validate recipient email format
 
 	// Metadata
 	Description string                 `json:"description,omitempty"`
@@ -69,12 +69,12 @@ type CustomEmailConfig struct {
 
 // CustomEmailSender provides enhanced email sending with custom configurations
 type CustomEmailSender struct {
-	config         *CustomEmailConfig
-	smtpSender     *SMTPSender
-	templateMgr    *TemplateManager
-	rateLimiter    *RateLimiter
-	logger         logger.Logger
-	monitor        *EmailMonitor
+	config      *CustomEmailConfig
+	smtpSender  *SMTPSender
+	templateMgr *TemplateManager
+	rateLimiter *RateLimiter
+	logger      logger.Logger
+	monitor     *EmailMonitor
 }
 
 // NewCustomEmailSender creates a new custom email sender
@@ -332,18 +332,18 @@ func (ces *CustomEmailSender) TestConnection(ctx context.Context) error {
 // GetCapabilities returns the capabilities of the custom email sender
 func (ces *CustomEmailSender) GetCapabilities() *CustomEmailCapabilities {
 	return &CustomEmailCapabilities{
-		SupportsTemplates:    true,
-		SupportsTracking:     ces.config.EnableTracking,
-		SupportsRateLimiting: ces.rateLimiter != nil,
+		SupportsTemplates:     true,
+		SupportsTracking:      ces.config.EnableTracking,
+		SupportsRateLimiting:  ces.rateLimiter != nil,
 		SupportsCustomHeaders: len(ces.config.CustomHeaders) > 0,
 		MaxRecipientsPerEmail: 100, // Configurable limit
-		SupportedFormats:     []string{"text", "html", "markdown"},
-		Templates:           ces.templateMgr.ListTemplates(),
+		SupportedFormats:      []string{"text", "html", "markdown"},
+		Templates:             ces.templateMgr.ListTemplates(),
 	}
 }
 
 // GetMetrics returns email sending metrics
-func (ces *CustomEmailSender) GetMetrics() EmailMetrics {
+func (ces *CustomEmailSender) GetMetrics() EmailMetricsSnapshot {
 	return ces.monitor.GetMetrics()
 }
 
@@ -368,13 +368,13 @@ type CustomEmailOptions struct {
 
 // CustomEmailResult represents the result of sending custom emails
 type CustomEmailResult struct {
-	RequestID  string                    `json:"request_id,omitempty"`
-	Timestamp  time.Time                 `json:"timestamp"`
-	Duration   time.Duration             `json:"duration"`
-	Total      int                       `json:"total"`
-	Successful int                       `json:"successful"`
-	Failed     int                       `json:"failed"`
-	Results    []*CustomRecipientResult  `json:"results"`
+	RequestID  string                   `json:"request_id,omitempty"`
+	Timestamp  time.Time                `json:"timestamp"`
+	Duration   time.Duration            `json:"duration"`
+	Total      int                      `json:"total"`
+	Successful int                      `json:"successful"`
+	Failed     int                      `json:"failed"`
+	Results    []*CustomRecipientResult `json:"results"`
 }
 
 // CustomRecipientResult represents the result for a specific recipient
@@ -388,13 +388,13 @@ type CustomRecipientResult struct {
 
 // CustomEmailCapabilities represents the capabilities of a custom email sender
 type CustomEmailCapabilities struct {
-	SupportsTemplates     bool                         `json:"supports_templates"`
-	SupportsTracking      bool                         `json:"supports_tracking"`
-	SupportsRateLimiting  bool                         `json:"supports_rate_limiting"`
-	SupportsCustomHeaders bool                         `json:"supports_custom_headers"`
-	MaxRecipientsPerEmail int                          `json:"max_recipients_per_email"`
-	SupportedFormats      []string                     `json:"supported_formats"`
-	Templates             map[string]*EmailTemplate    `json:"templates"`
+	SupportsTemplates     bool                      `json:"supports_templates"`
+	SupportsTracking      bool                      `json:"supports_tracking"`
+	SupportsRateLimiting  bool                      `json:"supports_rate_limiting"`
+	SupportsCustomHeaders bool                      `json:"supports_custom_headers"`
+	MaxRecipientsPerEmail int                       `json:"max_recipients_per_email"`
+	SupportedFormats      []string                  `json:"supported_formats"`
+	Templates             map[string]*EmailTemplate `json:"templates"`
 }
 
 // Validate validates the custom email configuration

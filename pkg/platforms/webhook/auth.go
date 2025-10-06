@@ -2,6 +2,7 @@
 package webhook
 
 import (
+	"context"
 	"crypto/hmac"
 	"crypto/md5"
 	"crypto/sha1"
@@ -207,7 +208,7 @@ func (a *AuthHandler) TestAuth(testURL string) error {
 	}
 
 	// Create a simple test request
-	req, err := http.NewRequest("HEAD", testURL, nil)
+	req, err := http.NewRequestWithContext(context.Background(), "HEAD", testURL, nil)
 	if err != nil {
 		return fmt.Errorf("failed to create test request: %w", err)
 	}

@@ -23,7 +23,7 @@ func main() {
 	config := common.DefaultExampleConfig()
 
 	// 请修改以下配置为您的实际Webhook信息
-	config.Webhook.URL = "https://httpbin.org/post"  // 测试用的webhook地址
+	config.Webhook.URL = "https://httpbin.org/post" // 测试用的webhook地址
 	config.Webhook.Method = "POST"
 	config.Webhook.Headers = map[string]string{
 		"Content-Type":    "application/json",
@@ -57,7 +57,7 @@ func main() {
 		logger.Error("创建NotifyHub客户端失败: %v", err)
 		return
 	}
-	defer client.Close()
+	defer func() { _ = client.Close() }()
 
 	logger.Success("NotifyHub客户端创建成功 (异步模式)")
 
@@ -119,16 +119,16 @@ func sendMultiTargetWebhook(client notifyhub.Client, config *common.ExampleConfi
 	// Configure multiple webhook targets
 	msg.Targets = []target.Target{
 		common.CreateWebhookTarget("https://httpbin.org/post"),
-		common.CreateWebhookTarget("https://webhook.site/unique-id-1"),  // 示例URL
-		common.CreateWebhookTarget("https://webhook.site/unique-id-2"),  // 示例URL
+		common.CreateWebhookTarget("https://webhook.site/unique-id-1"), // 示例URL
+		common.CreateWebhookTarget("https://webhook.site/unique-id-2"), // 示例URL
 	}
 
 	// Add multi-target specific data
 	msg.PlatformData = map[string]interface{}{
 		"webhook": map[string]interface{}{
-			"broadcast":    true,
-			"target_count": len(msg.Targets),
-			"fan_out":      true,
+			"broadcast":     true,
+			"target_count":  len(msg.Targets),
+			"fan_out":       true,
 			"delivery_mode": "parallel",
 		},
 	}
@@ -150,10 +150,12 @@ func sendAsyncWebhook(client notifyhub.Client, config *common.ExampleConfig, log
 
 	msg := common.CreateTestMessage("Webhook", "basic")
 	msg.Title = "⚡ 异步Webhook发送测试"
-	msg.Body = "这是一个通过异步方式发送的Webhook，不会阻塞主程序的执行。"
+	msg.Body = "这是一个异步方式发送的Webhook。\n\n异步功能已经实现，Webhook将在后台处理。"
 	msg.Targets = []target.Target{
 		common.CreateWebhookTarget(config.Webhook.URL),
 	}
+
+	logger.Info("🚀 使用异步模式发送Webhook")
 
 	ctx := context.Background()
 	handle, err := client.SendAsync(ctx, msg)
@@ -161,15 +163,13 @@ func sendAsyncWebhook(client notifyhub.Client, config *common.ExampleConfig, log
 		return err
 	}
 
-	logger.Info("异步Webhook已加入队列，句柄ID: %s", handle.ID())
+	logger.Info("异步Webhook已提交，消息ID: %s", handle.ID())
 
-	// Wait for completion with timeout
-	waitCtx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
-	defer cancel()
-
-	receipt, err := handle.Wait(waitCtx)
+	// Wait for the result
+	receipt, err := handle.Wait(ctx)
 	if err != nil {
-		return fmt.Errorf("异步Webhook发送失败: %w", err)
+		logger.Error("异步Webhook发送失败: %v", err)
+		return err
 	}
 
 	logger.Success("异步Webhook发送完成!")
@@ -183,14 +183,14 @@ func sendTemplatedWebhook(client notifyhub.Client, config *common.ExampleConfig,
 
 	// Template variables
 	templateVars := map[string]interface{}{
-		"event_type":    "user_action",
-		"user_id":       "user_12345",
-		"action":        "purchase_completed",
-		"timestamp":     time.Now().Unix(),
-		"amount":        299.99,
-		"currency":      "USD",
-		"order_id":      "ORDER-2023-001",
-		"product_name":  "NotifyHub Pro License",
+		"event_type":   "user_action",
+		"user_id":      "user_12345",
+		"action":       "purchase_completed",
+		"timestamp":    time.Now().Unix(),
+		"amount":       299.99,
+		"currency":     "USD",
+		"order_id":     "ORDER-2023-001",
+		"product_name": "NotifyHub Pro License",
 	}
 
 	msg := message.New()
@@ -234,6 +234,7 @@ func sendTemplatedWebhook(client notifyhub.Client, config *common.ExampleConfig,
 	}
 
 	logger.Success("模板化Webhook发送成功!")
+	logger.Debug("发送回执: %+v", receipt)
 	return nil
 }
 
@@ -251,11 +252,11 @@ func sendWebhookWithRetry(client notifyhub.Client, config *common.ExampleConfig,
 	msg.PlatformData = map[string]interface{}{
 		"webhook": map[string]interface{}{
 			"retry_config": map[string]interface{}{
-				"max_retries":     3,
-				"retry_delay":     "2s",
-				"backoff_factor":  2.0,
-				"timeout":         "30s",
-				"retry_on_codes":  []int{429, 500, 502, 503, 504},
+				"max_retries":    3,
+				"retry_delay":    "2s",
+				"backoff_factor": 2.0,
+				"timeout":        "30s",
+				"retry_on_codes": []int{429, 500, 502, 503, 504},
 			},
 			"failure_handling": map[string]interface{}{
 				"dead_letter_queue": true,
@@ -292,9 +293,9 @@ func sendEventStreamWebhook(client notifyhub.Client, config *common.ExampleConfi
 	// Event stream data
 	msg.PlatformData = map[string]interface{}{
 		"webhook": map[string]interface{}{
-			"stream_type":   "event_stream",
-			"batch_size":    100,
-			"sequence_id":   12345,
+			"stream_type": "event_stream",
+			"batch_size":  100,
+			"sequence_id": 12345,
 			"stream_events": []map[string]interface{}{
 				{
 					"event_id":   "evt_001",
@@ -313,20 +314,20 @@ func sendEventStreamWebhook(client notifyhub.Client, config *common.ExampleConfi
 					"session_id": "sess_abc123",
 				},
 				{
-					"event_id":   "evt_003",
-					"type":       "api_call",
-					"timestamp":  time.Now().Unix() + 10,
-					"user_id":    "user_001",
-					"endpoint":   "/api/v1/export",
-					"method":     "POST",
-					"status":     200,
+					"event_id":  "evt_003",
+					"type":      "api_call",
+					"timestamp": time.Now().Unix() + 10,
+					"user_id":   "user_001",
+					"endpoint":  "/api/v1/export",
+					"method":    "POST",
+					"status":    200,
 				},
 			},
 			"aggregations": map[string]interface{}{
-				"total_events":     3,
-				"unique_users":     1,
-				"event_types":      []string{"page_view", "button_click", "api_call"},
-				"time_window":      "15s",
+				"total_events": 3,
+				"unique_users": 1,
+				"event_types":  []string{"page_view", "button_click", "api_call"},
+				"time_window":  "15s",
 			},
 		},
 	}
@@ -342,6 +343,7 @@ func sendEventStreamWebhook(client notifyhub.Client, config *common.ExampleConfi
 	}
 
 	logger.Success("事件流Webhook发送成功!")
+	logger.Debug("发送回执: %+v", receipt)
 	return nil
 }
 
@@ -358,22 +360,22 @@ func sendSignedWebhook(client notifyhub.Client, config *common.ExampleConfig, lo
 	msg.PlatformData = map[string]interface{}{
 		"webhook": map[string]interface{}{
 			"signature": map[string]interface{}{
-				"algorithm":    "hmac-sha256",
-				"secret_key":   "your_webhook_secret",
-				"header_name":  "X-Signature-256",
+				"algorithm":         "hmac-sha256",
+				"secret_key":        "your_webhook_secret",
+				"header_name":       "X-Signature-256",
 				"include_timestamp": true,
-				"timestamp_header": "X-Timestamp",
+				"timestamp_header":  "X-Timestamp",
 			},
 			"security": map[string]interface{}{
-				"verify_ssl":     true,
-				"require_https":  true,
-				"ip_whitelist":   []string{"192.168.1.0/24", "10.0.0.0/8"},
+				"verify_ssl":    true,
+				"require_https": true,
+				"ip_whitelist":  []string{"192.168.1.0/24", "10.0.0.0/8"},
 			},
 			"payload": map[string]interface{}{
-				"event":       "webhook_test",
-				"timestamp":   time.Now().Unix(),
-				"data":        "sensitive_data_here",
-				"checksum":    "calculated_checksum",
+				"event":     "webhook_test",
+				"timestamp": time.Now().Unix(),
+				"data":      "sensitive_data_here",
+				"checksum":  "calculated_checksum",
 			},
 		},
 	}
@@ -409,10 +411,10 @@ func createOrderWebhook(orderID, status string) *message.Message {
 			"status":     status,
 			"timestamp":  time.Now().Unix(),
 			"data": map[string]interface{}{
-				"order_id":     orderID,
-				"new_status":   status,
-				"changed_at":   time.Now().Format(time.RFC3339),
-				"changed_by":   "system",
+				"order_id":   orderID,
+				"new_status": status,
+				"changed_at": time.Now().Format(time.RFC3339),
+				"changed_by": "system",
 			},
 		},
 	}

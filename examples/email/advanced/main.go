@@ -53,7 +53,7 @@ func main() {
 		logger.Error("创建NotifyHub客户端失败: %v", err)
 		return
 	}
-	defer client.Close()
+	defer func() { _ = client.Close() }()
 
 	logger.Success("NotifyHub客户端创建成功 (异步模式)")
 
@@ -189,6 +189,7 @@ func sendMultiRecipientEmail(client notifyhub.Client, config *common.ExampleConf
 	}
 
 	logger.Success("多收件人邮件发送成功!")
+	logger.Debug("发送回执: %+v", receipt)
 	return nil
 }
 
@@ -198,10 +199,12 @@ func sendAsyncEmail(client notifyhub.Client, config *common.ExampleConfig, logge
 
 	msg := common.CreateTestMessage("Email", "basic")
 	msg.Title = "⚡ 异步邮件发送测试"
-	msg.Body = "这是一封通过异步方式发送的邮件，不会阻塞主程序的执行。"
+	msg.Body = "这是一封异步方式发送的邮件。\n\n异步功能已经实现，邮件将在后台处理。"
 	msg.Targets = []target.Target{
 		common.CreateEmailTarget(config.Email.To),
 	}
+
+	logger.Info("🚀 使用异步模式发送邮件")
 
 	ctx := context.Background()
 	handle, err := client.SendAsync(ctx, msg)
@@ -209,15 +212,13 @@ func sendAsyncEmail(client notifyhub.Client, config *common.ExampleConfig, logge
 		return err
 	}
 
-	logger.Info("异步邮件已加入队列，句柄ID: %s", handle.ID())
+	logger.Info("异步邮件已提交，消息ID: %s", handle.ID())
 
-	// Wait for completion with timeout
-	waitCtx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
-	defer cancel()
-
-	receipt, err := handle.Wait(waitCtx)
+	// Wait for the result
+	receipt, err := handle.Wait(ctx)
 	if err != nil {
-		return fmt.Errorf("异步邮件发送失败: %w", err)
+		logger.Error("异步邮件发送失败: %v", err)
+		return err
 	}
 
 	logger.Success("异步邮件发送完成!")
@@ -254,6 +255,7 @@ func sendTemplatedEmail(client notifyhub.Client, config *common.ExampleConfig, l
 	}
 
 	logger.Success("模板化邮件发送成功!")
+	logger.Debug("发送回执: %+v", receipt)
 	return nil
 }
 
@@ -276,13 +278,13 @@ func sendEmailWithMetadata(client notifyhub.Client, config *common.ExampleConfig
 
 	// Rich metadata
 	msg.Metadata = map[string]interface{}{
-		"campaign_id":     "metadata_demo_001",
-		"sender_dept":     "技术部",
-		"category":        "测试",
-		"tracking_pixel":  true,
-		"utm_source":      "notifyhub",
-		"utm_campaign":    "advanced_demo",
-		"priority_score":  85,
+		"campaign_id":    "metadata_demo_001",
+		"sender_dept":    "技术部",
+		"category":       "测试",
+		"tracking_pixel": true,
+		"utm_source":     "notifyhub",
+		"utm_campaign":   "advanced_demo",
+		"priority_score": 85,
 		"tags":           []string{"demo", "metadata", "advanced"},
 	}
 
@@ -297,6 +299,7 @@ func sendEmailWithMetadata(client notifyhub.Client, config *common.ExampleConfig
 	}
 
 	logger.Success("带元数据的邮件发送成功!")
+	logger.Debug("发送回执: %+v", receipt)
 	logger.Debug("元数据: %+v", msg.Metadata)
 	return nil
 }

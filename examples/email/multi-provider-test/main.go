@@ -411,7 +411,7 @@ func testNotifyHubIntegration(logger *common.Logger, providerName string, emailC
 		logger.Error("❌ %s NotifyHub客户端创建失败: %v", providerName, err)
 		return
 	}
-	defer client.Close()
+	defer func() { _ = client.Close() }()
 
 	logger.Success("✅ %s NotifyHub客户端创建成功", providerName)
 }
@@ -471,7 +471,7 @@ func testRealSending(logger *common.Logger, providerName, username, password, re
 		logger.Error("创建客户端失败: %v", err)
 		return
 	}
-	defer client.Close()
+	defer func() { _ = client.Close() }()
 
 	// Create test message
 	msg := common.CreateTestMessage("Email", "basic")

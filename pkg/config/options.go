@@ -31,6 +31,14 @@ func WithWebhook(config WebhookConfig) Option {
 	}
 }
 
+// WithSlack configures Slack platform
+func WithSlack(config SlackConfig) Option {
+	return func(c *Config) error {
+		c.Slack = &config
+		return nil
+	}
+}
+
 // WithAsync enables async processing with specified workers
 func WithAsync(workers int) Option {
 	return func(c *Config) error {
@@ -123,6 +131,21 @@ func NewWebhookConfig(url string) WebhookConfig {
 	}
 }
 
+// NewSlackConfig creates a new Slack configuration
+func NewSlackConfig(webhookURL, token string) SlackConfig {
+	return SlackConfig{
+		WebhookURL: webhookURL,
+		Token:      token,
+		Channel:    "#general",
+		Username:   "NotifyHub",
+		IconEmoji:  ":bell:",
+		VerifySSL:  true,
+		Timeout:    30 * time.Second,
+		MaxRetries: 3,
+		RateLimit:  1, // 1 request per second
+	}
+}
+
 // WithQuickFeishu is a convenience method for quick Feishu setup
 func WithQuickFeishu(webhookURL, secret string) Option {
 	return WithFeishu(NewFeishuConfig(webhookURL, secret))
@@ -136,6 +159,25 @@ func WithQuickEmail(host string, port int, from string) Option {
 // WithQuickWebhook is a convenience method for quick Webhook setup
 func WithQuickWebhook(url string) Option {
 	return WithWebhook(NewWebhookConfig(url))
+}
+
+// WithQuickSlack is a convenience method for quick Slack setup
+func WithQuickSlack(webhookURL, token string) Option {
+	return WithSlack(NewSlackConfig(webhookURL, token))
+}
+
+// WithSlackWebhook is a convenience method for Slack webhook setup
+func WithSlackWebhook(webhookURL string) Option {
+	return WithSlack(NewSlackConfig(webhookURL, ""))
+}
+
+// WithSlackToken is a convenience method for Slack API token setup
+func WithSlackToken(token, channel string) Option {
+	config := NewSlackConfig("", token)
+	if channel != "" {
+		config.Channel = channel
+	}
+	return WithSlack(config)
 }
 
 // Production configuration preset

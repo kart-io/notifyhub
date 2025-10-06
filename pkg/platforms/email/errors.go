@@ -13,41 +13,41 @@ type EmailErrorType string
 
 const (
 	// Connection errors
-	ErrorTypeConnection        EmailErrorType = "connection"
-	ErrorTypeTimeout          EmailErrorType = "timeout"
-	ErrorTypeDNS              EmailErrorType = "dns"
-	ErrorTypeNetwork          EmailErrorType = "network"
+	ErrorTypeConnection EmailErrorType = "connection"
+	ErrorTypeTimeout    EmailErrorType = "timeout"
+	ErrorTypeDNS        EmailErrorType = "dns"
+	ErrorTypeNetwork    EmailErrorType = "network"
 
 	// Authentication errors
-	ErrorTypeAuth             EmailErrorType = "authentication"
-	ErrorTypeCredentials      EmailErrorType = "credentials"
-	ErrorTypePermission       EmailErrorType = "permission"
+	ErrorTypeAuth        EmailErrorType = "authentication"
+	ErrorTypeCredentials EmailErrorType = "credentials"
+	ErrorTypePermission  EmailErrorType = "permission"
 
 	// SMTP protocol errors
-	ErrorTypeSMTP             EmailErrorType = "smtp"
-	ErrorTypeProtocol         EmailErrorType = "protocol"
-	ErrorTypeTLS              EmailErrorType = "tls"
+	ErrorTypeSMTP     EmailErrorType = "smtp"
+	ErrorTypeProtocol EmailErrorType = "protocol"
+	ErrorTypeTLS      EmailErrorType = "tls"
 
 	// Message errors
-	ErrorTypeMessage          EmailErrorType = "message"
-	ErrorTypeRecipient        EmailErrorType = "recipient"
-	ErrorTypeSize             EmailErrorType = "size"
-	ErrorTypeFormat           EmailErrorType = "format"
+	ErrorTypeMessage   EmailErrorType = "message"
+	ErrorTypeRecipient EmailErrorType = "recipient"
+	ErrorTypeSize      EmailErrorType = "size"
+	ErrorTypeFormat    EmailErrorType = "format"
 
 	// Rate limiting errors
-	ErrorTypeRateLimit        EmailErrorType = "rate_limit"
-	ErrorTypeQuota            EmailErrorType = "quota"
+	ErrorTypeRateLimit EmailErrorType = "rate_limit"
+	ErrorTypeQuota     EmailErrorType = "quota"
 
 	// Server errors
 	ErrorTypeServerUnavailable EmailErrorType = "server_unavailable"
-	ErrorTypeServerError      EmailErrorType = "server_error"
+	ErrorTypeServerError       EmailErrorType = "server_error"
 
 	// Configuration errors
-	ErrorTypeConfig           EmailErrorType = "configuration"
-	ErrorTypeValidation       EmailErrorType = "validation"
+	ErrorTypeConfig     EmailErrorType = "configuration"
+	ErrorTypeValidation EmailErrorType = "validation"
 
 	// Generic errors
-	ErrorTypeUnknown          EmailErrorType = "unknown"
+	ErrorTypeUnknown EmailErrorType = "unknown"
 )
 
 // EmailError represents a detailed email error with context and suggestions

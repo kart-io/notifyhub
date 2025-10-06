@@ -3,8 +3,10 @@ package async
 
 import (
 	"context"
+	"sync"
 	"time"
 
+	"github.com/kart/notifyhub/pkg/message"
 	"github.com/kart/notifyhub/pkg/receipt"
 )
 
@@ -172,11 +174,12 @@ func WithMetadata(key string, value interface{}) Option {
 
 // MemoryHandle implements Handle using in-memory storage
 type MemoryHandle struct {
-	id      string
-	status  Status
-	result  chan Result
-	cancel  chan bool
-	manager *CallbackManager
+	id          string
+	status      Status
+	statusMutex sync.RWMutex
+	result      chan Result
+	cancel      chan bool
+	manager     *CallbackManager
 }
 
 // NewMemoryHandle creates a new memory handle
@@ -197,8 +200,12 @@ func (h *MemoryHandle) ID() string {
 
 // Status returns the current status
 func (h *MemoryHandle) Status() Status {
-	h.status.UpdatedAt = time.Now()
-	return h.status
+	h.statusMutex.RLock()
+	defer h.statusMutex.RUnlock()
+
+	statusCopy := h.status
+	statusCopy.UpdatedAt = time.Now()
+	return statusCopy
 }
 
 // Result returns the result channel
@@ -208,8 +215,11 @@ func (h *MemoryHandle) Result() <-chan Result {
 
 // Cancel cancels the operation
 func (h *MemoryHandle) Cancel() error {
+	h.statusMutex.Lock()
 	h.status.State = StateCancelled
 	h.status.UpdatedAt = time.Now()
+	h.statusMutex.Unlock()
+
 	select {
 	case h.cancel <- true:
 	default:
@@ -249,13 +259,45 @@ func (h *MemoryHandle) OnProgress(callback ProgressCallback) Handle {
 	return h
 }
 
+// SetResult sets the result for the handle
+func (h *MemoryHandle) SetResult(result Result) {
+	h.statusMutex.Lock()
+	h.status.State = StateCompleted
+	if result.Error != nil {
+		h.status.State = StateFailed
+	}
+	h.status.UpdatedAt = time.Now()
+	h.statusMutex.Unlock()
+
+	select {
+	case h.result <- result:
+	default:
+		// Channel might be full or closed
+	}
+}
+
+// SetResultWithCallback sets the result and triggers callbacks
+func (h *MemoryHandle) SetResultWithCallback(result Result, msg *message.Message) {
+	h.SetResult(result)
+
+	// Trigger callbacks if manager exists
+	if h.manager != nil {
+		if result.Error != nil {
+			h.manager.TriggerError(msg, result.Error)
+		} else {
+			h.manager.TriggerComplete(result.Receipt)
+		}
+	}
+}
+
 // MemoryBatchHandle implements BatchHandle using in-memory storage
 type MemoryBatchHandle struct {
-	batchID  string
-	handles  []Handle
-	status   BatchStatus
-	results  chan Result
-	progress chan BatchProgress
+	batchID     string
+	handles     []Handle
+	status      BatchStatus
+	statusMutex sync.RWMutex
+	results     chan Result
+	progress    chan BatchProgress
 }
 
 // NewBatchHandle creates a new batch handle
@@ -283,8 +325,12 @@ func (bh *MemoryBatchHandle) BatchID() string {
 
 // Status returns the batch status
 func (bh *MemoryBatchHandle) Status() BatchStatus {
-	bh.status.UpdatedAt = time.Now()
-	return bh.status
+	bh.statusMutex.RLock()
+	defer bh.statusMutex.RUnlock()
+
+	statusCopy := bh.status
+	statusCopy.UpdatedAt = time.Now()
+	return statusCopy
 }
 
 // Results returns the results channel
@@ -305,8 +351,12 @@ func (bh *MemoryBatchHandle) Cancel() error {
 			continue
 		}
 	}
+
+	bh.statusMutex.Lock()
 	bh.status.State = StateCancelled
 	bh.status.UpdatedAt = time.Now()
+	bh.statusMutex.Unlock()
+
 	return nil
 }
 
@@ -324,4 +374,47 @@ func (bh *MemoryBatchHandle) Wait(ctx context.Context) ([]*receipt.Receipt, erro
 	}
 
 	return receipts, nil
+}
+
+// AddResult adds a result to the batch handle
+func (bh *MemoryBatchHandle) AddResult(result Result) {
+	select {
+	case bh.results <- result:
+		// Update status (thread-safe update needed)
+		bh.statusMutex.Lock()
+		if result.Error != nil {
+			bh.status.Failed++
+		} else {
+			bh.status.Completed++
+		}
+		bh.status.Progress = float64(bh.status.Completed+bh.status.Failed) / float64(bh.status.Total)
+		bh.status.UpdatedAt = time.Now()
+
+		// Update state based on progress
+		if bh.status.Completed+bh.status.Failed >= bh.status.Total {
+			if bh.status.Failed == 0 {
+				bh.status.State = StateCompleted
+			} else {
+				bh.status.State = StateFailed
+			}
+		} else {
+			bh.status.State = StateProcessing
+		}
+		bh.statusMutex.Unlock()
+
+		// Send progress update
+		progress := BatchProgress{
+			Completed: bh.status.Completed,
+			Total:     bh.status.Total,
+			Failed:    bh.status.Failed,
+			Progress:  bh.status.Progress,
+		}
+		select {
+		case bh.progress <- progress:
+		default:
+			// Progress channel might be full
+		}
+	default:
+		// Results channel might be full
+	}
 }

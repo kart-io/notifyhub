@@ -16,6 +16,8 @@ BINARY_UNIX=$(BINARY_NAME)_unix
 
 # Directories
 PKG_DIR=./pkg/...
+EXAMPLES_DIR=./examples/...
+LINT_DIRS=./pkg/... ./examples/...
 ROOT_DIR=.
 
 .PHONY: all build clean test coverage deps fmt lint vet check help
@@ -26,27 +28,27 @@ all: check build
 # Format code using go fmt
 fmt:
 	@echo "Running go fmt..."
-	$(GOFMT) $(PKG_DIR)
+	$(GOFMT) $(LINT_DIRS)
 	@echo "Code formatting complete."
 
 # Lint code using golangci-lint (more comprehensive than golint)
 lint:
 	@echo "Running golangci-lint..."
 	@which golangci-lint > /dev/null || (echo "golangci-lint not found. Installing..." && go install github.com/golangci/golangci-lint/cmd/golangci-lint@latest)
-	golangci-lint run $(PKG_DIR)
+	golangci-lint run $(LINT_DIRS)
 	@echo "Linting complete."
 
 # Alternative lint using staticcheck (if golangci-lint is not preferred)
 lint-static:
 	@echo "Running staticcheck..."
 	@which staticcheck > /dev/null || (echo "staticcheck not found. Installing..." && go install honnef.co/go/tools/cmd/staticcheck@latest)
-	staticcheck $(PKG_DIR)
+	staticcheck $(LINT_DIRS)
 	@echo "Static analysis complete."
 
 # Run go vet
 vet:
 	@echo "Running go vet..."
-	$(GOVET) $(PKG_DIR)
+	$(GOVET) $(LINT_DIRS)
 	@echo "Go vet complete."
 
 # Comprehensive check: fmt + vet + lint

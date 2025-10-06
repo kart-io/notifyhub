@@ -5,7 +5,7 @@ import (
 	"bytes"
 	"fmt"
 	htmlTemplate "html/template"
-	"io/ioutil"
+	"os"
 	"path/filepath"
 	"strings"
 	textTemplate "text/template"
@@ -38,10 +38,10 @@ type EmailTemplate struct {
 // TemplateData represents data to be used in template rendering
 type TemplateData struct {
 	// Message data
-	Title    string                 `json:"title"`
-	Body     string                 `json:"body"`
-	Priority string                 `json:"priority"`
-	ID       string                 `json:"id"`
+	Title    string `json:"title"`
+	Body     string `json:"body"`
+	Priority string `json:"priority"`
+	ID       string `json:"id"`
 
 	// Template variables
 	Variables map[string]interface{} `json:"variables"`
@@ -78,7 +78,7 @@ func (tm *TemplateManager) LoadTemplatesFromDir() error {
 		return nil
 	}
 
-	files, err := ioutil.ReadDir(tm.templateDir)
+	files, err := os.ReadDir(tm.templateDir)
 	if err != nil {
 		tm.logger.Warn("无法读取模板目录", "dir", tm.templateDir, "error", err)
 		return err
@@ -105,7 +105,7 @@ func (tm *TemplateManager) LoadTemplatesFromDir() error {
 
 // loadTemplateFromFile loads a template from a file
 func (tm *TemplateManager) loadTemplateFromFile(filePath string) error {
-	content, err := ioutil.ReadFile(filePath)
+	content, err := os.ReadFile(filePath)
 	if err != nil {
 		return fmt.Errorf("读取模板文件失败: %w", err)
 	}
@@ -307,11 +307,11 @@ func (tm *TemplateManager) GetDefaultTemplate() *EmailTemplate {
 
 	// Return a basic default template
 	return &EmailTemplate{
-		Name:    "default",
-		Type:    TemplateTypeText,
-		Subject: "{{.Title}}",
-		Content: "{{.Body}}",
-		IsDefault: true,
+		Name:        "default",
+		Type:        TemplateTypeText,
+		Subject:     "{{.Title}}",
+		Content:     "{{.Body}}",
+		IsDefault:   true,
 		Description: "默认邮件模板",
 	}
 }
@@ -320,8 +320,8 @@ func (tm *TemplateManager) GetDefaultTemplate() *EmailTemplate {
 func (tm *TemplateManager) CreateBasicTemplates() {
 	templates := []*EmailTemplate{
 		{
-			Name: "notification",
-			Type: TemplateTypeHTML,
+			Name:    "notification",
+			Type:    TemplateTypeHTML,
 			Subject: "[通知] {{.Title}}",
 			Content: `
 <html>
@@ -350,8 +350,8 @@ func (tm *TemplateManager) CreateBasicTemplates() {
 			Description: "通知类邮件模板",
 		},
 		{
-			Name: "alert",
-			Type: TemplateTypeHTML,
+			Name:    "alert",
+			Type:    TemplateTypeHTML,
 			Subject: "🚨 [警报] {{.Title}}",
 			Content: `
 <html>
@@ -381,8 +381,8 @@ func (tm *TemplateManager) CreateBasicTemplates() {
 			Description: "警报类邮件模板",
 		},
 		{
-			Name: "plain",
-			Type: TemplateTypeText,
+			Name:    "plain",
+			Type:    TemplateTypeText,
 			Subject: "{{.Title}}",
 			Content: `{{.Title}}
 
@@ -394,11 +394,11 @@ func (tm *TemplateManager) CreateBasicTemplates() {
 
 此邮件由 NotifyHub 自动发送`,
 			Description: "纯文本邮件模板",
-			IsDefault: true,
+			IsDefault:   true,
 		},
 		{
-			Name: "marketing",
-			Type: TemplateTypeHTML,
+			Name:    "marketing",
+			Type:    TemplateTypeHTML,
 			Subject: "{{.Title}}",
 			Content: `
 <html>
@@ -435,7 +435,9 @@ func (tm *TemplateManager) CreateBasicTemplates() {
 	}
 
 	for _, template := range templates {
-		tm.AddTemplate(template)
+		if err := tm.AddTemplate(template); err != nil {
+			tm.logger.Error("Failed to add template", "template_name", template.Name, "error", err)
+		}
 	}
 
 	tm.logger.Info("创建基础模板完成", "count", len(templates))
@@ -453,10 +455,10 @@ func (tm *TemplateManager) ValidateTemplate(template *EmailTemplate) error {
 
 	// Try to parse the template
 	testData := &TemplateData{
-		Title: "测试标题",
-		Body:  "测试内容",
+		Title:     "测试标题",
+		Body:      "测试内容",
 		Timestamp: "2023-01-01 12:00:00",
-		Sender: "test@example.com",
+		Sender:    "test@example.com",
 		Variables: make(map[string]interface{}),
 	}
 

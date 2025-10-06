@@ -3,6 +3,8 @@ package async
 
 import (
 	"context"
+	"fmt"
+	"sync"
 	"time"
 
 	"github.com/kart/notifyhub/pkg/message"
@@ -57,22 +59,32 @@ type RetryPolicy struct {
 	Jitter          bool          `json:"jitter"`
 }
 
+// ProcessorFunc defines the function signature for processing messages
+type ProcessorFunc func(ctx context.Context, msg *message.Message, targets []target.Target) Result
+
 // QueueItem represents an item in the queue
 type QueueItem struct {
-	ID       string           `json:"id"`
-	Message  *message.Message `json:"message"`
-	Targets  []target.Target  `json:"targets"`
-	Options  []Option         `json:"-"`
-	Created  time.Time        `json:"created"`
-	Attempts int              `json:"attempts"`
+	ID        string           `json:"id"`
+	Message   *message.Message `json:"message"`
+	Targets   []target.Target  `json:"targets"`
+	Options   []Option         `json:"-"`
+	Created   time.Time        `json:"created"`
+	Attempts  int              `json:"attempts"`
+	Processor ProcessorFunc    `json:"-"` // Function to process the message
+	Handle    Handle           `json:"-"` // Handle to send results to
 }
 
 // MemoryQueue implements Queue using in-memory channels
 type MemoryQueue struct {
-	config  QueueConfig
-	items   chan *QueueItem
-	workers []*Worker
-	stats   QueueStats
+	config      QueueConfig
+	items       chan *QueueItem
+	workers     []*Worker
+	stats       QueueStats
+	statsMutex  sync.RWMutex
+	closed      bool
+	closeMutex  sync.Mutex
+	shutdownCtx context.Context
+	cancelFunc  context.CancelFunc
 }
 
 // NewMemoryQueue creates a new memory-based queue
@@ -84,30 +96,93 @@ func NewMemoryQueue(config QueueConfig) *MemoryQueue {
 		config.BufferSize = 1000
 	}
 
+	ctx, cancel := context.WithCancel(context.Background())
+
 	return &MemoryQueue{
-		config: config,
-		items:  make(chan *QueueItem, config.BufferSize),
-		stats:  QueueStats{UpdatedAt: time.Now()},
+		config:      config,
+		items:       make(chan *QueueItem, config.BufferSize),
+		stats:       QueueStats{UpdatedAt: time.Now()},
+		closed:      false,
+		shutdownCtx: ctx,
+		cancelFunc:  cancel,
 	}
 }
 
 // Enqueue adds a message to the queue
 func (q *MemoryQueue) Enqueue(ctx context.Context, msg *message.Message, targets []target.Target, opts ...Option) (Handle, error) {
+	// Check if queue is closed
+	q.closeMutex.Lock()
+	if q.closed {
+		q.closeMutex.Unlock()
+		return nil, fmt.Errorf("queue is closed")
+	}
+	q.closeMutex.Unlock()
+
+	handle := NewMemoryHandle(msg.ID)
+
+	// Create a default processor that returns an error since no processor was provided
+	defaultProcessor := func(ctx context.Context, message *message.Message, targets []target.Target) Result {
+		return Result{
+			Receipt: nil,
+			Error:   fmt.Errorf("no processor function provided for message %s", message.ID),
+		}
+	}
+
 	item := &QueueItem{
-		ID:      msg.ID,
-		Message: msg,
-		Targets: targets,
-		Options: opts,
-		Created: time.Now(),
+		ID:        msg.ID,
+		Message:   msg,
+		Targets:   targets,
+		Options:   opts,
+		Created:   time.Now(),
+		Processor: defaultProcessor,
+		Handle:    handle,
 	}
 
 	select {
 	case q.items <- item:
+		q.statsMutex.Lock()
 		q.stats.Pending++
-		handle := NewMemoryHandle(item.ID)
+		q.statsMutex.Unlock()
 		return handle, nil
 	case <-ctx.Done():
 		return nil, ctx.Err()
+	case <-q.shutdownCtx.Done():
+		return nil, fmt.Errorf("queue is shutting down")
+	}
+}
+
+// EnqueueWithProcessor adds a message to the queue with a custom processor
+func (q *MemoryQueue) EnqueueWithProcessor(ctx context.Context, msg *message.Message, targets []target.Target, processor ProcessorFunc, opts ...Option) (Handle, error) {
+	// Check if queue is closed
+	q.closeMutex.Lock()
+	if q.closed {
+		q.closeMutex.Unlock()
+		return nil, fmt.Errorf("queue is closed")
+	}
+	q.closeMutex.Unlock()
+
+	handle := NewMemoryHandle(msg.ID)
+
+	item := &QueueItem{
+		ID:        msg.ID,
+		Message:   msg,
+		Targets:   targets,
+		Options:   opts,
+		Created:   time.Now(),
+		Processor: processor,
+		Handle:    handle,
+	}
+
+	select {
+	case q.items <- item:
+		q.statsMutex.Lock()
+		q.stats.Pending++
+		q.statsMutex.Unlock()
+		return handle, nil
+	case <-ctx.Done():
+		return nil, ctx.Err()
+	case <-q.shutdownCtx.Done():
+		return nil, fmt.Errorf("queue is shutting down")
 	}
 }
 
@@ -141,10 +216,25 @@ func (q *MemoryQueue) Start(ctx context.Context) error {
 
 // Stop stops the queue workers
 func (q *MemoryQueue) Stop(ctx context.Context) error {
+	q.closeMutex.Lock()
+	if q.closed {
+		q.closeMutex.Unlock()
+		return nil // Already closed
+	}
+	q.closed = true
+	q.closeMutex.Unlock()
+
+	// Signal shutdown to all pending operations
+	q.cancelFunc()
+
+	// Close the items channel
 	close(q.items)
+
+	// Stop all workers
 	for _, worker := range q.workers {
 		worker.Stop()
 	}
+
 	return nil
 }
 
@@ -156,7 +246,11 @@ func (q *MemoryQueue) IsHealthy(ctx context.Context) error {
 
 // GetStats returns queue statistics
 func (q *MemoryQueue) GetStats() QueueStats {
-	q.stats.UpdatedAt = time.Now()
-	q.stats.Workers = len(q.workers)
-	return q.stats
+	q.statsMutex.RLock()
+	defer q.statsMutex.RUnlock()
+
+	stats := q.stats
+	stats.UpdatedAt = time.Now()
+	stats.Workers = len(q.workers)
+	return stats
 }

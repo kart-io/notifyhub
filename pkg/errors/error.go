@@ -3,6 +3,7 @@ package errors
 
 import (
 	"encoding/json"
+	"errors"
 	"fmt"
 	"time"
 )
@@ -336,7 +337,8 @@ func NewInternalError(message string) *NotifyError {
 
 // IsConfigError checks if error is a configuration error
 func IsConfigError(err error) bool {
-	if notifyErr, ok := err.(*NotifyError); ok {
+	var notifyErr *NotifyError
+	if errors.As(err, &notifyErr) {
 		return GetCategory(notifyErr.Code) == "configuration"
 	}
 	return false
@@ -344,7 +346,8 @@ func IsConfigError(err error) bool {
 
 // IsPlatformError checks if error is a platform error
 func IsPlatformError(err error) bool {
-	if notifyErr, ok := err.(*NotifyError); ok {
+	var notifyErr *NotifyError
+	if errors.As(err, &notifyErr) {
 		return GetCategory(notifyErr.Code) == "platform"
 	}
 	return false
@@ -352,7 +355,8 @@ func IsPlatformError(err error) bool {
 
 // IsNetworkError checks if error is a network error
 func IsNetworkError(err error) bool {
-	if notifyErr, ok := err.(*NotifyError); ok {
+	var notifyErr *NotifyError
+	if errors.As(err, &notifyErr) {
 		return GetCategory(notifyErr.Code) == "network"
 	}
 	return false
@@ -360,7 +364,8 @@ func IsNetworkError(err error) bool {
 
 // IsRetryableError checks if error is retryable
 func IsRetryableError(err error) bool {
-	if notifyErr, ok := err.(*NotifyError); ok {
+	var notifyErr *NotifyError
+	if errors.As(err, &notifyErr) {
 		return notifyErr.IsRetryable()
 	}
 	return false
@@ -368,7 +373,8 @@ func IsRetryableError(err error) bool {
 
 // IsTemporaryError checks if error is temporary
 func IsTemporaryError(err error) bool {
-	if notifyErr, ok := err.(*NotifyError); ok {
+	var notifyErr *NotifyError
+	if errors.As(err, &notifyErr) {
 		return notifyErr.IsRetryable() && (notifyErr.Code == ErrPlatformUnavailable ||
 			notifyErr.Code == ErrNetworkTimeout ||
 			notifyErr.Code == ErrConnectionFailed ||
@@ -381,7 +387,8 @@ func IsTemporaryError(err error) bool {
 
 // GetErrorCode extracts the error code from an error
 func GetErrorCode(err error) ErrorCode {
-	if notifyErr, ok := err.(*NotifyError); ok {
+	var notifyErr *NotifyError
+	if errors.As(err, &notifyErr) {
 		return notifyErr.Code
 	}
 	return ErrInternal

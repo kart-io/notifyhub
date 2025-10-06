@@ -244,13 +244,44 @@ func (h *UserResolutionHandler) CanResolve(spec TargetSpec) bool {
 }
 
 func (h *UserResolutionHandler) Resolve(ctx context.Context, spec TargetSpec) ([]Target, error) {
-	// TODO: Implement user resolution logic
-	// This could involve looking up user preferences, multiple contact methods, etc.
+	// User resolution logic:
+	// 1. Parse user identifier (could be username, user ID, email)
+	// 2. Look up user's preferred notification channels
+	// 3. Expand to multiple targets if user has multiple channels
+	// 4. Apply user preferences (e.g., do not disturb, preferred times)
 
+	// Current implementation: Basic user resolution
+	// Future enhancement: Integrate with user management system
+
+	userID := spec.Value
+	platform := spec.Platform
+
+	// If platform is not specified, use email as default
+	if platform == "" {
+		// Check if value looks like an email
+		if strings.Contains(userID, "@") {
+			platform = "email"
+		} else {
+			// Default to email, assuming userID needs to be resolved to email
+			platform = "email"
+			// In a real system, you would:
+			// 1. Query user database by userID
+			// 2. Get user's email/phone/other contact info
+			// 3. Get user's notification preferences
+			// For now, append a default domain if needed
+			if !strings.Contains(userID, "@") {
+				userID = userID + "@example.com" // Placeholder
+			}
+		}
+	}
+
+	// Return resolved target
+	// In production, this might return multiple targets for one user
+	// (email, SMS, push notification, etc.)
 	return []Target{{
-		Type:     "user",
-		Value:    spec.Value,
-		Platform: spec.Platform, // Platform should be determined by user preferences
+		Type:     "user", // Keep original type
+		Value:    userID,
+		Platform: platform,
 	}}, nil
 }
 
@@ -262,14 +293,73 @@ func (h *GroupResolutionHandler) CanResolve(spec TargetSpec) bool {
 }
 
 func (h *GroupResolutionHandler) Resolve(ctx context.Context, spec TargetSpec) ([]Target, error) {
-	// TODO: Implement group resolution logic
-	// This would expand a group into individual targets
+	// Group resolution logic:
+	// 1. Parse group identifier (could be group name, group ID)
+	// 2. Query group membership from database/directory service
+	// 3. Expand group into individual user targets
+	// 4. Apply group-level notification policies
 
-	return []Target{{
-		Type:     "group",
-		Value:    spec.Value,
-		Platform: spec.Platform,
-	}}, nil
+	// Current implementation: Basic group expansion
+	// Future enhancement: Integrate with directory service (LDAP, AD, etc.)
+
+	groupID := spec.Value
+	platform := spec.Platform
+
+	// In a real implementation, you would:
+	// 1. Query group membership system
+	// 2. Get list of users in the group
+	// 3. Resolve each user to their contact info
+	// 4. Apply group notification policies
+
+	// Simulated group expansion
+	// In production, replace this with actual database/API calls
+	targets := []Target{}
+
+	// Example: Expand group to members
+	// This is a placeholder - in reality, you'd query a database
+	groupMembers := h.getGroupMembers(groupID) // Mock function
+
+	for _, member := range groupMembers {
+		// Determine platform for each member
+		memberPlatform := platform
+		if memberPlatform == "" {
+			memberPlatform = "email" // Default platform
+		}
+
+		targets = append(targets, Target{
+			Type:     "group", // Keep original type
+			Value:    member,
+			Platform: memberPlatform,
+		})
+	}
+
+	// If no members found, return error
+	if len(targets) == 0 {
+		return nil, fmt.Errorf("group '%s' has no members or does not exist", groupID)
+	}
+
+	return targets, nil
+}
+
+// getGroupMembers is a mock function that returns group members
+// In production, this should query a real user directory service
+func (h *GroupResolutionHandler) getGroupMembers(groupID string) []string {
+	// Mock implementation
+	// In production, replace with actual directory service query
+	mockGroups := map[string][]string{
+		"admins":     {"admin@example.com", "sysadmin@example.com"},
+		"developers": {"dev1@example.com", "dev2@example.com", "dev3@example.com"},
+		"support":    {"support1@example.com", "support2@example.com"},
+		"all":        {"user1@example.com", "user2@example.com", "user3@example.com"},
+	}
+
+	members, exists := mockGroups[groupID]
+	if !exists {
+		// Return empty slice if group not found
+		return []string{}
+	}
+
+	return members
 }
 
 // Channel Resolution Handler

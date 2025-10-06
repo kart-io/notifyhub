@@ -3,6 +3,7 @@ package async
 
 import (
 	"context"
+	"fmt"
 	"sync"
 	"time"
 
@@ -11,11 +12,12 @@ import (
 
 // Worker processes queue items
 type Worker struct {
-	id     int
-	items  <-chan *QueueItem
-	logger logger.Logger
-	quit   chan bool
-	wg     sync.WaitGroup
+	id        int
+	items     <-chan *QueueItem
+	logger    logger.Logger
+	quit      chan bool
+	wg        sync.WaitGroup
+	closeOnce sync.Once
 }
 
 // NewWorker creates a new worker
@@ -57,7 +59,9 @@ func (w *Worker) Start(ctx context.Context) {
 
 // Stop stops the worker
 func (w *Worker) Stop() {
-	close(w.quit)
+	w.closeOnce.Do(func() {
+		close(w.quit)
+	})
 	w.wg.Wait()
 }
 
@@ -65,14 +69,26 @@ func (w *Worker) Stop() {
 func (w *Worker) processItem(ctx context.Context, item *QueueItem) {
 	w.logger.Debug("Processing item", "worker_id", w.id, "item_id", item.ID)
 
-	// TODO: Implement actual message processing
-	// This would involve:
-	// 1. Getting the appropriate platform sender
-	// 2. Sending the message to targets
-	// 3. Handling retries and callbacks
-	// 4. Updating the handle status
+	var result Result
 
-	time.Sleep(10 * time.Millisecond) // Simulate processing
+	// Execute the item's processor function if available
+	if item.Processor != nil {
+		result = item.Processor(ctx, item.Message, item.Targets)
+	} else {
+		// Handle items without processor (create error result)
+		w.logger.Error("No processor function for item", "worker_id", w.id, "item_id", item.ID)
+		result = Result{
+			Receipt: nil,
+			Error:   fmt.Errorf("no processor function available for queue item %s", item.ID),
+		}
+	}
+
+	// Send result to the handle if available
+	if item.Handle != nil {
+		if memHandle, ok := item.Handle.(*MemoryHandle); ok {
+			memHandle.SetResultWithCallback(result, item.Message)
+		}
+	}
 
 	w.logger.Debug("Item processed", "worker_id", w.id, "item_id", item.ID)
 }
@@ -82,6 +98,9 @@ type WorkerPool struct {
 	workers []*Worker
 	config  WorkerPoolConfig
 	logger  logger.Logger
+	mu      sync.Mutex
+	items   <-chan *QueueItem
+	ctx     context.Context
 }
 
 // WorkerPoolConfig configures the worker pool
@@ -109,6 +128,9 @@ func NewWorkerPool(config WorkerPoolConfig) *WorkerPool {
 
 // Start starts the worker pool
 func (wp *WorkerPool) Start(ctx context.Context, items <-chan *QueueItem) error {
+	wp.ctx = ctx
+	wp.items = items
+
 	wp.logger.Info("Starting worker pool", "min_workers", wp.config.MinWorkers)
 
 	// Start initial workers
@@ -148,8 +170,72 @@ func (wp *WorkerPool) Scale(targetWorkers int) error {
 
 	wp.logger.Info("Scaling worker pool", "current", currentWorkers, "target", targetWorkers)
 
-	// TODO: Implement scaling logic
-	// This would involve adding or removing workers dynamically
+	// Implement scaling logic
+	if targetWorkers > currentWorkers {
+		// Scale up: add new workers
+		return wp.scaleUp(targetWorkers - currentWorkers)
+	}
+
+	// Scale down: remove excess workers
+	return wp.scaleDown(currentWorkers - targetWorkers)
+}
+
+// scaleUp adds new workers to the pool
+func (wp *WorkerPool) scaleUp(count int) error {
+	wp.mu.Lock()
+	defer wp.mu.Unlock()
+
+	wp.logger.Info("Scaling up worker pool", "additional_workers", count)
+
+	currentCount := len(wp.workers)
+
+	for i := 0; i < count; i++ {
+		workerID := currentCount + i + 1
+		worker := NewWorker(workerID, wp.items)
+
+		// Start worker in a goroutine
+		go worker.Start(wp.ctx)
+
+		wp.workers = append(wp.workers, worker)
+		wp.logger.Debug("Added new worker", "worker_id", workerID, "total_workers", len(wp.workers))
+	}
+
+	wp.logger.Info("Worker pool scaled up successfully",
+		"added", count,
+		"total_workers", len(wp.workers))
+
+	return nil
+}
+
+// scaleDown removes workers from the pool
+func (wp *WorkerPool) scaleDown(count int) error {
+	wp.mu.Lock()
+	defer wp.mu.Unlock()
+
+	if count <= 0 {
+		return nil
+	}
+
+	wp.logger.Info("Scaling down worker pool", "workers_to_remove", count)
+
+	currentCount := len(wp.workers)
+	if count > currentCount {
+		count = currentCount
+	}
+
+	// Stop the last 'count' workers
+	workersToStop := wp.workers[currentCount-count:]
+	wp.workers = wp.workers[:currentCount-count]
+
+	// Stop workers gracefully
+	for _, worker := range workersToStop {
+		worker.Stop()
+		wp.logger.Debug("Stopped worker", "worker_id", worker.id)
+	}
+
+	wp.logger.Info("Worker pool scaled down successfully",
+		"removed", count,
+		"remaining_workers", len(wp.workers))
 
 	return nil
 }

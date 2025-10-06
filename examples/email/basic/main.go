@@ -59,7 +59,7 @@ func main() {
 		logger.Error("创建NotifyHub客户端失败: %v", err)
 		return
 	}
-	defer client.Close()
+	defer func() { _ = client.Close() }()
 
 	logger.Success("NotifyHub客户端创建成功")
 

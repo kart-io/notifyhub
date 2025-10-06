@@ -31,8 +31,10 @@ type Client interface {
 type HealthStatus struct {
 	Status      string                 `json:"status"`       // "healthy", "degraded", "unhealthy"
 	Platforms   map[string]string      `json:"platforms"`    // Platform name -> health status
-	Uptime      int64                  `json:"uptime"`       // Uptime in seconds
-	ActiveTasks int                    `json:"active_tasks"` // Number of active async tasks
-	QueueDepth  int                    `json:"queue_depth"`  // Current queue depth
+	Uptime      float64                `json:"uptime"`       // Uptime in seconds
+	ActiveTasks int64                  `json:"active_tasks"` // Number of active async tasks
+	QueueDepth  int64                  `json:"queue_depth"`  // Current queue depth
+	TotalSent   int64                  `json:"total_sent"`   // Total messages sent
+	SuccessRate float64                `json:"success_rate"` // Success rate percentage
 	Metadata    map[string]interface{} `json:"metadata,omitempty"`
 }

@@ -231,13 +231,11 @@ func (f *FeishuPlatform) isFeishuTarget(target target.Target) bool {
 
 // NewPlatform is the factory function for creating Feishu platforms
 // This function will be called by the platform registry
-func NewPlatform(cfg interface{}) (platform.Platform, error) {
+func NewPlatform(cfg interface{}, log logger.Logger) (platform.Platform, error) {
 	feishuConfig, ok := cfg.(*config.FeishuConfig)
 	if !ok {
 		return nil, fmt.Errorf("invalid feishu configuration type")
 	}
 
-	// TODO: Logger should be injected properly
-	logger := logger.New()
-	return NewFeishuPlatform(feishuConfig, logger)
+	return NewFeishuPlatform(feishuConfig, log)
 }

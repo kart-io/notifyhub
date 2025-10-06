@@ -79,13 +79,13 @@ func demonstrateWelcomeEmail(logger *common.Logger, templateDir string) error {
 		logger.Error("创建邮件发送器失败: %v", err)
 		return err
 	}
-	defer sender.Close()
+	defer func() { _ = sender.Close() }()
 
 	// Load template from file (in real scenario)
 	// For demo, we'll create a welcome template programmatically
 	welcomeTemplate := &email.EmailTemplate{
-		Name: "welcome-user",
-		Type: email.TemplateTypeHTML,
+		Name:    "welcome-user",
+		Type:    email.TemplateTypeHTML,
 		Subject: "欢迎加入 {{.Variables.company}}！",
 		Content: `
 <h1>欢迎，{{.Variables.user_name}}！</h1>
@@ -98,26 +98,26 @@ func demonstrateWelcomeEmail(logger *common.Logger, templateDir string) error {
 
 	// Add template to sender
 	templateManager := email.NewTemplateManager(templateDir, logger)
-	templateManager.AddTemplate(welcomeTemplate)
+	_ = templateManager.AddTemplate(welcomeTemplate)
 
 	// Prepare email options
 	options := &email.CustomEmailOptions{
-		RequestID: fmt.Sprintf("welcome-%d", time.Now().Unix()),
-		Template:  "welcome-user",
+		RequestID:  fmt.Sprintf("welcome-%d", time.Now().Unix()),
+		Template:   "welcome-user",
 		Recipients: []string{"newuser@example.com"},
 		Variables: map[string]interface{}{
-			"user_name":        "张三",
-			"company":          "示例科技有限公司",
-			"activation_url":   "https://company.com/activate?token=abc123",
-			"support_email":    "support@company.com",
-			"support_phone":    "400-123-4567",
-			"website":          "https://company.com",
-			"unsubscribe_url":  "https://company.com/unsubscribe",
+			"user_name":       "张三",
+			"company":         "示例科技有限公司",
+			"activation_url":  "https://company.com/activate?token=abc123",
+			"support_email":   "support@company.com",
+			"support_phone":   "400-123-4567",
+			"website":         "https://company.com",
+			"unsubscribe_url": "https://company.com/unsubscribe",
 		},
 		CustomData: map[string]interface{}{
-			"user_id":       12345,
+			"user_id":           12345,
 			"registration_date": time.Now().Format("2006-01-02"),
-			"source":        "website",
+			"source":            "website",
 		},
 	}
 
@@ -152,7 +152,7 @@ func demonstrateInvoiceEmail(logger *common.Logger, templateDir string) error {
 		UseStartTLS:    true,
 
 		CustomHeaders: map[string]string{
-			"X-Email-Type":    "billing",
+			"X-Email-Type":     "billing",
 			"X-Invoice-System": "v2.0",
 		},
 
@@ -164,23 +164,23 @@ func demonstrateInvoiceEmail(logger *common.Logger, templateDir string) error {
 	if err != nil {
 		return err
 	}
-	defer sender.Close()
+	defer func() { _ = sender.Close() }()
 
 	// Prepare invoice email options with complex data
 	options := &email.CustomEmailOptions{
-		RequestID: fmt.Sprintf("invoice-%d", time.Now().Unix()),
-		Template:  "invoice", // This would load from invoice.html template file
+		RequestID:  fmt.Sprintf("invoice-%d", time.Now().Unix()),
+		Template:   "invoice", // This would load from invoice.html template file
 		Recipients: []string{"customer@company.com"},
 		Variables: map[string]interface{}{
-			"customer_name":    "李四",
-			"company":          "示例科技有限公司",
-			"invoice_number":   "INV-2024-001",
-			"invoice_date":     "2024-01-01",
-			"due_date":         "2024-01-31",
-			"billing_period":   "2024年1月",
-			"total_amount":     "1,299.00",
-			"currency":         "CNY",
-			"is_overdue":       false,
+			"customer_name":  "李四",
+			"company":        "示例科技有限公司",
+			"invoice_number": "INV-2024-001",
+			"invoice_date":   "2024-01-01",
+			"due_date":       "2024-01-31",
+			"billing_period": "2024年1月",
+			"total_amount":   "1,299.00",
+			"currency":       "CNY",
+			"is_overdue":     false,
 
 			// Billing items
 			"items": []map[string]interface{}{
@@ -205,16 +205,16 @@ func demonstrateInvoiceEmail(logger *common.Logger, templateDir string) error {
 			},
 
 			// Contact info
-			"billing_email":    "billing@company.com",
-			"billing_phone":    "400-123-4567",
-			"support_url":      "https://company.com/support",
-			"payment_url":      "https://billing.company.com/pay/INV-2024-001",
-			"company_address":  "北京市朝阳区示例大厦10层",
+			"billing_email":   "billing@company.com",
+			"billing_phone":   "400-123-4567",
+			"support_url":     "https://company.com/support",
+			"payment_url":     "https://billing.company.com/pay/INV-2024-001",
+			"company_address": "北京市朝阳区示例大厦10层",
 		},
 		CustomData: map[string]interface{}{
-			"customer_id":      "CUST-001",
-			"subscription_id":  "SUB-001",
-			"billing_cycle":    "monthly",
+			"customer_id":     "CUST-001",
+			"subscription_id": "SUB-001",
+			"billing_cycle":   "monthly",
 		},
 	}
 
@@ -262,7 +262,7 @@ func demonstrateNewsletterEmail(logger *common.Logger, templateDir string) error
 	if err != nil {
 		return err
 	}
-	defer sender.Close()
+	defer func() { _ = sender.Close() }()
 
 	// Newsletter with rich content
 	options := &email.CustomEmailOptions{
@@ -275,11 +275,11 @@ func demonstrateNewsletterEmail(logger *common.Logger, templateDir string) error
 		},
 		Body: "欢迎阅读本期技术简报！本期为您带来最新的技术动态、产品更新和行业洞察。",
 		Variables: map[string]interface{}{
-			"subscriber_name":   "尊敬的订阅者",
-			"newsletter_title":  "技术简报",
-			"issue_number":      "第42期",
-			"publish_date":      "2024年1月15日",
-			"company":           "示例科技",
+			"subscriber_name":     "尊敬的订阅者",
+			"newsletter_title":    "技术简报",
+			"issue_number":        "第42期",
+			"publish_date":        "2024年1月15日",
+			"company":             "示例科技",
 			"company_description": "专注于创新技术解决方案",
 
 			// Featured article
@@ -342,9 +342,9 @@ func demonstrateNewsletterEmail(logger *common.Logger, templateDir string) error
 			"company_address": "北京市朝阳区示例大厦",
 		},
 		CustomData: map[string]interface{}{
-			"campaign_id":      "newsletter-2024-01",
-			"segment":          "tech-subscribers",
-			"send_time":        time.Now().Format(time.RFC3339),
+			"campaign_id": "newsletter-2024-01",
+			"segment":     "tech-subscribers",
+			"send_time":   time.Now().Format(time.RFC3339),
 		},
 	}
 
@@ -376,9 +376,9 @@ func demonstrateSystemAlertEmail(logger *common.Logger, templateDir string) erro
 
 		// High priority for alerts
 		CustomHeaders: map[string]string{
-			"X-Priority":    "1",
-			"X-Alert-Type":  "system",
-			"Importance":    "high",
+			"X-Priority":   "1",
+			"X-Alert-Type": "system",
+			"Importance":   "high",
 		},
 
 		// No rate limiting for critical alerts
@@ -393,7 +393,7 @@ func demonstrateSystemAlertEmail(logger *common.Logger, templateDir string) erro
 	if err != nil {
 		return err
 	}
-	defer sender.Close()
+	defer func() { _ = sender.Close() }()
 
 	// System alert with detailed information
 	options := &email.CustomEmailOptions{
@@ -408,25 +408,25 @@ func demonstrateSystemAlertEmail(logger *common.Logger, templateDir string) erro
 		},
 		Priority: "urgent",
 		Variables: map[string]interface{}{
-			"alert_type":         "CPU_HIGH",
-			"severity":           "CRITICAL",
-			"system_name":        "生产环境监控系统",
-			"environment":        "production",
-			"server_name":        "web-server-01",
-			"server_ip":          "192.168.1.100",
-			"service_name":       "nginx",
-			"alert_id":           "ALT-2024-001",
-			"monitoring_system":  "Prometheus",
+			"alert_type":        "CPU_HIGH",
+			"severity":          "CRITICAL",
+			"system_name":       "生产环境监控系统",
+			"environment":       "production",
+			"server_name":       "web-server-01",
+			"server_ip":         "192.168.1.100",
+			"service_name":      "nginx",
+			"alert_id":          "ALT-2024-001",
+			"monitoring_system": "Prometheus",
 
 			// Performance metrics
-			"cpu_usage":     "95",
-			"memory_usage":  "78",
-			"disk_usage":    "45",
+			"cpu_usage":      "95",
+			"memory_usage":   "78",
+			"disk_usage":     "45",
 			"network_status": "正常",
 
 			// Impact information
-			"affected_users":    "约500名用户",
-			"affected_services": "Web服务, API服务",
+			"affected_users":     "约500名用户",
+			"affected_services":  "Web服务, API服务",
 			"estimated_downtime": "如不处理可能在30分钟内导致服务中断",
 
 			// Troubleshooting
@@ -487,4 +487,14 @@ func demonstrateSystemAlertEmail(logger *common.Logger, templateDir string) erro
 // Helper function for file path
 func getTemplatePath(templateDir, filename string) string {
 	return filepath.Join(templateDir, filename)
+}
+
+// Suppress unused function warnings for example code
+var _ = func() {
+	_ = runTemplateDemo
+	_ = demonstrateWelcomeEmail
+	_ = demonstrateInvoiceEmail
+	_ = demonstrateNewsletterEmail
+	_ = demonstrateSystemAlertEmail
+	_ = getTemplatePath
 }

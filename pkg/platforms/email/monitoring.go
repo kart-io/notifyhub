@@ -27,6 +27,18 @@ type EmailMetrics struct {
 	RecentActivity []ActivityRecord `json:"recent_activity,omitempty"`
 }
 
+// EmailMetricsSnapshot represents a snapshot of email metrics without mutex (safe for copying)
+type EmailMetricsSnapshot struct {
+	TotalSent       int64                       `json:"total_sent"`
+	TotalFailed     int64                       `json:"total_failed"`
+	LastSentTime    time.Time                   `json:"last_sent_time"`
+	LastFailTime    time.Time                   `json:"last_fail_time"`
+	AverageLatency  float64                     `json:"average_latency_ms"`
+	SuccessRate     float64                     `json:"success_rate"`
+	ProviderMetrics map[string]*ProviderMetrics `json:"provider_metrics"`
+	RecentActivity  []ActivityRecord            `json:"recent_activity,omitempty"`
+}
+
 // ProviderMetrics tracks metrics for a specific email provider
 type ProviderMetrics struct {
 	Provider       string        `json:"provider"`
@@ -205,18 +217,18 @@ func (em *EmailMonitor) maskEmail(email string) string {
 }
 
 // GetMetrics returns current metrics (thread-safe)
-func (em *EmailMonitor) GetMetrics() EmailMetrics {
+func (em *EmailMonitor) GetMetrics() EmailMetricsSnapshot {
 	em.metrics.mu.RLock()
 	defer em.metrics.mu.RUnlock()
 
 	// Deep copy to prevent race conditions
-	metrics := EmailMetrics{
-		TotalSent:      em.metrics.TotalSent,
-		TotalFailed:    em.metrics.TotalFailed,
-		LastSentTime:   em.metrics.LastSentTime,
-		LastFailTime:   em.metrics.LastFailTime,
-		AverageLatency: em.metrics.AverageLatency,
-		SuccessRate:    em.metrics.SuccessRate,
+	metrics := EmailMetricsSnapshot{
+		TotalSent:       em.metrics.TotalSent,
+		TotalFailed:     em.metrics.TotalFailed,
+		LastSentTime:    em.metrics.LastSentTime,
+		LastFailTime:    em.metrics.LastFailTime,
+		AverageLatency:  em.metrics.AverageLatency,
+		SuccessRate:     em.metrics.SuccessRate,
 		ProviderMetrics: make(map[string]*ProviderMetrics),
 		RecentActivity:  make([]ActivityRecord, len(em.metrics.RecentActivity)),
 	}
@@ -244,10 +256,10 @@ func (em *EmailMonitor) GetHealthStatus() HealthStatus {
 	metrics := em.GetMetrics()
 
 	status := HealthStatus{
-		Status:     "healthy",
-		Timestamp:  time.Now(),
-		Metrics:    metrics,
-		Issues:     []HealthIssue{},
+		Status:    "healthy",
+		Timestamp: time.Now(),
+		Metrics:   metrics,
+		Issues:    []HealthIssue{},
 	}
 
 	// Check for health issues
@@ -308,10 +320,10 @@ func (em *EmailMonitor) GetHealthStatus() HealthStatus {
 
 // HealthStatus represents the health status of email platform
 type HealthStatus struct {
-	Status    string        `json:"status"` // healthy, degraded, unhealthy
-	Timestamp time.Time     `json:"timestamp"`
-	Metrics   EmailMetrics  `json:"metrics"`
-	Issues    []HealthIssue `json:"issues,omitempty"`
+	Status    string               `json:"status"` // healthy, degraded, unhealthy
+	Timestamp time.Time            `json:"timestamp"`
+	Metrics   EmailMetricsSnapshot `json:"metrics"`
+	Issues    []HealthIssue        `json:"issues,omitempty"`
 }
 
 // HealthIssue represents a health issue

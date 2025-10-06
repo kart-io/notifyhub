@@ -18,6 +18,9 @@ type ExampleConfig struct {
 	// Webhook settings
 	Webhook WebhookSettings `json:"webhook"`
 
+	// Slack settings
+	Slack SlackSettings `json:"slack"`
+
 	// Test settings
 	Test TestSettings `json:"test"`
 }
@@ -51,6 +54,16 @@ type WebhookSettings struct {
 	Token    string            `json:"token"`
 }
 
+// SlackSettings for slack examples
+type SlackSettings struct {
+	WebhookURL string `json:"webhook_url"`
+	Token      string `json:"token"`
+	Channel    string `json:"channel"`
+	Username   string `json:"username"`
+	IconEmoji  string `json:"icon_emoji"`
+	IconURL    string `json:"icon_url"`
+}
+
 // TestSettings for testing
 type TestSettings struct {
 	DryRun  bool   `json:"dry_run"`
@@ -75,6 +88,11 @@ func DefaultExampleConfig() *ExampleConfig {
 			Headers: map[string]string{
 				"Content-Type": "application/json",
 			},
+		},
+		Slack: SlackSettings{
+			Channel:   "#general",
+			Username:  "NotifyHub",
+			IconEmoji: ":bell:",
 		},
 		Test: TestSettings{
 			DryRun:  false,
@@ -141,6 +159,32 @@ func (c *ExampleConfig) CreateWebhookConfig() *config.Config {
 			Method:  c.Webhook.Method,
 			Headers: c.Webhook.Headers,
 			Timeout: 15 * time.Second,
+		},
+		Async: config.AsyncConfig{
+			Enabled: false,
+			Workers: 2,
+		},
+		Logger: config.LoggerConfig{
+			Level:  "info",
+			Format: "text",
+		},
+	}
+}
+
+// CreateSlackConfig creates NotifyHub slack configuration
+func (c *ExampleConfig) CreateSlackConfig() *config.Config {
+	return &config.Config{
+		Timeout:    30 * time.Second,
+		MaxRetries: 3,
+		Slack: &config.SlackConfig{
+			WebhookURL: c.Slack.WebhookURL,
+			Token:      c.Slack.Token,
+			Channel:    c.Slack.Channel,
+			Username:   c.Slack.Username,
+			IconEmoji:  c.Slack.IconEmoji,
+			IconURL:    c.Slack.IconURL,
+			VerifySSL:  true,
+			Timeout:    15 * time.Second,
 		},
 		Async: config.AsyncConfig{
 			Enabled: false,

@@ -15,9 +15,9 @@ import (
 const (
 	SMTP_HOST     = "smtp.feishu.cn"
 	SMTP_PORT     = 465
-	SMTP_USERNAME = "costa@hellotalk.cn"
+	SMTP_USERNAME = ""
 	SMTP_PASSWORD = ""
-	SMTP_FROM     = "costa@hellotalk.cn"
+	SMTP_FROM     = ""
 )
 
 func main() {
@@ -112,7 +112,7 @@ func demonstrateBasicCustomConfig(logger *common.Logger) error {
 		logger.Error("创建自定义邮件发送器失败: %v", err)
 		return err
 	}
-	defer sender.Close()
+	defer func() { _ = sender.Close() }()
 
 	logger.Success("✅ 自定义邮件发送器创建成功")
 
@@ -211,7 +211,7 @@ func demonstrateStandardNotifyHub(logger *common.Logger) error {
 		logger.Error("创建NotifyHub客户端失败: %v", err)
 		return err
 	}
-	defer client.Close()
+	defer func() { _ = client.Close() }()
 
 	logger.Success("✅ NotifyHub客户端创建成功 (使用自定义SMTP配置)")
 
@@ -307,7 +307,7 @@ func demonstrateTemplateSystem(logger *common.Logger) error {
 		logger.Error("创建模板演示发送器失败: %v", err)
 		return err
 	}
-	defer sender.Close()
+	defer func() { _ = sender.Close() }()
 
 	// Get available templates
 	capabilities := sender.GetCapabilities()
@@ -440,7 +440,7 @@ func demonstrateAdvancedFeatures(logger *common.Logger) error {
 		logger.Error("创建高级邮件发送器失败: %v", err)
 		return err
 	}
-	defer sender.Close()
+	defer func() { _ = sender.Close() }()
 
 	// Display advanced features
 	capabilities := sender.GetCapabilities()
@@ -544,4 +544,11 @@ func formatDuration(d time.Duration) string {
 		return fmt.Sprintf("%.1fs", d.Seconds())
 	}
 	return fmt.Sprintf("%.1fm", d.Minutes())
+}
+
+// Suppress unused function warnings for example code
+var _ = func() {
+	_ = demonstrateAdvancedFeatures
+	_ = demonstrateRateLimiting
+	_ = formatDuration
 }

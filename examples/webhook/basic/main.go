@@ -20,15 +20,15 @@ func main() {
 	config := common.DefaultExampleConfig()
 
 	// 请修改以下配置为您的实际Webhook信息
-	config.Webhook.URL = "https://httpbin.org/post"                          // 测试用的webhook地址
-	config.Webhook.Method = "POST"                                           // HTTP方法
-	config.Webhook.Headers = map[string]string{                             // 自定义请求头
-		"Content-Type":  "application/json",
-		"Authorization": "Bearer your_token_here",  // 如果需要认证
+	config.Webhook.URL = "https://httpbin.org/post" // 测试用的webhook地址
+	config.Webhook.Method = "POST"                  // HTTP方法
+	config.Webhook.Headers = map[string]string{     // 自定义请求头
+		"Content-Type":    "application/json",
+		"Authorization":   "Bearer your_token_here", // 如果需要认证
 		"X-Custom-Header": "NotifyHub-Example",
 	}
-	config.Webhook.AuthType = "bearer"  // 认证类型: bearer, basic, none
-	config.Webhook.Token = "your_token_here"  // Bearer token
+	config.Webhook.AuthType = "bearer"       // 认证类型: bearer, basic, none
+	config.Webhook.Token = "your_token_here" // Bearer token
 
 	// Check configuration
 	if !common.CheckConfigurationPrompt("webhook") {
@@ -50,7 +50,7 @@ func main() {
 		logger.Error("创建NotifyHub客户端失败: %v", err)
 		return
 	}
-	defer client.Close()
+	defer func() { _ = client.Close() }()
 
 	logger.Success("NotifyHub客户端创建成功")
 
@@ -112,7 +112,7 @@ func sendTextMessage(client notifyhub.Client, config *common.ExampleConfig, logg
 	msg.PlatformData = map[string]interface{}{
 		"webhook": map[string]interface{}{
 			"content_type": "text/plain",
-			"payload": msg.Body,
+			"payload":      msg.Body,
 		},
 	}
 
@@ -153,9 +153,9 @@ func sendStructuredData(client notifyhub.Client, config *common.ExampleConfig, l
 				"object_type": "webhook",
 				"object_id":   "webhook_001",
 				"metadata": map[string]interface{}{
-					"ip_address":  "192.168.1.100",
-					"user_agent":  "NotifyHub/1.0",
-					"session_id":  "sess_abc123",
+					"ip_address": "192.168.1.100",
+					"user_agent": "NotifyHub/1.0",
+					"session_id": "sess_abc123",
 				},
 			},
 		},
@@ -190,10 +190,10 @@ func sendUrgentNotification(client notifyhub.Client, config *common.ExampleConfi
 	// Add urgent notification data
 	msg.PlatformData = map[string]interface{}{
 		"webhook": map[string]interface{}{
-			"alert_level":    "urgent",
-			"severity":       "high",
-			"requires_ack":   true,
-			"escalation":     true,
+			"alert_level":           "urgent",
+			"severity":              "high",
+			"requires_ack":          true,
+			"escalation":            true,
 			"notification_channels": []string{"email", "sms", "phone"},
 		},
 	}

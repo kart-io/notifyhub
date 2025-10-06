@@ -317,15 +317,13 @@ func (w *WebhookPlatform) addAuthHeaders(req *http.Request) {
 
 // NewPlatform is the factory function for creating Webhook platforms
 // This function will be called by the platform registry
-func NewPlatform(cfg interface{}) (platform.Platform, error) {
+func NewPlatform(cfg interface{}, log logger.Logger) (platform.Platform, error) {
 	webhookConfig, ok := cfg.(*config.WebhookConfig)
 	if !ok {
 		return nil, fmt.Errorf("invalid webhook configuration type")
 	}
 
-	// TODO: Logger should be injected properly
-	logger := logger.New()
-	return NewWebhookPlatform(webhookConfig, logger)
+	return NewWebhookPlatform(webhookConfig, log)
 }
 
 // NewConfigFromMap creates WebhookConfig from a configuration map for backward compatibility

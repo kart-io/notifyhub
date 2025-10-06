@@ -227,7 +227,8 @@ func (d *Dispatcher) SendBatch(ctx context.Context, messages []*message.Message)
 
 	// Send each message
 	for _, msg := range messages {
-		receipt, err := d.Send(ctx, msg)
+		// Use targets from the message itself
+		receipt, err := d.Send(ctx, msg, msg.Targets...)
 		if err != nil {
 			errors = append(errors, fmt.Errorf("message %s: %w", msg.ID, err))
 			continue

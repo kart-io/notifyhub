@@ -66,7 +66,7 @@ func (l *Logger) Warn(msg string, args ...any) {
 // WaitForEnter waits for user to press enter
 func WaitForEnter(prompt string) {
 	fmt.Print(prompt)
-	bufio.NewReader(os.Stdin).ReadBytes('\n')
+	_, _ = bufio.NewReader(os.Stdin).ReadBytes('\n')
 }
 
 // ConfirmAction asks user for confirmation
@@ -106,10 +106,17 @@ func ValidateConfig(config *ExampleConfig, platform string) error {
 		}
 	case "webhook":
 		if config.Webhook.URL == "" {
-			return fmt.Errorf("Webhook URL未设置")
+			return fmt.Errorf("webhook URL未设置")
 		}
 		if !strings.HasPrefix(config.Webhook.URL, "http") {
-			return fmt.Errorf("Webhook URL格式不正确")
+			return fmt.Errorf("webhook URL格式不正确")
+		}
+	case "slack":
+		if config.Slack.WebhookURL == "" && config.Slack.Token == "" {
+			return fmt.Errorf("slack Webhook URL或Token未设置")
+		}
+		if config.Slack.WebhookURL != "" && !strings.HasPrefix(config.Slack.WebhookURL, "https://hooks.slack.com/") {
+			return fmt.Errorf("slack Webhook URL格式不正确")
 		}
 	}
 	return nil
@@ -159,7 +166,7 @@ func CreateTestMessage(platform, messageType string) *message.Message {
         <p>此消息由 NotifyHub 发送</p>
     </div>
 </body>
-</html>`, platform, platform, time.Now().Format("2006-01-02 15:04:05"))
+</html>`, platform, time.Now().Format("2006-01-02 15:04:05"))
 		msg.Format = message.FormatHTML
 		msg.Priority = message.PriorityNormal
 
@@ -238,6 +245,14 @@ func CreateWebhookTarget(url string) target.Target {
 	return target.New(target.TargetTypeWebhook, url, target.PlatformWebhook)
 }
 
+// CreateSlackTarget creates a slack target
+func CreateSlackTarget(channel string) target.Target {
+	if channel == "" {
+		channel = "#general"
+	}
+	return target.New("slack", channel, "slack")
+}
+
 // PrintSeparator prints a visual separator
 func PrintSeparator(title string) {
 	fmt.Println()
@@ -274,6 +289,10 @@ func CheckConfigurationPrompt(platform string) bool {
 		fmt.Println("   - 目标Webhook URL")
 		fmt.Println("   - 认证信息(如需要)")
 		fmt.Println("   - 请求头设置(如需要)")
+	case "slack":
+		fmt.Println("   - Slack Webhook URL 或 Bot Token")
+		fmt.Println("   - 目标频道设置")
+		fmt.Println("   - 机器人用户名和图标(可选)")
 	}
 
 	fmt.Println()

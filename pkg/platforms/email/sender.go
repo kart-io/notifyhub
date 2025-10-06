@@ -171,7 +171,7 @@ func (s *SMTPSender) sendWithContext(ctx context.Context, from string, to []stri
 		}
 
 		if _, err := wc.Write(message); err != nil {
-			wc.Close()
+			_ = wc.Close() // Best effort close, original error is more important
 			resultChan <- fmt.Errorf("failed to write message data: %w", err)
 			return
 		}
@@ -213,7 +213,7 @@ func (s *SMTPSender) connectSMTP() (*smtp.Client, error) {
 
 		client, err = smtp.NewClient(conn, s.config.SMTPHost)
 		if err != nil {
-			conn.Close()
+			_ = conn.Close() // Best effort close, original error is more important
 			return nil, fmt.Errorf("SMTP client creation failed: %w", err)
 		}
 	} else {
@@ -232,7 +232,7 @@ func (s *SMTPSender) connectSMTP() (*smtp.Client, error) {
 	}
 
 	if err := client.Hello(hostname); err != nil {
-		client.Close()
+		_ = client.Close() // Best effort close, original error is more important
 		return nil, fmt.Errorf("EHLO/HELO failed: %w", err)
 	}
 
@@ -244,7 +244,7 @@ func (s *SMTPSender) connectSMTP() (*smtp.Client, error) {
 			s.logger.Debug("启用STARTTLS")
 			tlsConfig := s.authHandler.GetTLSConfig()
 			if err := client.StartTLS(tlsConfig); err != nil {
-				client.Close()
+				_ = client.Close() // Best effort close, original error is more important
 				return nil, fmt.Errorf("STARTTLS failed: %w", err)
 			}
 			s.logger.Debug("✅ STARTTLS成功")
@@ -259,7 +259,7 @@ func (s *SMTPSender) connectSMTP() (*smtp.Client, error) {
 		auth := s.authHandler.GetAuth()
 		if auth != nil {
 			if err := client.Auth(auth); err != nil {
-				client.Close()
+				_ = client.Close() // Best effort close, original error is more important
 				return nil, fmt.Errorf("SMTP authentication failed: %w", err)
 			}
 			s.logger.Debug("✅ SMTP认证成功")
@@ -283,7 +283,11 @@ func (s *SMTPSender) TestConnection(ctx context.Context) error {
 			resultChan <- err
 			return
 		}
-		defer client.Close()
+		defer func() {
+			if closeErr := client.Close(); closeErr != nil {
+				s.logger.Warn("Failed to close SMTP client", "error", closeErr)
+			}
+		}()
 
 		// Test by sending NOOP command
 		if err := client.Noop(); err != nil {
@@ -321,7 +325,11 @@ func (s *SMTPSender) GetServerCapabilities(ctx context.Context) (map[string]stri
 			errorChan <- err
 			return
 		}
-		defer client.Close()
+		defer func() {
+			if closeErr := client.Close(); closeErr != nil {
+				s.logger.Warn("Failed to close SMTP client", "error", closeErr)
+			}
+		}()
 
 		capabilities := make(map[string]string)
 

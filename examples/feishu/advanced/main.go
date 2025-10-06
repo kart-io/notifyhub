@@ -23,9 +23,9 @@ func main() {
 	config := common.DefaultExampleConfig()
 
 	// 请修改以下配置为您的实际飞书信息
-	config.Feishu.WebhookURL = "https://open.feishu.cn/open-apis/bot/v2/hook/your-webhook-url"
-	config.Feishu.Secret = "your_webhook_secret"      // 可选，飞书机器人签名校验
-	config.Feishu.Keywords = []string{"测试", "通知"} // 可选，关键词设置
+	config.Feishu.WebhookURL = "https://open.feishu.cn/open-apis/bot/v2/hook/b6bd1f02-01a7-4adc-9cd0-f043414dd5f1"
+	config.Feishu.Secret = ""                               // 可选，飞书机器人签名校验
+	config.Feishu.Keywords = []string{"notification", "通知"} // 可选，关键词设置
 
 	// Check configuration
 	if !common.CheckConfigurationPrompt("feishu") {
@@ -50,7 +50,7 @@ func main() {
 		logger.Error("创建NotifyHub客户端失败: %v", err)
 		return
 	}
-	defer client.Close()
+	defer func() { _ = client.Close() }()
 
 	logger.Success("NotifyHub客户端创建成功 (异步模式)")
 
@@ -172,10 +172,12 @@ func sendAsyncMessage(client notifyhub.Client, config *common.ExampleConfig, log
 
 	msg := common.CreateTestMessage("Feishu", "basic")
 	msg.Title = "⚡ 异步消息发送测试"
-	msg.Body = "这是一条通过异步方式发送的飞书消息，不会阻塞主程序的执行。"
+	msg.Body = "这是一条异步方式发送的飞书消息。\n\n异步功能已经实现，消息将在后台处理。"
 	msg.Targets = []target.Target{
 		common.CreateFeishuTarget(),
 	}
+
+	logger.Info("🚀 使用异步模式发送消息")
 
 	ctx := context.Background()
 	handle, err := client.SendAsync(ctx, msg)
@@ -183,15 +185,13 @@ func sendAsyncMessage(client notifyhub.Client, config *common.ExampleConfig, log
 		return err
 	}
 
-	logger.Info("异步消息已加入队列，句柄ID: %s", handle.ID())
+	logger.Info("异步消息已提交，消息ID: %s", handle.ID())
 
-	// Wait for completion with timeout
-	waitCtx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
-	defer cancel()
-
-	receipt, err := handle.Wait(waitCtx)
+	// Wait for the result
+	receipt, err := handle.Wait(ctx)
 	if err != nil {
-		return fmt.Errorf("异步消息发送失败: %w", err)
+		logger.Error("异步消息发送失败: %v", err)
+		return err
 	}
 
 	logger.Success("异步消息发送完成!")
@@ -205,12 +205,12 @@ func sendTemplatedMessage(client notifyhub.Client, config *common.ExampleConfig,
 
 	// Template variables
 	templateVars := map[string]interface{}{
-		"user_name":     "张三",
-		"project_name":  "NotifyHub",
-		"deploy_time":   time.Now().Format("2006-01-02 15:04:05"),
-		"version":       "v1.2.0",
-		"environment":   "生产环境",
-		"success_rate":  "99.9%",
+		"user_name":    "张三",
+		"project_name": "NotifyHub",
+		"deploy_time":  time.Now().Format("2006-01-02 15:04:05"),
+		"version":      "v1.2.0",
+		"environment":  "生产环境",
+		"success_rate": "99.9%",
 	}
 
 	msg := message.New()
@@ -230,6 +230,7 @@ func sendTemplatedMessage(client notifyhub.Client, config *common.ExampleConfig,
 	}
 
 	logger.Success("模板化消息发送成功!")
+	logger.Debug("发送回执: %+v", receipt)
 	return nil
 }
 
@@ -257,12 +258,12 @@ func sendMessageWithMetadata(client notifyhub.Client, config *common.ExampleConf
 		"category":       "测试",
 		"message_type":   "notification",
 		"priority_score": 85,
-		"tags":          []string{"demo", "metadata", "advanced"},
+		"tags":           []string{"demo", "metadata", "advanced"},
 		"business_data": map[string]interface{}{
-			"order_id":     "ORD-2023-001",
-			"customer_id":  "CUST-001",
-			"amount":       1299.99,
-			"currency":     "CNY",
+			"order_id":    "ORD-2023-001",
+			"customer_id": "CUST-001",
+			"amount":      1299.99,
+			"currency":    "CNY",
 		},
 	}
 
@@ -277,6 +278,7 @@ func sendMessageWithMetadata(client notifyhub.Client, config *common.ExampleConf
 	}
 
 	logger.Success("带元数据的消息发送成功!")
+	logger.Debug("发送回执: %+v", receipt)
 	logger.Debug("元数据: %+v", msg.Metadata)
 	return nil
 }
@@ -296,10 +298,10 @@ func sendMentionMessage(client notifyhub.Client, config *common.ExampleConfig, l
 		"feishu": map[string]interface{}{
 			"mentions": []map[string]interface{}{
 				{
-					"key":       "all",
-					"id":        "all",
-					"id_type":   "user_id",
-					"name":      "所有人",
+					"key":        "all",
+					"id":         "all",
+					"id_type":    "user_id",
+					"name":       "所有人",
 					"tenant_key": "",
 				},
 			},
@@ -317,6 +319,7 @@ func sendMentionMessage(client notifyhub.Client, config *common.ExampleConfig, l
 	}
 
 	logger.Success("@用户消息发送成功!")
+	logger.Debug("发送回执: %+v", receipt)
 	return nil
 }
 

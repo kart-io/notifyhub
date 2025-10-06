@@ -127,12 +127,12 @@ func (rl *RateLimiter) Stats() RateLimiterStats {
 	timeToRefill := time.Until(nextRefill)
 
 	return RateLimiterStats{
-		CurrentTokens:  rl.tokens,
-		Capacity:       rl.capacity,
-		RefillRate:     rl.refillRate,
-		RefillPeriod:   rl.refillPeriod,
-		TimeToRefill:   timeToRefill,
-		LastRefill:     rl.lastRefill,
+		CurrentTokens: rl.tokens,
+		Capacity:      rl.capacity,
+		RefillRate:    rl.refillRate,
+		RefillPeriod:  rl.refillPeriod,
+		TimeToRefill:  timeToRefill,
+		LastRefill:    rl.lastRefill,
 	}
 }
 

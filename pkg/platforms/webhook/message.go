@@ -243,7 +243,8 @@ func (b *MessageBuilder) buildFromTemplate(msg *message.Message, targets []targe
 	// Try to parse as JSON, otherwise return as string
 	var result interface{}
 	if err := json.Unmarshal([]byte(template), &result); err != nil {
-		return template, nil
+		// If JSON unmarshal fails, return the template string as-is
+		return template, err
 	}
 
 	return result, nil

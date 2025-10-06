@@ -201,7 +201,7 @@ func detectAndValidateProvider(logger *common.Logger, config *common.ExampleConf
 		logger.Info("请检查配置是否正确")
 		return
 	}
-	defer client.Close()
+	defer func() { _ = client.Close() }()
 
 	logger.Success("NotifyHub客户端创建成功！")
 	logger.Info("✅ 配置验证通过，可以尝试发送邮件")

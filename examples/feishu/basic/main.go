@@ -20,9 +20,9 @@ func main() {
 	config := common.DefaultExampleConfig()
 
 	// 请修改以下配置为您的实际飞书信息
-	config.Feishu.WebhookURL = "https://open.feishu.cn/open-apis/bot/v2/hook/your-webhook-url"
-	config.Feishu.Secret = "your_webhook_secret"      // 可选，飞书机器人签名校验
-	config.Feishu.Keywords = []string{"测试", "通知"} // 可选，关键词设置
+	config.Feishu.WebhookURL = "https://open.feishu.cn/open-apis/bot/v2/hook/b6bd1f02-01a7-4adc-9cd0-f043414dd5f1"
+	config.Feishu.Secret = ""                               // 可选，飞书机器人签名校验
+	config.Feishu.Keywords = []string{"notification", "通知"} // 可选，关键词设置
 
 	// Check configuration
 	if !common.CheckConfigurationPrompt("feishu") {
@@ -44,7 +44,7 @@ func main() {
 		logger.Error("创建NotifyHub客户端失败: %v", err)
 		return
 	}
-	defer client.Close()
+	defer func() { _ = client.Close() }()
 
 	logger.Success("NotifyHub客户端创建成功")
 

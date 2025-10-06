@@ -333,10 +333,10 @@ func SendGridConfig(apiKey string) *Config {
 func NetEase163Config(username, password string) *Config {
 	config := NewConfig()
 	config.SMTPHost = "smtp.163.com"
-	config.SMTPPort = 25  // 163 supports both 25 and 587, 25 is more common for 163
+	config.SMTPPort = 25 // 163 supports both 25 and 587, 25 is more common for 163
 	config.Username = username
 	config.Password = password
-	config.UseTLS = false      // 163 typically uses STARTTLS on port 25
+	config.UseTLS = false // 163 typically uses STARTTLS on port 25
 	config.UseStartTLS = true
 	config.AuthMethod = "plain"
 	return config

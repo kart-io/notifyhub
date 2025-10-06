@@ -13,6 +13,7 @@ import (
 type FeishuConfig = platforms.FeishuConfig
 type EmailConfig = platforms.EmailConfig
 type WebhookConfig = platforms.WebhookConfig
+type SlackConfig = platforms.SlackConfig
 
 // Config represents the unified configuration structure
 type Config struct {
@@ -24,6 +25,7 @@ type Config struct {
 	Feishu  *FeishuConfig  `json:"feishu,omitempty"`
 	Email   *EmailConfig   `json:"email,omitempty"`
 	Webhook *WebhookConfig `json:"webhook,omitempty"`
+	Slack   *SlackConfig   `json:"slack,omitempty"`
 
 	// Async configuration
 	Async AsyncConfig `json:"async"`
@@ -37,8 +39,13 @@ type Config struct {
 
 // AsyncConfig configures asynchronous processing
 type AsyncConfig struct {
-	Enabled bool `json:"enabled"`
-	Workers int  `json:"workers"`
+	Enabled    bool          `json:"enabled"`
+	Workers    int           `json:"workers"`
+	BufferSize int           `json:"buffer_size"` // Queue buffer size
+	Timeout    time.Duration `json:"timeout"`     // Queue operation timeout
+	MinWorkers int           `json:"min_workers"` // Minimum worker count
+	MaxWorkers int           `json:"max_workers"` // Maximum worker count
+	UsePool    bool          `json:"use_pool"`    // Enable goroutine pool mode
 }
 
 // LoggerConfig configures logging behavior
@@ -94,6 +101,35 @@ func (c *Config) GetWorkers() int {
 	return c.Async.Workers
 }
 
+// GetAsyncDefaults applies default values to async configuration
+func (c *Config) GetAsyncDefaults() AsyncConfig {
+	config := c.Async
+
+	// Apply defaults
+	if config.Workers <= 0 {
+		config.Workers = 4
+	}
+	if config.BufferSize <= 0 {
+		config.BufferSize = 1000
+	}
+	if config.Timeout <= 0 {
+		config.Timeout = 30 * time.Second
+	}
+	if config.MinWorkers <= 0 {
+		config.MinWorkers = config.Workers
+	}
+	if config.MaxWorkers <= 0 {
+		config.MaxWorkers = config.Workers * 2
+	}
+
+	return config
+}
+
+// IsPoolModeEnabled returns true if goroutine pool mode is enabled
+func (c *Config) IsPoolModeEnabled() bool {
+	return c.Async.UsePool && c.Async.Enabled
+}
+
 // HasFeishu returns true if Feishu is configured
 func (c *Config) HasFeishu() bool {
 	return c.Feishu != nil
@@ -107,6 +143,11 @@ func (c *Config) HasEmail() bool {
 // HasWebhook returns true if Webhook is configured
 func (c *Config) HasWebhook() bool {
 	return c.Webhook != nil
+}
+
+// HasSlack returns true if Slack is configured
+func (c *Config) HasSlack() bool {
+	return c.Slack != nil
 }
 
 // Validate validates the configuration
@@ -150,6 +191,12 @@ func (c *Config) Validate() error {
 	if c.Webhook != nil {
 		if err := c.Webhook.Validate(); err != nil {
 			return fmt.Errorf("webhook configuration validation failed: %w", err)
+		}
+	}
+
+	if c.Slack != nil {
+		if err := c.Slack.Validate(); err != nil {
+			return fmt.Errorf("slack configuration validation failed: %w", err)
 		}
 	}
 

@@ -2,7 +2,6 @@
 package main
 
 import (
-	"context"
 	"fmt"
 	"time"
 
@@ -21,34 +20,34 @@ func configureSenderAndRecipients() error {
 		DisplayName: "我的邮件服务",
 
 		// 🏷️ 发件人设置
-		From:     "sender@yourcompany.com",     // 发件人邮箱地址 (必填)
-		FromName: "Your Company Name",          // 发件人显示名称 (可选)
-		Username: "sender@yourcompany.com",     // SMTP认证用户名 (通常与From相同)
-		Password: "your-app-password",          // 邮箱密码或应用专用密码 (必填)
+		From:     "sender@yourcompany.com", // 发件人邮箱地址 (必填)
+		FromName: "Your Company Name",      // 发件人显示名称 (可选)
+		Username: "sender@yourcompany.com", // SMTP认证用户名 (通常与From相同)
+		Password: "your-app-password",      // 邮箱密码或应用专用密码 (必填)
 
 		// 🌐 SMTP服务器设置
-		Host: "smtp.yourcompany.com",           // SMTP服务器地址 (必填)
-		Port: 587,                              // SMTP端口 (必填)
+		Host: "smtp.yourcompany.com", // SMTP服务器地址 (必填)
+		Port: 587,                    // SMTP端口 (必填)
 
 		// 🔒 安全设置
-		UseTLS:      false,                     // 是否使用TLS
-		UseStartTLS: true,                      // 是否使用STARTTLS (推荐)
-		AuthMethod:  "plain",                   // 认证方式
+		UseTLS:      false,   // 是否使用TLS
+		UseStartTLS: true,    // 是否使用STARTTLS (推荐)
+		AuthMethod:  "plain", // 认证方式
 
 		// 📧 回复和退信设置
-		ReplyToAddress: "noreply@yourcompany.com",  // 回复地址 (可选)
-		BounceAddress:  "bounce@yourcompany.com",   // 退信地址 (可选)
+		ReplyToAddress: "noreply@yourcompany.com", // 回复地址 (可选)
+		BounceAddress:  "bounce@yourcompany.com",  // 退信地址 (可选)
 
 		// 📝 自定义邮件头
 		CustomHeaders: map[string]string{
-			"X-Company":     "Your Company",
-			"X-Department":  "IT Department",
-			"X-Priority":    "normal",
+			"X-Company":    "Your Company",
+			"X-Department": "IT Department",
+			"X-Priority":   "normal",
 		},
 
 		// 🚦 频率限制 (可选)
-		RateLimit:  60,           // 每分钟60封邮件
-		BurstLimit: 20,           // 突发限制20封
+		RateLimit:  60, // 每分钟60封邮件
+		BurstLimit: 20, // 突发限制20封
 
 		// 🛡️ 域名限制 (可选)
 		AllowedDomains: []string{
@@ -80,7 +79,11 @@ func configureSenderAndRecipients() error {
 	if err != nil {
 		return err
 	}
-	defer sender.Close()
+	defer func() {
+		if err := sender.Close(); err != nil {
+			fmt.Printf("关闭发送器失败: %v\n", err)
+		}
+	}()
 
 	// ================================
 	// 2. 收件人配置 (Recipients Configuration)
@@ -111,7 +114,7 @@ func configureSenderAndRecipients() error {
 	// 方式2: 使用模板的收件人设置
 	templateOptions := &email.CustomEmailOptions{
 		RequestID: "template-email-001",
-		Template:  "notification",  // 使用内置模板
+		Template:  "notification", // 使用内置模板
 		Subject:   "重要通知",
 
 		// 📧 多个收件人
@@ -155,8 +158,8 @@ func configureSenderAndRecipients() error {
 		Subject:    "公司月报",
 		Recipients: batchRecipients,
 		Variables: map[string]interface{}{
-			"month":         "12月",
-			"year":          "2024",
+			"month":          "12月",
+			"year":           "2024",
 			"newsletter_url": "https://yourcompany.com/newsletter/202412",
 		},
 		Priority: "low",
@@ -175,9 +178,8 @@ func configureSenderAndRecipients() error {
 
 	logger.Info("\n🚀 发送邮件示例 (仅演示，不实际发送):")
 
-	ctx := context.Background()
-
 	// 注意: 在实际环境中取消注释以下代码来发送邮件
+	// ctx := context.Background()
 
 	// 发送基础邮件
 	// result1, err := sender.SendCustomEmail(ctx, basicOptions)
@@ -228,7 +230,7 @@ func gmailConfig() *email.CustomEmailConfig {
 		Host:        "smtp.gmail.com",
 		Port:        587,
 		Username:    "your-email@gmail.com",
-		Password:    "your-app-password",  // 使用应用专用密码
+		Password:    "your-app-password", // 使用应用专用密码
 		From:        "your-email@gmail.com",
 		FromName:    "Your Name",
 		UseStartTLS: true,
@@ -242,9 +244,9 @@ func email163Config() *email.CustomEmailConfig {
 	return &email.CustomEmailConfig{
 		Name:        "163-service",
 		Host:        "smtp.163.com",
-		Port:        25,  // 或587
+		Port:        25, // 或587
 		Username:    "your-email@163.com",
-		Password:    "your-auth-code",  // 使用授权码
+		Password:    "your-auth-code", // 使用授权码
 		From:        "your-email@163.com",
 		FromName:    "Your Name",
 		UseStartTLS: true,
@@ -260,7 +262,7 @@ func qqMailConfig() *email.CustomEmailConfig {
 		Host:        "smtp.qq.com",
 		Port:        587,
 		Username:    "your-email@qq.com",
-		Password:    "your-auth-code",  // 使用授权码
+		Password:    "your-auth-code", // 使用授权码
 		From:        "your-email@qq.com",
 		FromName:    "Your Name",
 		UseStartTLS: true,
@@ -272,28 +274,37 @@ func qqMailConfig() *email.CustomEmailConfig {
 // 企业邮箱配置示例
 func enterpriseConfig() *email.CustomEmailConfig {
 	return &email.CustomEmailConfig{
-		Name:         "enterprise-service",
-		Host:         "smtp.yourcompany.com",
-		Port:         587,
-		Username:     "your-email@yourcompany.com",
-		Password:     "your-password",
-		From:         "noreply@yourcompany.com",
-		FromName:     "Your Company System",
-		UseStartTLS:  true,
-		RequireSSL:   true,  // 企业级安全要求
+		Name:        "enterprise-service",
+		Host:        "smtp.yourcompany.com",
+		Port:        587,
+		Username:    "your-email@yourcompany.com",
+		Password:    "your-password",
+		From:        "noreply@yourcompany.com",
+		FromName:    "Your Company System",
+		UseStartTLS: true,
+		RequireSSL:  true, // 企业级安全要求
 
 		// 企业级设置
 		CustomHeaders: map[string]string{
-			"X-Company":    "Your Company",
-			"X-System":     "NotifyHub",
+			"X-Company":     "Your Company",
+			"X-System":      "NotifyHub",
 			"X-Environment": "Production",
 		},
 
 		// 严格的域名限制
-		AllowedDomains: []string{"yourcompany.com"},
+		AllowedDomains:     []string{"yourcompany.com"},
 		ValidateRecipients: true,
 
 		CreatedAt: time.Now(),
 		UpdatedAt: time.Now(),
 	}
+}
+
+// Suppress unused function warnings for example code
+var _ = func() {
+	_ = configureSenderAndRecipients
+	_ = gmailConfig
+	_ = email163Config
+	_ = qqMailConfig
+	_ = enterpriseConfig
 }
