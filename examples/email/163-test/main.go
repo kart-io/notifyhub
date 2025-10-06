@@ -63,7 +63,7 @@ func main() {
 		logger.Error("创建NotifyHub客户端失败: %v", err)
 		return
 	}
-	defer client.Close()
+	defer func() { _ = client.Close() }()
 
 	logger.Success("NotifyHub客户端创建成功 (163邮箱)")
 
@@ -103,7 +103,6 @@ func send163TestEmail(client notifyhub.Client, config *common.ExampleConfig, log
 
 	msg.Targets = []target.Target{
 		common.CreateEmailTarget("costa9293@gmail.com"),
-		common.CreateEmailTarget("costa@hellotalk.cn"),
 	}
 
 	logger.Info("📤 开始通过163 SMTP发送邮件...")
