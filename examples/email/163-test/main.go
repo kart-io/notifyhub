@@ -14,7 +14,7 @@ const (
 	SMTP_HOST     = "smtp.163.com"
 	SMTP_PORT     = 25
 	SMTP_USERNAME = "longqiuhong@163.com"
-	SMTP_PASSWORD = "NZWrc358e3xBj3wQ"
+	SMTP_PASSWORD = ""
 	SMTP_FROM     = "longqiuhong@163.com"
 )
 
