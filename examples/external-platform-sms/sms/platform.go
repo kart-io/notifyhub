@@ -7,9 +7,9 @@ import (
 	"fmt"
 	"strings"
 
-	"github.com/kart/notifyhub/pkg/message"
-	"github.com/kart/notifyhub/pkg/platform"
-	"github.com/kart/notifyhub/pkg/target"
+	"github.com/kart-io/notifyhub/pkg/message"
+	"github.com/kart-io/notifyhub/pkg/platform"
+	"github.com/kart-io/notifyhub/pkg/target"
 )
 
 // Provider represents different SMS service providers

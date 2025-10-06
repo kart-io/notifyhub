@@ -6,8 +6,8 @@ import (
 	"fmt"
 	"strings"
 
-	"github.com/kart/notifyhub/pkg/message"
-	"github.com/kart/notifyhub/pkg/utils/logger"
+	"github.com/kart-io/notifyhub/pkg/message"
+	"github.com/kart-io/notifyhub/pkg/utils/logger"
 )
 
 // Message size constants for Feishu platform

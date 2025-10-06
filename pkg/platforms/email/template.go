@@ -10,8 +10,8 @@ import (
 	"strings"
 	textTemplate "text/template"
 
-	"github.com/kart/notifyhub/pkg/message"
-	"github.com/kart/notifyhub/pkg/utils/logger"
+	"github.com/kart-io/notifyhub/pkg/message"
+	"github.com/kart-io/notifyhub/pkg/utils/logger"
 )
 
 // TemplateType represents the type of email template

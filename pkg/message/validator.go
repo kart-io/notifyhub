@@ -6,7 +6,7 @@ import (
 	"strings"
 	"time"
 
-	"github.com/kart/notifyhub/pkg/errors"
+	"github.com/kart-io/notifyhub/pkg/errors"
 )
 
 // Validator provides message validation functionality

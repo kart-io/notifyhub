@@ -6,7 +6,7 @@ import (
 	"strings"
 	"time"
 
-	"github.com/kart/notifyhub/pkg/utils/logger"
+	"github.com/kart-io/notifyhub/pkg/utils/logger"
 )
 
 // Config represents the unified configuration for NotifyHub

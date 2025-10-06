@@ -8,9 +8,9 @@ import (
 	"sync"
 	"time"
 
-	"github.com/kart/notifyhub/pkg/message"
-	"github.com/kart/notifyhub/pkg/platform"
-	"github.com/kart/notifyhub/pkg/target"
+	"github.com/kart-io/notifyhub/pkg/message"
+	"github.com/kart-io/notifyhub/pkg/platform"
+	"github.com/kart-io/notifyhub/pkg/target"
 )
 
 // SimpleSender is the minimal interface external platforms need to implement

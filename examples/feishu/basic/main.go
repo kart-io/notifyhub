@@ -4,9 +4,9 @@ package main
 import (
 	"context"
 
-	"github.com/kart/notifyhub/examples/common"
-	"github.com/kart/notifyhub/pkg/notifyhub"
-	"github.com/kart/notifyhub/pkg/target"
+	"github.com/kart-io/notifyhub/examples/common"
+	"github.com/kart-io/notifyhub/pkg/notifyhub"
+	"github.com/kart-io/notifyhub/pkg/target"
 )
 
 func main() {

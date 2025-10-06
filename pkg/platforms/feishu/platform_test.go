@@ -4,9 +4,9 @@ import (
 	"testing"
 	"time"
 
-	"github.com/kart/notifyhub/pkg/config"
-	"github.com/kart/notifyhub/pkg/target"
-	"github.com/kart/notifyhub/pkg/utils/logger"
+	"github.com/kart-io/notifyhub/pkg/config"
+	"github.com/kart-io/notifyhub/pkg/target"
+	"github.com/kart-io/notifyhub/pkg/utils/logger"
 )
 
 // mockLogger implements logger.Logger interface for testing

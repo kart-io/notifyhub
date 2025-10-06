@@ -8,7 +8,7 @@ import (
 	"strings"
 	"time"
 
-	"github.com/kart/notifyhub/pkg/config/platforms"
+	"github.com/kart-io/notifyhub/pkg/config/platforms"
 )
 
 // ValidationResult represents the result of configuration validation

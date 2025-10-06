@@ -9,11 +9,11 @@ import (
 	"strings"
 	"time"
 
-	"github.com/kart/notifyhub/pkg/config"
-	"github.com/kart/notifyhub/pkg/message"
-	"github.com/kart/notifyhub/pkg/platform"
-	"github.com/kart/notifyhub/pkg/target"
-	"github.com/kart/notifyhub/pkg/utils/logger"
+	"github.com/kart-io/notifyhub/pkg/config"
+	"github.com/kart-io/notifyhub/pkg/message"
+	"github.com/kart-io/notifyhub/pkg/platform"
+	"github.com/kart-io/notifyhub/pkg/target"
+	"github.com/kart-io/notifyhub/pkg/utils/logger"
 )
 
 // EmailPlatform implements the Platform interface for email notifications

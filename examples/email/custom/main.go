@@ -6,10 +6,10 @@ import (
 	"fmt"
 	"time"
 
-	"github.com/kart/notifyhub/examples/common"
-	"github.com/kart/notifyhub/pkg/notifyhub"
-	"github.com/kart/notifyhub/pkg/platforms/email"
-	"github.com/kart/notifyhub/pkg/target"
+	"github.com/kart-io/notifyhub/examples/common"
+	"github.com/kart-io/notifyhub/pkg/notifyhub"
+	"github.com/kart-io/notifyhub/pkg/platforms/email"
+	"github.com/kart-io/notifyhub/pkg/target"
 )
 
 const (

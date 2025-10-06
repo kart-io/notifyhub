@@ -5,8 +5,8 @@ import (
 	"fmt"
 	"time"
 
-	"github.com/kart/notifyhub/pkg/config/platforms"
-	"github.com/kart/notifyhub/pkg/utils/logger"
+	"github.com/kart-io/notifyhub/pkg/config/platforms"
+	"github.com/kart-io/notifyhub/pkg/utils/logger"
 )
 
 // Type aliases for platform configurations

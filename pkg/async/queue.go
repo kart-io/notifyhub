@@ -7,8 +7,8 @@ import (
 	"sync"
 	"time"
 
-	"github.com/kart/notifyhub/pkg/message"
-	"github.com/kart/notifyhub/pkg/target"
+	"github.com/kart-io/notifyhub/pkg/message"
+	"github.com/kart-io/notifyhub/pkg/target"
 )
 
 // Queue defines the interface for async message queues

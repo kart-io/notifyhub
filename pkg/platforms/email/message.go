@@ -11,8 +11,8 @@ import (
 	"strings"
 	"time"
 
-	"github.com/kart/notifyhub/pkg/message"
-	"github.com/kart/notifyhub/pkg/target"
+	"github.com/kart-io/notifyhub/pkg/message"
+	"github.com/kart-io/notifyhub/pkg/target"
 )
 
 // Message represents an email message

@@ -11,7 +11,7 @@ import (
 	"strings"
 	"time"
 
-	"github.com/kart/notifyhub/pkg/message"
+	"github.com/kart-io/notifyhub/pkg/message"
 )
 
 // SecurityMode represents different Feishu security configurations

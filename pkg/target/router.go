@@ -8,7 +8,7 @@ import (
 	"sync"
 	"time"
 
-	"github.com/kart/notifyhub/pkg/utils/logger"
+	"github.com/kart-io/notifyhub/pkg/utils/logger"
 )
 
 // Router routes targets to appropriate platforms with load balancing

@@ -5,9 +5,9 @@ import (
 	"testing"
 	"time"
 
-	"github.com/kart/notifyhub/pkg/message"
-	"github.com/kart/notifyhub/pkg/receipt"
-	"github.com/kart/notifyhub/pkg/target"
+	"github.com/kart-io/notifyhub/pkg/message"
+	"github.com/kart-io/notifyhub/pkg/receipt"
+	"github.com/kart-io/notifyhub/pkg/target"
 )
 
 func TestMemoryHandle_Status(t *testing.T) {

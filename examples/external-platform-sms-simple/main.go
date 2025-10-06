@@ -7,10 +7,10 @@ import (
 	"log"
 	"strings"
 
-	"github.com/kart/notifyhub/pkg/external"
-	"github.com/kart/notifyhub/pkg/message"
-	"github.com/kart/notifyhub/pkg/platform"
-	"github.com/kart/notifyhub/pkg/target"
+	"github.com/kart-io/notifyhub/pkg/external"
+	"github.com/kart-io/notifyhub/pkg/message"
+	"github.com/kart-io/notifyhub/pkg/platform"
+	"github.com/kart-io/notifyhub/pkg/target"
 )
 
 // 🎯 核心实现：只需要这一个方法！

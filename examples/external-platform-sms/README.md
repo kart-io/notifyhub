@@ -79,9 +79,9 @@ package main
 
 import (
     "context"
-    "github.com/kart/notifyhub/examples/external-platform-sms/sms"
-    "github.com/kart/notifyhub/pkg/message"
-    "github.com/kart/notifyhub/pkg/target"
+    "github.com/kart-io/notifyhub/examples/external-platform-sms/sms"
+    "github.com/kart-io/notifyhub/pkg/message"
+    "github.com/kart-io/notifyhub/pkg/target"
 )
 
 func main() {

@@ -4,8 +4,8 @@ package message
 import (
 	"time"
 
-	"github.com/kart/notifyhub/pkg/errors"
-	"github.com/kart/notifyhub/pkg/target"
+	"github.com/kart-io/notifyhub/pkg/errors"
+	"github.com/kart-io/notifyhub/pkg/target"
 )
 
 // Message represents a unified message structure

@@ -8,17 +8,17 @@ import (
 	"sync/atomic"
 	"time"
 
-	"github.com/kart/notifyhub/pkg/async"
-	"github.com/kart/notifyhub/pkg/config"
-	"github.com/kart/notifyhub/pkg/message"
-	"github.com/kart/notifyhub/pkg/platform"
-	"github.com/kart/notifyhub/pkg/platforms/email"
-	"github.com/kart/notifyhub/pkg/platforms/feishu"
-	"github.com/kart/notifyhub/pkg/platforms/slack"
-	"github.com/kart/notifyhub/pkg/platforms/webhook"
-	receiptpkg "github.com/kart/notifyhub/pkg/receipt"
-	"github.com/kart/notifyhub/pkg/target"
-	"github.com/kart/notifyhub/pkg/utils/logger"
+	"github.com/kart-io/notifyhub/pkg/async"
+	"github.com/kart-io/notifyhub/pkg/config"
+	"github.com/kart-io/notifyhub/pkg/message"
+	"github.com/kart-io/notifyhub/pkg/platform"
+	"github.com/kart-io/notifyhub/pkg/platforms/email"
+	"github.com/kart-io/notifyhub/pkg/platforms/feishu"
+	"github.com/kart-io/notifyhub/pkg/platforms/slack"
+	"github.com/kart-io/notifyhub/pkg/platforms/webhook"
+	receiptpkg "github.com/kart-io/notifyhub/pkg/receipt"
+	"github.com/kart-io/notifyhub/pkg/target"
+	"github.com/kart-io/notifyhub/pkg/utils/logger"
 )
 
 // clientImpl implements the Client interface

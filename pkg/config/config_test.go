@@ -4,8 +4,8 @@ import (
 	"testing"
 	"time"
 
-	"github.com/kart/notifyhub/pkg/config/platforms"
-	"github.com/kart/notifyhub/pkg/utils/logger"
+	"github.com/kart-io/notifyhub/pkg/config/platforms"
+	"github.com/kart-io/notifyhub/pkg/utils/logger"
 )
 
 func TestConfig_Validate(t *testing.T) {

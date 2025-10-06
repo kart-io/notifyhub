@@ -6,8 +6,8 @@ import (
 	"sync"
 	"time"
 
-	"github.com/kart/notifyhub/pkg/message"
-	"github.com/kart/notifyhub/pkg/receipt"
+	"github.com/kart-io/notifyhub/pkg/message"
+	"github.com/kart-io/notifyhub/pkg/receipt"
 )
 
 // Handle represents an asynchronous operation handle
