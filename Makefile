@@ -20,7 +20,7 @@ EXAMPLES_DIR=./examples/...
 LINT_DIRS=./pkg/... ./examples/...
 ROOT_DIR=.
 
-.PHONY: all build clean test coverage deps fmt lint vet check help \
+.PHONY: all build clean test coverage deps fmt fmt-check lint vet check help \
 	git-prune git-fetch git-clean-branches git-sync git-show-merged git-cleanup
 
 # Default target
@@ -31,6 +31,20 @@ fmt:
 	@echo "Running go fmt..."
 	$(GOFMT) $(LINT_DIRS)
 	@echo "Code formatting complete."
+
+# Check code formatting with gofmt -s (simplify)
+fmt-check:
+	@echo "Checking code formatting with gofmt -s..."
+	@UNFORMATTED=$$(gofmt -s -l $$(find . -name "*.go" -not -path "./vendor/*")); \
+	if [ -n "$$UNFORMATTED" ]; then \
+		echo "❌ The following files are not formatted with 'gofmt -s':"; \
+		echo "$$UNFORMATTED"; \
+		echo ""; \
+		echo "Please run: make fmt"; \
+		exit 1; \
+	else \
+		echo "✅ All Go files are properly formatted"; \
+	fi
 
 # Lint code using golangci-lint (more comprehensive than golint)
 lint:
@@ -124,6 +138,7 @@ help:
 	@echo ""
 	@echo "✨ Code Quality:"
 	@echo "  make fmt           - Format code using go fmt"
+	@echo "  make fmt-check     - Check code formatting with gofmt -s"
 	@echo "  make vet           - Run go vet"
 	@echo "  make lint          - Lint code using golangci-lint"
 	@echo "  make lint-static   - Static analysis using staticcheck"
