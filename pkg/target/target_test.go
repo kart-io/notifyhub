@@ -4,7 +4,7 @@ import (
 	"context"
 	"testing"
 
-	"github.com/kart/notifyhub/pkg/utils/logger"
+	"github.com/kart-io/notifyhub/pkg/utils/logger"
 )
 
 func TestTarget_Validate(t *testing.T) {

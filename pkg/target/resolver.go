@@ -7,8 +7,8 @@ import (
 	"regexp"
 	"strings"
 
-	"github.com/kart/notifyhub/pkg/errors"
-	"github.com/kart/notifyhub/pkg/utils/logger"
+	"github.com/kart-io/notifyhub/pkg/errors"
+	"github.com/kart-io/notifyhub/pkg/utils/logger"
 )
 
 // Resolver resolves targets from various formats and sources

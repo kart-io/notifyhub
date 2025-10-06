@@ -2,7 +2,7 @@
 package target
 
 import (
-	"github.com/kart/notifyhub/pkg/errors"
+	"github.com/kart-io/notifyhub/pkg/errors"
 )
 
 // Target represents a unified target structure

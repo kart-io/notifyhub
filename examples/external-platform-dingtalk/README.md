@@ -78,7 +78,7 @@ platform.Capabilities{
 ### 1. 注册外部平台
 
 ```go
-import "github.com/kart/notifyhub/examples/external-platform-dingtalk/dingtalk"
+import "github.com/kart-io/notifyhub/examples/external-platform-dingtalk/dingtalk"
 
 // 创建平台工厂函数
 factory := platform.Factory(dingtalk.New)

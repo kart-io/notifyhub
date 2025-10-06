@@ -4,7 +4,7 @@ package config
 import (
 	"time"
 
-	"github.com/kart/notifyhub/pkg/utils/logger"
+	"github.com/kart-io/notifyhub/pkg/utils/logger"
 )
 
 // WithFeishu configures Feishu platform

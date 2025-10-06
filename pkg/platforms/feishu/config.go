@@ -7,7 +7,7 @@ import (
 	"strings"
 	"time"
 
-	"github.com/kart/notifyhub/pkg/config"
+	"github.com/kart-io/notifyhub/pkg/config"
 )
 
 // ValidateConfig validates the Feishu configuration

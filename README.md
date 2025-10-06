@@ -141,7 +141,7 @@ NotifyHub 是一个现代化的统一通知系统，提供简洁的 API 和强�
 ### 安装
 
 ```bash
-go get github.com/kart/notifyhub
+go get github.com/kart-io/notifyhub
 ```
 
 ### 基础使用
@@ -153,10 +153,10 @@ import (
     "context"
     "fmt"
 
-    "github.com/kart/notifyhub/pkg/notifyhub"
-    "github.com/kart/notifyhub/pkg/config"
-    "github.com/kart/notifyhub/pkg/message"
-    "github.com/kart/notifyhub/pkg/target"
+    "github.com/kart-io/notifyhub/pkg/notifyhub"
+    "github.com/kart-io/notifyhub/pkg/config"
+    "github.com/kart-io/notifyhub/pkg/message"
+    "github.com/kart-io/notifyhub/pkg/target"
 )
 
 func main() {

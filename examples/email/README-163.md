@@ -34,7 +34,7 @@ config.Email.To = "recipient@example.com"       // 收件人
 #### 3. 使用预定义配置
 
 ```go
-import "github.com/kart/notifyhub/pkg/platforms/email"
+import "github.com/kart-io/notifyhub/pkg/platforms/email"
 
 // 使用163邮箱预定义配置
 emailConfig := email.NetEase163Config("your_email@163.com", "your_auth_code")
@@ -62,9 +62,9 @@ package main
 import (
     "context"
 
-    "github.com/kart/notifyhub/examples/common"
-    "github.com/kart/notifyhub/pkg/notifyhub"
-    "github.com/kart/notifyhub/pkg/target"
+    "github.com/kart-io/notifyhub/examples/common"
+    "github.com/kart-io/notifyhub/pkg/notifyhub"
+    "github.com/kart-io/notifyhub/pkg/target"
 )
 
 func main() {

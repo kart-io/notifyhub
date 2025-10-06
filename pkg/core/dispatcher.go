@@ -7,13 +7,13 @@ import (
 	"sync"
 	"time"
 
-	"github.com/kart/notifyhub/pkg/async"
-	"github.com/kart/notifyhub/pkg/errors"
-	"github.com/kart/notifyhub/pkg/message"
-	"github.com/kart/notifyhub/pkg/receipt"
-	"github.com/kart/notifyhub/pkg/target"
-	"github.com/kart/notifyhub/pkg/utils/logger"
-	"github.com/kart/notifyhub/pkg/utils/metrics"
+	"github.com/kart-io/notifyhub/pkg/async"
+	"github.com/kart-io/notifyhub/pkg/errors"
+	"github.com/kart-io/notifyhub/pkg/message"
+	"github.com/kart-io/notifyhub/pkg/receipt"
+	"github.com/kart-io/notifyhub/pkg/target"
+	"github.com/kart-io/notifyhub/pkg/utils/logger"
+	"github.com/kart-io/notifyhub/pkg/utils/metrics"
 )
 
 // Dispatcher handles message dispatch and coordination

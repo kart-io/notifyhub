@@ -6,7 +6,7 @@ import (
 	"fmt"
 	"sync"
 
-	"github.com/kart/notifyhub/pkg/utils/logger"
+	"github.com/kart-io/notifyhub/pkg/utils/logger"
 )
 
 // registryImpl implements the Registry interface

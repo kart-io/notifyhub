@@ -4,8 +4,8 @@ package platform
 import (
 	"context"
 
-	"github.com/kart/notifyhub/pkg/message"
-	"github.com/kart/notifyhub/pkg/target"
+	"github.com/kart-io/notifyhub/pkg/message"
+	"github.com/kart-io/notifyhub/pkg/target"
 )
 
 // Platform represents the unified platform interface

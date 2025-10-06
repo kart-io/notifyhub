@@ -4,7 +4,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/kart/notifyhub/pkg/target"
+	"github.com/kart-io/notifyhub/pkg/target"
 )
 
 func TestNewBuilder(t *testing.T) {

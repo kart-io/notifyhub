@@ -7,12 +7,12 @@ import (
 	"fmt"
 	"log"
 
-	"github.com/kart/notifyhub/examples/external-platform-dingtalk/dingtalk"
-	"github.com/kart/notifyhub/pkg/config"
-	"github.com/kart/notifyhub/pkg/message"
-	"github.com/kart/notifyhub/pkg/notifyhub"
-	"github.com/kart/notifyhub/pkg/receipt"
-	"github.com/kart/notifyhub/pkg/target"
+	"github.com/kart-io/notifyhub/examples/external-platform-dingtalk/dingtalk"
+	"github.com/kart-io/notifyhub/pkg/config"
+	"github.com/kart-io/notifyhub/pkg/message"
+	"github.com/kart-io/notifyhub/pkg/notifyhub"
+	"github.com/kart-io/notifyhub/pkg/receipt"
+	"github.com/kart-io/notifyhub/pkg/target"
 )
 
 func main() {
@@ -326,7 +326,7 @@ func sendMarkdownMessage(client notifyhub.Client, webhookURL string) error {
 | 响应时间 | < 1s |
 
 ### 🔗 相关链接
-- [NotifyHub](https://github.com/kart/notifyhub)
+- [NotifyHub](https://github.com/kart-io/notifyhub)
 - [DingTalk API](https://developers.dingtalk.com/)
 
 > 这是一条 **Markdown** 格式的测试消息`

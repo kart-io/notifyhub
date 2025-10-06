@@ -4,7 +4,7 @@ package common
 import (
 	"time"
 
-	"github.com/kart/notifyhub/pkg/config"
+	"github.com/kart-io/notifyhub/pkg/config"
 )
 
 // ExampleConfig holds configuration for examples

@@ -4,8 +4,8 @@ package message
 import (
 	"time"
 
-	"github.com/kart/notifyhub/pkg/target"
-	"github.com/kart/notifyhub/pkg/utils/idgen"
+	"github.com/kart-io/notifyhub/pkg/target"
+	"github.com/kart-io/notifyhub/pkg/utils/idgen"
 )
 
 // Builder provides a fluent interface for building messages

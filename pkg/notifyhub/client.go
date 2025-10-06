@@ -5,9 +5,9 @@ package notifyhub
 import (
 	"context"
 
-	"github.com/kart/notifyhub/pkg/async"
-	"github.com/kart/notifyhub/pkg/message"
-	"github.com/kart/notifyhub/pkg/receipt"
+	"github.com/kart-io/notifyhub/pkg/async"
+	"github.com/kart-io/notifyhub/pkg/message"
+	"github.com/kart-io/notifyhub/pkg/receipt"
 )
 
 // Client represents the unified notification client interface
