@@ -21,7 +21,7 @@ func main() {
 
 	// 请修改以下配置为您的实际飞书信息
 	config.Feishu.WebhookURL = "https://open.feishu.cn/open-apis/bot/v2/hook/xxxxx-xxxx-xxxx-xxxxxxxxxxxxxxxxxxxx"
-	config.Feishu.Secret = ""                               // 可选，飞书机器人签名校验
+	config.Feishu.Secret = ""                       // 可选，飞书机器人签名校验
 	config.Feishu.Keywords = []string{"111", "222"} // 可选，关键词设置
 
 	// Check configuration

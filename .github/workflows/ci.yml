@@ -2,9 +2,9 @@ name: CI
 
 on:
   push:
-    branches: [ main, develop ]
+    branches: [main, develop]
   pull_request:
-    branches: [ main ]
+    branches: [main]
 
 jobs:
   test:
@@ -15,54 +15,55 @@ jobs:
         go-version: [1.21, 1.22]
 
     steps:
-    - name: Set up Go
-      uses: actions/setup-go@v4
-      with:
-        go-version: ${{ matrix.go-version }}
+      - name: Set up Go
+        uses: actions/setup-go@v4
+        with:
+          go-version: ${{ matrix.go-version }}
 
-    - name: Check out code
-      uses: actions/checkout@v4
+      - name: Check out code
+        uses: actions/checkout@v4
 
-    - name: Cache Go modules
-      uses: actions/cache@v3
-      with:
-        path: |
-          ~/.cache/go-build
-          ~/go/pkg/mod
-        key: ${{ runner.os }}-go-${{ matrix.go-version }}-${{ hashFiles('**/go.sum') }}
-        restore-keys: |
-          ${{ runner.os }}-go-${{ matrix.go-version }}-
+      - name: Cache Go modules
+        uses: actions/cache@v3
+        with:
+          path: |
+            ~/.cache/go-build
+            ~/go/pkg/mod
+          key: ${{ runner.os }}-go-${{ matrix.go-version }}-${{ hashFiles('**/go.mod') }}
+          restore-keys: |
+            ${{ runner.os }}-go-${{ matrix.go-version }}-
 
-    - name: Download dependencies
-      run: go mod download
+      - name: Download dependencies
+        run: go mod download
 
-    - name: Verify dependencies
-      run: go mod verify
+      - name: Verify dependencies
+        run: go mod verify
 
-    - name: Run go vet
-      run: go vet ./...
+      - name: Run go vet
+        run: go vet ./...
 
-    - name: Run go fmt check
-      run: |
-        if [ "$(gofmt -s -l . | wc -l)" -gt 0 ]; then
-          echo "The following files are not formatted:"
-          gofmt -s -l .
-          exit 1
-        fi
+      - name: Run go fmt check
+        run: |
+          UNFORMATTED=$(gofmt -s -l $(find . -name "*.go" -not -path "./vendor/*"))
+          if [ -n "$UNFORMATTED" ]; then
+            echo "The following files are not formatted:"
+            echo "$UNFORMATTED"
+            exit 1
+          fi
 
-    - name: Run tests
-      run: go test -v -race -coverprofile=coverage.out -covermode=atomic ./...
+      - name: Run tests
+        run: go test -v -race -coverprofile=coverage.out -covermode=atomic ./...
 
-    - name: Upload coverage to Codecov
-      if: matrix.go-version == '1.22'
-      uses: codecov/codecov-action@v3
-      with:
-        file: ./coverage.out
-        flags: unittests
-        name: codecov-umbrella
+      - name: Upload coverage to Codecov
+        if: matrix.go-version == '1.22'
+        uses: codecov/codecov-action@v3
+        with:
+          file: ./coverage.out
+          flags: unittests
+          name: codecov-umbrella
 
-    - name: Run benchmarks
-      run: go test -v -bench=. -benchmem -run=^$ ./...
+      - name: Run benchmarks
+        run: go test -v -bench=. -benchmem -run=^$ ./...
 
   security:
     name: Security Scan
@@ -70,42 +71,42 @@ jobs:
     needs: test
 
     steps:
-    - name: Set up Go
-      uses: actions/setup-go@v4
-      with:
-        go-version: 1.22
+      - name: Set up Go
+        uses: actions/setup-go@v4
+        with:
+          go-version: 1.22
 
-    - name: Check out code
-      uses: actions/checkout@v4
+      - name: Check out code
+        uses: actions/checkout@v4
 
-    - name: Run Gosec Security Scanner
-      uses: securecodewarrior/github-action-gosec@master
-      with:
-        args: '-fmt sarif -out results.sarif ./...'
+      - name: Run Gosec Security Scanner
+        uses: securecodewarrior/github-action-gosec@master
+        with:
+          args: "-fmt sarif -out results.sarif ./..."
 
-    - name: Upload SARIF file
-      uses: github/codeql-action/upload-sarif@v2
-      with:
-        sarif_file: results.sarif
+      - name: Upload SARIF file
+        uses: github/codeql-action/upload-sarif@v2
+        with:
+          sarif_file: results.sarif
 
   lint:
     name: Lint
     runs-on: ubuntu-latest
 
     steps:
-    - name: Set up Go
-      uses: actions/setup-go@v4
-      with:
-        go-version: 1.22
+      - name: Set up Go
+        uses: actions/setup-go@v4
+        with:
+          go-version: 1.22
 
-    - name: Check out code
-      uses: actions/checkout@v4
+      - name: Check out code
+        uses: actions/checkout@v4
 
-    - name: Run golangci-lint
-      uses: golangci/golangci-lint-action@v3
-      with:
-        version: latest
-        args: --timeout=5m
+      - name: Run golangci-lint
+        uses: golangci/golangci-lint-action@v3
+        with:
+          version: latest
+          args: --timeout=5m
 
   build:
     name: Build
@@ -113,13 +114,13 @@ jobs:
     needs: [test, lint]
 
     steps:
-    - name: Set up Go
-      uses: actions/setup-go@v4
-      with:
-        go-version: 1.22
+      - name: Set up Go
+        uses: actions/setup-go@v4
+        with:
+          go-version: 1.22
 
-    - name: Check out code
-      uses: actions/checkout@v4
+      - name: Check out code
+        uses: actions/checkout@v4
 
-    - name: Build
-      run: go build -v ./...
+      - name: Build
+        run: go build -v ./...
