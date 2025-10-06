@@ -84,76 +84,108 @@ func SetDefaults(cfg *config.FeishuConfig) {
 	cfg.Keywords = cleanKeywords
 }
 
+// extractString safely extracts a string from a map
+func extractString(configMap map[string]interface{}, key string) string {
+	if value, ok := configMap[key].(string); ok {
+		return value
+	}
+	return ""
+}
+
+// extractInt safely extracts an int from a map (handles both int and float64)
+func extractInt(configMap map[string]interface{}, key string) int {
+	if value, ok := configMap[key].(int); ok {
+		return value
+	}
+	if valueFloat, ok := configMap[key].(float64); ok {
+		return int(valueFloat)
+	}
+	return 0
+}
+
+// extractBool safely extracts a bool from a map
+func extractBool(configMap map[string]interface{}, key string) bool {
+	if value, ok := configMap[key].(bool); ok {
+		return value
+	}
+	return false
+}
+
+// extractTimeout safely extracts a timeout duration from a map
+func extractTimeout(configMap map[string]interface{}, key string) time.Duration {
+	// Try time.Duration first
+	if timeout, ok := configMap[key].(time.Duration); ok {
+		return timeout
+	}
+
+	// Try string format (e.g., "30s", "5m")
+	if timeoutStr, ok := configMap[key].(string); ok {
+		if parsed, err := time.ParseDuration(timeoutStr); err == nil {
+			return parsed
+		}
+	}
+
+	// Try float64 (seconds)
+	if timeoutFloat, ok := configMap[key].(float64); ok {
+		return time.Duration(timeoutFloat) * time.Second
+	}
+
+	return 0
+}
+
+// extractKeywords safely extracts keywords from various formats
+func extractKeywords(configMap map[string]interface{}, key string, existing []string) []string {
+	keywordsInterface, ok := configMap[key]
+	if !ok {
+		return existing
+	}
+
+	// Try []string directly
+	if keywordSlice, ok := keywordsInterface.([]string); ok {
+		return keywordSlice
+	}
+
+	// Try []interface{} and convert each element
+	if keywordSlice, ok := keywordsInterface.([]interface{}); ok {
+		var keywords []string
+		for _, keyword := range keywordSlice {
+			if keywordStr, ok := keyword.(string); ok {
+				keywords = append(keywords, keywordStr)
+			}
+		}
+		return keywords
+	}
+
+	// Try comma-separated string format
+	if keywordsStr, ok := keywordsInterface.(string); ok {
+		if keywordsStr != "" {
+			var keywords []string
+			for _, keyword := range strings.Split(keywordsStr, ",") {
+				trimmed := strings.TrimSpace(keyword)
+				if trimmed != "" {
+					keywords = append(keywords, trimmed)
+				}
+			}
+			return keywords
+		}
+	}
+
+	return existing
+}
+
 // NewConfigFromMap creates a FeishuConfig from a map (for backward compatibility)
 func NewConfigFromMap(configMap map[string]interface{}) (*config.FeishuConfig, error) {
-	cfg := &config.FeishuConfig{}
-
-	// Extract webhook configuration
-	if webhookURL, ok := configMap["webhook_url"].(string); ok {
-		cfg.WebhookURL = webhookURL
-	}
-	if secret, ok := configMap["secret"].(string); ok {
-		cfg.Secret = secret
-	}
-
-	// Extract keywords
-	if keywords, ok := configMap["keywords"].([]string); ok {
-		cfg.Keywords = keywords
+	cfg := &config.FeishuConfig{
+		WebhookURL: extractString(configMap, "webhook_url"),
+		Secret:     extractString(configMap, "secret"),
+		MaxRetries: extractInt(configMap, "max_retries"),
+		RateLimit:  extractInt(configMap, "rate_limit"),
+		VerifySSL:  extractBool(configMap, "verify_ssl"),
+		Timeout:    extractTimeout(configMap, "timeout"),
 	}
 
-	// Extract timeout
-	if timeout, ok := configMap["timeout"].(time.Duration); ok {
-		cfg.Timeout = timeout
-	} else if timeoutStr, ok := configMap["timeout"].(string); ok {
-		if parsed, err := time.ParseDuration(timeoutStr); err == nil {
-			cfg.Timeout = parsed
-		}
-	} else if timeoutFloat, ok := configMap["timeout"].(float64); ok {
-		cfg.Timeout = time.Duration(timeoutFloat) * time.Second
-	}
-
-	// Extract max retries
-	if maxRetries, ok := configMap["max_retries"].(int); ok {
-		cfg.MaxRetries = maxRetries
-	} else if maxRetriesFloat, ok := configMap["max_retries"].(float64); ok {
-		cfg.MaxRetries = int(maxRetriesFloat)
-	}
-
-	// Extract rate limit
-	if rateLimit, ok := configMap["rate_limit"].(int); ok {
-		cfg.RateLimit = rateLimit
-	} else if rateLimitFloat, ok := configMap["rate_limit"].(float64); ok {
-		cfg.RateLimit = int(rateLimitFloat)
-	}
-
-	// Extract verify SSL
-	if verifySSL, ok := configMap["verify_ssl"].(bool); ok {
-		cfg.VerifySSL = verifySSL
-	}
-
-	// Extract keywords
-	if keywordsInterface, ok := configMap["keywords"]; ok {
-		if keywordSlice, ok := keywordsInterface.([]interface{}); ok {
-			for _, keyword := range keywordSlice {
-				if keywordStr, ok := keyword.(string); ok {
-					cfg.Keywords = append(cfg.Keywords, keywordStr)
-				}
-			}
-		} else if keywordsStr, ok := keywordsInterface.(string); ok {
-			// Support comma-separated string format
-			if keywordsStr != "" {
-				keywords := strings.Split(keywordsStr, ",")
-				for _, keyword := range keywords {
-					trimmed := strings.TrimSpace(keyword)
-					if trimmed != "" {
-						cfg.Keywords = append(cfg.Keywords, trimmed)
-					}
-				}
-			}
-		} else if keywordSlice, ok := keywordsInterface.([]string); ok {
-			cfg.Keywords = keywordSlice
-		}
-	}
+	// Extract keywords with special handling
+	cfg.Keywords = extractKeywords(configMap, "keywords", cfg.Keywords)
 
 	// Set defaults and validate
 	SetDefaults(cfg)

@@ -103,142 +103,155 @@ func NewEmailError(errorType EmailErrorType, message string, originalErr error) 
 	return emailErr
 }
 
+// errorPattern defines an error pattern with its type and suggestions
+type errorPattern struct {
+	patterns    []string
+	errorType   EmailErrorType
+	code        string
+	retryable   bool
+	suggestions []string
+}
+
+// getErrorPatterns returns a list of error patterns to match against
+func getErrorPatterns() []errorPattern {
+	return []errorPattern{
+		{
+			patterns:  []string{"authentication failed", "535", "auth"},
+			errorType: ErrorTypeAuth,
+			code:      "535",
+			retryable: false,
+			suggestions: []string{
+				"检查用户名和密码是否正确",
+				"确认使用授权码而不是登录密码 (163, QQ等)",
+				"确认使用应用专用密码 (Gmail等)",
+				"检查邮箱是否开启了SMTP服务",
+				"验证认证方式是否正确 (PLAIN, LOGIN等)",
+			},
+		},
+		{
+			patterns:  []string{"connection refused", "connect"},
+			errorType: ErrorTypeConnection,
+			retryable: true,
+			suggestions: []string{
+				"检查SMTP服务器地址和端口是否正确",
+				"检查网络连接",
+				"检查防火墙设置",
+				"确认SMTP服务是否正常运行",
+				"尝试使用其他网络环境",
+			},
+		},
+		{
+			patterns:  []string{"timeout", "deadline"},
+			errorType: ErrorTypeTimeout,
+			retryable: true,
+			suggestions: []string{
+				"增加连接超时时间",
+				"检查网络连接质量",
+				"尝试在网络条件更好的环境下重试",
+				"检查服务器是否过载",
+			},
+		},
+		{
+			patterns:  []string{"tls", "ssl", "certificate"},
+			errorType: ErrorTypeTLS,
+			retryable: false,
+			suggestions: []string{
+				"检查TLS/SSL配置 (UseTLS vs UseStartTLS)",
+				"尝试不同的加密端口 (25, 587, 465)",
+				"检查服务器证书是否有效",
+				"尝试跳过证书验证 (仅测试环境)",
+				"确认服务器支持的TLS版本",
+			},
+		},
+		{
+			patterns:  []string{"no such host", "dns"},
+			errorType: ErrorTypeDNS,
+			retryable: true,
+			suggestions: []string{
+				"检查SMTP服务器地址拼写",
+				"检查DNS设置",
+				"尝试使用IP地址而不是域名",
+				"检查网络DNS配置",
+			},
+		},
+		{
+			patterns:  []string{"rate limit", "too many", "429"},
+			errorType: ErrorTypeRateLimit,
+			code:      "429",
+			retryable: true,
+			suggestions: []string{
+				"降低发送频率",
+				"等待一段时间后重试",
+				"检查邮箱服务商的发送限制",
+				"考虑分批发送邮件",
+				"联系邮箱服务商提高发送配额",
+			},
+		},
+		{
+			patterns:  []string{"recipient", "550", "invalid"},
+			errorType: ErrorTypeRecipient,
+			code:      "550",
+			retryable: false,
+			suggestions: []string{
+				"检查收件人邮箱地址格式",
+				"确认收件人邮箱存在",
+				"检查收件人邮箱是否被禁用",
+				"验证收件人邮箱服务商设置",
+			},
+		},
+		{
+			patterns:  []string{"size", "too large", "552"},
+			errorType: ErrorTypeSize,
+			code:      "552",
+			retryable: false,
+			suggestions: []string{
+				"减小邮件大小",
+				"压缩附件",
+				"分多封邮件发送",
+				"检查邮箱服务商的大小限制",
+			},
+		},
+		{
+			patterns:  []string{"421", "service not available"},
+			errorType: ErrorTypeServerUnavailable,
+			code:      "421",
+			retryable: true,
+			suggestions: []string{
+				"稍后重试",
+				"检查服务器状态",
+				"联系邮箱服务商",
+				"尝试使用备用SMTP服务器",
+			},
+		},
+	}
+}
+
+// matchesPattern checks if an error string matches any of the patterns
+func matchesPattern(errStr string, patterns []string) bool {
+	for _, pattern := range patterns {
+		if strings.Contains(errStr, pattern) {
+			return true
+		}
+	}
+	return false
+}
+
 // analyzeError analyzes the original error to provide enhanced context
 func (e *EmailError) analyzeError(err error) {
 	errStr := strings.ToLower(err.Error())
 
-	// Authentication errors
-	if strings.Contains(errStr, "authentication failed") ||
-		strings.Contains(errStr, "535") ||
-		strings.Contains(errStr, "auth") {
-		e.Type = ErrorTypeAuth
-		e.Code = "535"
-		e.Retryable = false
-		e.Suggestions = []string{
-			"检查用户名和密码是否正确",
-			"确认使用授权码而不是登录密码 (163, QQ等)",
-			"确认使用应用专用密码 (Gmail等)",
-			"检查邮箱是否开启了SMTP服务",
-			"验证认证方式是否正确 (PLAIN, LOGIN等)",
+	// Try to match against known error patterns
+	for _, pattern := range getErrorPatterns() {
+		if matchesPattern(errStr, pattern.patterns) {
+			e.Type = pattern.errorType
+			e.Code = pattern.code
+			e.Retryable = pattern.retryable
+			e.Suggestions = pattern.suggestions
+			return
 		}
 	}
 
-	// Connection errors
-	if strings.Contains(errStr, "connection refused") ||
-		strings.Contains(errStr, "connect") {
-		e.Type = ErrorTypeConnection
-		e.Retryable = true
-		e.Suggestions = []string{
-			"检查SMTP服务器地址和端口是否正确",
-			"检查网络连接",
-			"检查防火墙设置",
-			"确认SMTP服务是否正常运行",
-			"尝试使用其他网络环境",
-		}
-	}
-
-	// Timeout errors
-	if strings.Contains(errStr, "timeout") ||
-		strings.Contains(errStr, "deadline") {
-		e.Type = ErrorTypeTimeout
-		e.Retryable = true
-		e.Suggestions = []string{
-			"增加连接超时时间",
-			"检查网络连接质量",
-			"尝试在网络条件更好的环境下重试",
-			"检查服务器是否过载",
-		}
-	}
-
-	// TLS/SSL errors
-	if strings.Contains(errStr, "tls") ||
-		strings.Contains(errStr, "ssl") ||
-		strings.Contains(errStr, "certificate") {
-		e.Type = ErrorTypeTLS
-		e.Retryable = false
-		e.Suggestions = []string{
-			"检查TLS/SSL配置 (UseTLS vs UseStartTLS)",
-			"尝试不同的加密端口 (25, 587, 465)",
-			"检查服务器证书是否有效",
-			"尝试跳过证书验证 (仅测试环境)",
-			"确认服务器支持的TLS版本",
-		}
-	}
-
-	// DNS errors
-	if strings.Contains(errStr, "no such host") ||
-		strings.Contains(errStr, "dns") {
-		e.Type = ErrorTypeDNS
-		e.Retryable = true
-		e.Suggestions = []string{
-			"检查SMTP服务器地址拼写",
-			"检查DNS设置",
-			"尝试使用IP地址而不是域名",
-			"检查网络DNS配置",
-		}
-	}
-
-	// Rate limiting
-	if strings.Contains(errStr, "rate limit") ||
-		strings.Contains(errStr, "too many") ||
-		strings.Contains(errStr, "429") {
-		e.Type = ErrorTypeRateLimit
-		e.Code = "429"
-		e.Retryable = true
-		e.Suggestions = []string{
-			"降低发送频率",
-			"等待一段时间后重试",
-			"检查邮箱服务商的发送限制",
-			"考虑分批发送邮件",
-			"联系邮箱服务商提高发送配额",
-		}
-	}
-
-	// Recipient errors
-	if strings.Contains(errStr, "recipient") ||
-		strings.Contains(errStr, "550") ||
-		strings.Contains(errStr, "invalid") {
-		e.Type = ErrorTypeRecipient
-		e.Code = "550"
-		e.Retryable = false
-		e.Suggestions = []string{
-			"检查收件人邮箱地址格式",
-			"确认收件人邮箱存在",
-			"检查收件人邮箱是否被禁用",
-			"验证收件人邮箱服务商设置",
-		}
-	}
-
-	// Message size errors
-	if strings.Contains(errStr, "size") ||
-		strings.Contains(errStr, "too large") ||
-		strings.Contains(errStr, "552") {
-		e.Type = ErrorTypeSize
-		e.Code = "552"
-		e.Retryable = false
-		e.Suggestions = []string{
-			"减小邮件大小",
-			"压缩附件",
-			"分多封邮件发送",
-			"检查邮箱服务商的大小限制",
-		}
-	}
-
-	// Server unavailable
-	if strings.Contains(errStr, "421") ||
-		strings.Contains(errStr, "service not available") {
-		e.Type = ErrorTypeServerUnavailable
-		e.Code = "421"
-		e.Retryable = true
-		e.Suggestions = []string{
-			"稍后重试",
-			"检查服务器状态",
-			"联系邮箱服务商",
-			"尝试使用备用SMTP服务器",
-		}
-	}
-
-	// Analyze by error type
+	// Check for network timeout errors
 	if netErr, ok := err.(net.Error); ok {
 		if netErr.Timeout() {
 			e.Type = ErrorTypeTimeout

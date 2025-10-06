@@ -260,6 +260,132 @@ func isValidEmail(email string) bool {
 }
 
 // convertToInternalConfig converts NotifyHub EmailConfig to internal Config
+// providerSettings contains provider-specific SMTP settings
+type providerSettings struct {
+	useStartTLS bool
+	useTLS      bool
+	authMethod  string
+	defaultPort int
+}
+
+// getProviderSettings returns provider-specific settings based on hostname
+func getProviderSettings(host string, currentPort int) *providerSettings {
+	host = strings.ToLower(host)
+
+	// Define provider patterns and their settings
+	providers := map[string]providerSettings{
+		"gmail.com": {
+			useStartTLS: true,
+			useTLS:      false,
+			authMethod:  "plain",
+			defaultPort: 587,
+		},
+		"163.com": {
+			useStartTLS: true,
+			useTLS:      false,
+			authMethod:  "plain",
+			defaultPort: 25,
+		},
+		"126.com": {
+			useStartTLS: true,
+			useTLS:      false,
+			authMethod:  "plain",
+			defaultPort: 25,
+		},
+		"yeah.net": {
+			useStartTLS: true,
+			useTLS:      false,
+			authMethod:  "plain",
+			defaultPort: 25,
+		},
+		"qq.com": {
+			useStartTLS: true,
+			useTLS:      false,
+			authMethod:  "plain",
+			defaultPort: 587,
+		},
+		"exmail.qq.com": {
+			useStartTLS: true,
+			useTLS:      false,
+			authMethod:  "plain",
+			defaultPort: 587,
+		},
+		"sina.com": {
+			useStartTLS: true,
+			useTLS:      false,
+			authMethod:  "plain",
+			defaultPort: 25,
+		},
+		"sina.cn": {
+			useStartTLS: true,
+			useTLS:      false,
+			authMethod:  "plain",
+			defaultPort: 25,
+		},
+		"sohu.com": {
+			useStartTLS: true,
+			useTLS:      false,
+			authMethod:  "plain",
+			defaultPort: 25,
+		},
+		"yahoo.com": {
+			useStartTLS: true,
+			useTLS:      false,
+			authMethod:  "plain",
+			defaultPort: 587,
+		},
+		"yahoo.co.jp": {
+			useStartTLS: true,
+			useTLS:      false,
+			authMethod:  "plain",
+			defaultPort: 587,
+		},
+		"zoho.com": {
+			useStartTLS: true,
+			useTLS:      false,
+			authMethod:  "plain",
+			defaultPort: 587,
+		},
+		"mxhichina.com": {
+			useStartTLS: true,
+			useTLS:      false,
+			authMethod:  "plain",
+			defaultPort: 587,
+		},
+		"outlook": {
+			useStartTLS: true,
+			useTLS:      false,
+			authMethod:  "plain",
+			defaultPort: 587,
+		},
+		"hotmail": {
+			useStartTLS: true,
+			useTLS:      false,
+			authMethod:  "plain",
+			defaultPort: 587,
+		},
+	}
+
+	// Check for ProtonMail Bridge (special case)
+	if strings.Contains(host, "127.0.0.1") && currentPort == 1025 {
+		return &providerSettings{
+			useStartTLS: true,
+			useTLS:      false,
+			authMethod:  "plain",
+			defaultPort: 1025,
+		}
+	}
+
+	// Find matching provider
+	for pattern, settings := range providers {
+		if strings.Contains(host, pattern) {
+			return &settings
+		}
+	}
+
+	return nil
+}
+
 func convertToInternalConfig(nhConfig *config.EmailConfig) *Config {
 	internalConfig := NewConfig()
 
@@ -271,101 +397,13 @@ func convertToInternalConfig(nhConfig *config.EmailConfig) *Config {
 	internalConfig.From = nhConfig.From
 	internalConfig.UseTLS = nhConfig.UseTLS
 
-	// Set appropriate TLS settings based on email provider
-	host := strings.ToLower(nhConfig.Host)
-
-	// Gmail settings
-	if strings.Contains(host, "gmail.com") {
-		internalConfig.UseStartTLS = true
-		internalConfig.UseTLS = false // Gmail uses STARTTLS, not direct TLS
-		internalConfig.AuthMethod = "plain"
-	}
-
-	// 163.com and other NetEase email settings
-	if strings.Contains(host, "163.com") || strings.Contains(host, "126.com") || strings.Contains(host, "yeah.net") {
-		internalConfig.UseStartTLS = true
-		internalConfig.UseTLS = false // NetEase uses STARTTLS
-		internalConfig.AuthMethod = "plain"
-		// 163 commonly uses port 25 for STARTTLS
+	// Apply provider-specific settings
+	if settings := getProviderSettings(nhConfig.Host, nhConfig.Port); settings != nil {
+		internalConfig.UseStartTLS = settings.useStartTLS
+		internalConfig.UseTLS = settings.useTLS
+		internalConfig.AuthMethod = settings.authMethod
 		if nhConfig.Port == 0 {
-			internalConfig.SMTPPort = 25
-		}
-	}
-
-	// QQ Mail settings (including Tencent Enterprise Mail)
-	if strings.Contains(host, "qq.com") || strings.Contains(host, "exmail.qq.com") {
-		internalConfig.UseStartTLS = true
-		internalConfig.UseTLS = false
-		internalConfig.AuthMethod = "plain"
-		if nhConfig.Port == 0 {
-			internalConfig.SMTPPort = 587
-		}
-	}
-
-	// Sina Mail settings
-	if strings.Contains(host, "sina.com") || strings.Contains(host, "sina.cn") {
-		internalConfig.UseStartTLS = true
-		internalConfig.UseTLS = false
-		internalConfig.AuthMethod = "plain"
-		if nhConfig.Port == 0 {
-			internalConfig.SMTPPort = 25
-		}
-	}
-
-	// Sohu Mail settings
-	if strings.Contains(host, "sohu.com") {
-		internalConfig.UseStartTLS = true
-		internalConfig.UseTLS = false
-		internalConfig.AuthMethod = "plain"
-		if nhConfig.Port == 0 {
-			internalConfig.SMTPPort = 25
-		}
-	}
-
-	// Yahoo Mail settings (including Yahoo Japan)
-	if strings.Contains(host, "yahoo.com") || strings.Contains(host, "yahoo.co.jp") {
-		internalConfig.UseStartTLS = true
-		internalConfig.UseTLS = false
-		internalConfig.AuthMethod = "plain"
-		if nhConfig.Port == 0 {
-			internalConfig.SMTPPort = 587
-		}
-	}
-
-	// Zoho Mail settings
-	if strings.Contains(host, "zoho.com") {
-		internalConfig.UseStartTLS = true
-		internalConfig.UseTLS = false
-		internalConfig.AuthMethod = "plain"
-		if nhConfig.Port == 0 {
-			internalConfig.SMTPPort = 587
-		}
-	}
-
-	// Alibaba Mail settings
-	if strings.Contains(host, "mxhichina.com") {
-		internalConfig.UseStartTLS = true
-		internalConfig.UseTLS = false
-		internalConfig.AuthMethod = "plain"
-		if nhConfig.Port == 0 {
-			internalConfig.SMTPPort = 587
-		}
-	}
-
-	// ProtonMail Bridge settings
-	if strings.Contains(host, "127.0.0.1") && nhConfig.Port == 1025 {
-		internalConfig.UseStartTLS = true
-		internalConfig.UseTLS = false
-		internalConfig.AuthMethod = "plain"
-	}
-
-	// Outlook/Hotmail settings
-	if strings.Contains(host, "outlook") || strings.Contains(host, "hotmail") {
-		internalConfig.UseStartTLS = true
-		internalConfig.UseTLS = false
-		internalConfig.AuthMethod = "plain"
-		if nhConfig.Port == 0 {
-			internalConfig.SMTPPort = 587
+			internalConfig.SMTPPort = settings.defaultPort
 		}
 	}
 
