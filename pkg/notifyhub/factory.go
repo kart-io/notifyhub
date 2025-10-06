@@ -538,93 +538,108 @@ func (c *clientImpl) Close() error {
 
 // determinePlatformByTargetType determines the platform based on target type
 func (c *clientImpl) determinePlatformByTargetType(tgt *target.Target) string {
-	// Platform detection rules based on target type and value
-	switch tgt.Type {
-	case "email":
-		// Email type always uses email platform
-		return "email"
-
-	case "phone":
-		// Phone type uses SMS platform (if available)
-		// Check if SMS is configured (via external platform or custom)
-		if c.config.Slack != nil { // Placeholder - should check for SMS config
-			return "sms"
-		}
-		// Fallback: some services can send to phone via other platforms
-		c.logger.Debug("SMS platform not configured, checking alternatives")
-		return ""
-
-	case "webhook":
-		// Webhook type uses webhook platform
-		return "webhook"
-
-	case "feishu":
-		// Feishu specific type
-		return "feishu"
-
-	case "slack":
-		// Slack specific type
-		return "slack"
-
-	case "dingtalk":
-		// DingTalk type uses external platform
-		// Check if DingTalk external platform is configured
-		return ""
-
-	case "user", "group":
-		// User/group types need to be resolved first
-		// Default to email if available
-		if c.config.HasEmail() {
-			return "email"
-		}
-		// Try other platforms in order of preference
-		if c.config.HasFeishu() {
-			return "feishu"
-		}
-		if c.config.HasSlack() {
-			return "slack"
-		}
-		if c.config.HasWebhook() {
-			return "webhook"
-		}
-
-	default:
-		// For unknown types, try to infer from value format
-		value := tgt.Value
-
-		// Check if value looks like an email
-		if strings.Contains(value, "@") && strings.Contains(value, ".") {
-			if c.config.HasEmail() {
-				c.logger.Debug("Value looks like email, using email platform", "value", value)
-				return "email"
-			}
-		}
-
-		// Check if value looks like a URL
-		if strings.HasPrefix(value, "http://") || strings.HasPrefix(value, "https://") {
-			if c.config.HasWebhook() {
-				c.logger.Debug("Value looks like URL, using webhook platform", "value", value)
-				return "webhook"
-			}
-		}
-
-		// Check if value looks like a phone number
-		if len(value) >= 10 && len(value) <= 15 {
-			// Simple check: mostly digits with possible + or - prefix
-			digits := 0
-			for _, r := range value {
-				if r >= '0' && r <= '9' {
-					digits++
-				}
-			}
-			if float64(digits)/float64(len(value)) > 0.8 {
-				// Check if SMS platform is configured
-				// Placeholder: no direct method to check SMS
-				c.logger.Debug("Value looks like phone number but SMS platform not available", "value", value)
-			}
-		}
+	// Map of direct type to platform mappings
+	directMappings := map[string]string{
+		"email":   "email",
+		"webhook": "webhook",
+		"feishu":  "feishu",
+		"slack":   "slack",
 	}
 
-	c.logger.Debug("无法自动检测平台类型", "target_type", tgt.Type, "value", tgt.Value)
+	// Check for direct mappings first
+	if platform, exists := directMappings[tgt.Type]; exists {
+		return platform
+	}
+
+	// Handle special cases
+	switch tgt.Type {
+	case "phone":
+		return c.determinePlatformForPhone()
+	case "dingtalk":
+		return "" // DingTalk requires external platform configuration
+	case "user", "group":
+		return c.determinePlatformForUserGroup()
+	default:
+		return c.inferPlatformFromValue(tgt.Value)
+	}
+}
+
+// determinePlatformForPhone determines platform for phone targets
+func (c *clientImpl) determinePlatformForPhone() string {
+	// Check if SMS is configured (via external platform or custom)
+	if c.config.Slack != nil { // Placeholder - should check for SMS config
+		return "sms"
+	}
+	c.logger.Debug("SMS platform not configured, checking alternatives")
 	return ""
+}
+
+// determinePlatformForUserGroup determines platform for user/group targets
+func (c *clientImpl) determinePlatformForUserGroup() string {
+	// Try platforms in order of preference
+	platformChecks := []struct {
+		check func() bool
+		name  string
+	}{
+		{c.config.HasEmail, "email"},
+		{c.config.HasFeishu, "feishu"},
+		{c.config.HasSlack, "slack"},
+		{c.config.HasWebhook, "webhook"},
+	}
+
+	for _, pc := range platformChecks {
+		if pc.check() {
+			return pc.name
+		}
+	}
+	return ""
+}
+
+// inferPlatformFromValue infers platform from target value format
+func (c *clientImpl) inferPlatformFromValue(value string) string {
+	// Check if value looks like an email
+	if c.looksLikeEmail(value) && c.config.HasEmail() {
+		c.logger.Debug("Value looks like email, using email platform", "value", value)
+		return "email"
+	}
+
+	// Check if value looks like a URL
+	if c.looksLikeURL(value) && c.config.HasWebhook() {
+		c.logger.Debug("Value looks like URL, using webhook platform", "value", value)
+		return "webhook"
+	}
+
+	// Check if value looks like a phone number
+	if c.looksLikePhoneNumber(value) {
+		c.logger.Debug("Value looks like phone number but SMS platform not available", "value", value)
+	}
+
+	c.logger.Debug("无法自动检测平台类型", "value", value)
+	return ""
+}
+
+// looksLikeEmail checks if a value looks like an email address
+func (c *clientImpl) looksLikeEmail(value string) bool {
+	return strings.Contains(value, "@") && strings.Contains(value, ".")
+}
+
+// looksLikeURL checks if a value looks like a URL
+func (c *clientImpl) looksLikeURL(value string) bool {
+	return strings.HasPrefix(value, "http://") || strings.HasPrefix(value, "https://")
+}
+
+// looksLikePhoneNumber checks if a value looks like a phone number
+func (c *clientImpl) looksLikePhoneNumber(value string) bool {
+	if len(value) < 10 || len(value) > 15 {
+		return false
+	}
+
+	// Simple check: mostly digits with possible + or - prefix
+	digits := 0
+	for _, r := range value {
+		if r >= '0' && r <= '9' {
+			digits++
+		}
+	}
+	return float64(digits)/float64(len(value)) > 0.8
 }

@@ -3,6 +3,7 @@ package email
 
 import (
 	"fmt"
+	"strings"
 	"time"
 )
 
@@ -76,21 +77,18 @@ func NewConfig() *Config {
 }
 
 // Validate validates the email configuration
-func (c *Config) Validate() error {
-	// Validate required fields
-	if c.SMTPHost == "" {
-		return fmt.Errorf("smtp_host is required")
+// validateStringInList checks if a value is in a list of valid values
+func validateStringInList(value string, validList []string, fieldName string) error {
+	for _, valid := range validList {
+		if value == valid {
+			return nil
+		}
 	}
+	return fmt.Errorf("invalid %s: %s (valid: %s)", fieldName, value, strings.Join(validList, ", "))
+}
 
-	if c.SMTPPort <= 0 || c.SMTPPort > 65535 {
-		return fmt.Errorf("smtp_port must be between 1 and 65535")
-	}
-
-	if c.From == "" {
-		return fmt.Errorf("from email address is required")
-	}
-
-	// Validate authentication if provided
+// validateAuthFields validates authentication fields
+func (c *Config) validateAuthFields() error {
 	if c.Username != "" || c.Password != "" {
 		if c.Username == "" {
 			return fmt.Errorf("username is required when password is provided")
@@ -99,49 +97,32 @@ func (c *Config) Validate() error {
 			return fmt.Errorf("password is required when username is provided")
 		}
 	}
+	return nil
+}
 
+// validateOptionalFields validates optional configuration fields
+func (c *Config) validateOptionalFields() error {
 	// Validate auth method
 	if c.AuthMethod != "" {
 		validMethods := []string{"plain", "login", "cram-md5"}
-		valid := false
-		for _, method := range validMethods {
-			if c.AuthMethod == method {
-				valid = true
-				break
-			}
-		}
-		if !valid {
-			return fmt.Errorf("invalid auth_method: %s (valid: plain, login, cram-md5)", c.AuthMethod)
+		if err := validateStringInList(c.AuthMethod, validMethods, "auth_method"); err != nil {
+			return err
 		}
 	}
 
 	// Validate encoding
 	if c.Encoding != "" {
 		validEncodings := []string{"UTF-8", "ISO-8859-1", "US-ASCII"}
-		valid := false
-		for _, encoding := range validEncodings {
-			if c.Encoding == encoding {
-				valid = true
-				break
-			}
-		}
-		if !valid {
-			return fmt.Errorf("invalid encoding: %s", c.Encoding)
+		if err := validateStringInList(c.Encoding, validEncodings, "encoding"); err != nil {
+			return err
 		}
 	}
 
 	// Validate content type
 	if c.ContentType != "" {
 		validTypes := []string{"text/plain", "text/html"}
-		valid := false
-		for _, contentType := range validTypes {
-			if c.ContentType == contentType {
-				valid = true
-				break
-			}
-		}
-		if !valid {
-			return fmt.Errorf("invalid content_type: %s", c.ContentType)
+		if err := validateStringInList(c.ContentType, validTypes, "content_type"); err != nil {
+			return err
 		}
 	}
 
@@ -154,7 +135,11 @@ func (c *Config) Validate() error {
 		return fmt.Errorf("burst_limit cannot be negative")
 	}
 
-	// Apply defaults for optional fields
+	return nil
+}
+
+// applyDefaults sets default values for optional configuration fields
+func (c *Config) applyDefaults() {
 	if c.Timeout == nil {
 		timeout := 30 * time.Second
 		c.Timeout = &timeout
@@ -169,6 +154,34 @@ func (c *Config) Validate() error {
 		window := time.Minute
 		c.RateLimitWindow = &window
 	}
+}
+
+func (c *Config) Validate() error {
+	// Validate required fields
+	if c.SMTPHost == "" {
+		return fmt.Errorf("smtp_host is required")
+	}
+
+	if c.SMTPPort <= 0 || c.SMTPPort > 65535 {
+		return fmt.Errorf("smtp_port must be between 1 and 65535")
+	}
+
+	if c.From == "" {
+		return fmt.Errorf("from email address is required")
+	}
+
+	// Validate authentication
+	if err := c.validateAuthFields(); err != nil {
+		return err
+	}
+
+	// Validate optional fields
+	if err := c.validateOptionalFields(); err != nil {
+		return err
+	}
+
+	// Apply defaults
+	c.applyDefaults()
 
 	return nil
 }
