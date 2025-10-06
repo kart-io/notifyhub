@@ -8,24 +8,28 @@ NotifyHub 是一个现代化的统一通知系统，提供简洁的 API 和强�
 ## ✨ 核心特性
 
 ### 🚀 统一的通知接口
+
 - **3层架构设计**: `Client → Dispatcher → Platform`，替代复杂的6层调用链
 - **多平台支持**: 飞书(Feishu)、邮件(Email)、Slack、Webhook
 - **外部平台扩展**: 支持在不修改核心代码的情况下添加新平台
 - **统一消息格式**: 跨平台的消息抽象和目标路由
 
 ### ⚡ 高性能异步处理
+
 - **真正的异步支持**: 基于队列的异步处理，支持回调机制
 - **协程池管理**: 智能协程池，支持动态工作协程数量调整
 - **批量操作**: 高效的批量消息发送和处理
 - **并发控制**: 支持多协程并发发送，资源管理完善
 
 ### 🔄 智能路由与错误处理
+
 - **ML 智能路由**: 基于平台健康度、成功率、响应时间的多因素评分算法
 - **自动平台检测**: 根据目标类型智能选择最佳平台
 - **用户/组解析**: 支持用户和组的自动展开和路由
 - **错误分类处理**: 区分临时错误和永久错误的处理策略
 
 ### 📊 完整的观察性
+
 - **实时指标统计**: 自动追踪总发送数、成功率、活跃任务数
 - **健康检查**: SMTP 连接测试、平台状态监控、队列健康检查
 - **Worker 动态扩缩容**: 根据负载自动调整工作协程数量
@@ -229,6 +233,7 @@ cfg := &config.Config{
 ### 支持的平台
 
 #### 1. 飞书 (Feishu)
+
 ```go
 cfg.Feishu = config.FeishuConfig{
     WebhookURL: "https://open.feishu.cn/open-apis/bot/v2/hook/your-webhook-url",
@@ -237,6 +242,7 @@ cfg.Feishu = config.FeishuConfig{
 ```
 
 #### 2. 邮件 (Email)
+
 ```go
 cfg.Email = config.EmailConfig{
     Host:     "smtp.example.com",
@@ -249,6 +255,7 @@ cfg.Email = config.EmailConfig{
 ```
 
 #### 3. Slack
+
 ```go
 cfg.Slack = config.SlackConfig{
     WebhookURL: "https://hooks.slack.com/services/YOUR/WEBHOOK/URL",
@@ -257,6 +264,7 @@ cfg.Slack = config.SlackConfig{
 ```
 
 #### 4. Webhook
+
 ```go
 cfg.Webhook = config.WebhookConfig{
     URL:     "https://your-webhook-endpoint.com/webhook",
@@ -651,6 +659,7 @@ type Platform interface {
 ### 扩展步骤
 
 1. **实现平台接口**
+
 ```go
 type CustomPlatform struct {
     config CustomConfig
@@ -661,18 +670,21 @@ func (c *CustomPlatform) Name() string { return "custom" }
 ```
 
 2. **注册平台工厂**
+
 ```go
 factory := platform.Factory(NewCustomPlatform)
 client.RegisterPlatform("custom", factory)
 ```
 
 3. **配置平台**
+
 ```go
 config := CustomConfig{/* 平台特定配置 */}
 client.SetPlatformConfig("custom", config)
 ```
 
 4. **使用平台**
+
 ```go
 msg.Targets = []target.Target{CreateCustomTarget(address)}
 receipt, err := client.Send(ctx, msg)
@@ -733,12 +745,14 @@ golangci-lint run ./...
 ### 已实现的核心功能
 
 ✅ **智能路由系统**
+
 - ML 评分算法：基于健康度、成功率、响应时间的智能平台选择
 - 自动平台检测：根据目标类型（email/phone/webhook/user/group）自动路由
 - 用户解析：支持用户 ID 到联系方式的智能转换
 - 组解析：支持组成员自动展开（内置 admins/developers/support/all 组）
 
 ✅ **实时监控指标**
+
 - 运行时长追踪（Uptime）
 - 活跃任务计数（使用 atomic.Int64）
 - 总发送数、成功数、失败数统计
@@ -746,11 +760,13 @@ golangci-lint run ./...
 - 队列深度监控
 
 ✅ **健康检查机制**
+
 - SMTP 连接健康检查（使用 NOOP 命令）
 - 平台状态实时监控
 - 优雅的错误处理和降级
 
 ✅ **Worker 池管理**
+
 - 动态扩容：根据负载自动增加 worker
 - 动态缩容：根据空闲自动减少 worker
 - 线程安全：使用 sync.Mutex 保护
@@ -760,6 +776,7 @@ golangci-lint run ./...
 
 1. 在 `pkg/platforms/` 下创建新平台目录
 2. 实现 `Platform` 接口:
+
 ```go
 type Platform interface {
     Send(ctx context.Context, msg *message.Message, target target.Target) (*receipt.Receipt, error)
@@ -767,6 +784,7 @@ type Platform interface {
     Close() error
 }
 ```
+
 3. 注册平台到注册表
 4. 添加配置选项
 5. 创建示例代码
