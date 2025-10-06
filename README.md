@@ -2,6 +2,7 @@
 
 [![Go Version](https://img.shields.io/badge/go-1.24.0-blue.svg)](https://golang.org)
 [![License](https://img.shields.io/badge/license-MIT-green.svg)](LICENSE)
+[![Go Report Card](https://goreportcard.com/badge/github.com/kart-io/notifyhub)](https://goreportcard.com/report/github.com/kart-io/notifyhub)
 
 NotifyHub 是一个现代化的统一通知系统，提供简洁的 API 和强大的异步处理能力。支持多个通知平台（飞书、邮件、Slack、Webhook），具备完整的协程池管理、智能重试机制和丰富的回调功能。
 
