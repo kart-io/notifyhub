@@ -96,44 +96,18 @@ func NewConfig() *Config {
 }
 
 // Validate validates the webhook configuration
-func (c *Config) Validate() error {
-	// Validate required fields
-	if c.WebhookURL == "" {
-		return fmt.Errorf("webhook_url is required")
-	}
-
-	// Validate URL format
-	if _, err := url.Parse(c.WebhookURL); err != nil {
-		return fmt.Errorf("invalid webhook_url: %w", err)
-	}
-
-	// Validate HTTP method
-	validMethods := []string{"GET", "POST", "PUT", "PATCH", "DELETE"}
-	methodValid := false
-	for _, method := range validMethods {
-		if strings.ToUpper(c.Method) == method {
-			methodValid = true
-			break
+// validateStringInList checks if a value is in a list of valid values
+func validateStringInList(value string, validList []string, fieldName string) error {
+	for _, valid := range validList {
+		if value == valid {
+			return nil
 		}
 	}
-	if !methodValid {
-		return fmt.Errorf("invalid method: %s (valid: %s)", c.Method, strings.Join(validMethods, ", "))
-	}
+	return fmt.Errorf("invalid %s: %s (valid: %s)", fieldName, value, strings.Join(validList, ", "))
+}
 
-	// Validate auth type
-	validAuthTypes := []string{"none", "basic", "bearer", "api_key", "signature"}
-	authValid := false
-	for _, authType := range validAuthTypes {
-		if c.AuthType == authType {
-			authValid = true
-			break
-		}
-	}
-	if !authValid {
-		return fmt.Errorf("invalid auth_type: %s (valid: %s)", c.AuthType, strings.Join(validAuthTypes, ", "))
-	}
-
-	// Validate auth configuration
+// validateAuthConfig validates authentication configuration based on auth type
+func (c *Config) validateAuthConfig() error {
 	switch c.AuthType {
 	case "basic":
 		if c.Username == "" || c.Password == "" {
@@ -155,40 +129,14 @@ func (c *Config) Validate() error {
 			return fmt.Errorf("secret is required for signature auth")
 		}
 	}
+	return nil
+}
 
-	// Validate payload format
-	if c.PayloadFormat != "" {
-		validFormats := []string{"json", "form", "xml"}
-		formatValid := false
-		for _, format := range validFormats {
-			if c.PayloadFormat == format {
-				formatValid = true
-				break
-			}
-		}
-		if !formatValid {
-			return fmt.Errorf("invalid payload_format: %s (valid: %s)", c.PayloadFormat, strings.Join(validFormats, ", "))
-		}
-	}
-
-	// Validate signature algorithm
-	if c.SignatureAlgo != "" {
-		validAlgos := []string{"sha1", "sha256", "md5"}
-		algoValid := false
-		for _, algo := range validAlgos {
-			if c.SignatureAlgo == algo {
-				algoValid = true
-				break
-			}
-		}
-		if !algoValid {
-			return fmt.Errorf("invalid signature_algo: %s (valid: %s)", c.SignatureAlgo, strings.Join(validAlgos, ", "))
-		}
-	}
-
-	// Validate expected status codes
+// validateStatusCodes validates and sets default status codes
+func (c *Config) validateStatusCodes() error {
 	if len(c.ExpectedStatus) == 0 {
 		c.ExpectedStatus = []int{200, 201, 202, 204}
+		return nil
 	}
 
 	for _, status := range c.ExpectedStatus {
@@ -196,8 +144,11 @@ func (c *Config) Validate() error {
 			return fmt.Errorf("invalid expected status code: %d", status)
 		}
 	}
+	return nil
+}
 
-	// Apply defaults for optional fields
+// applyDefaults sets default values for optional configuration fields
+func (c *Config) applyDefaults() {
 	if c.Timeout == nil {
 		timeout := 30 * time.Second
 		c.Timeout = &timeout
@@ -222,6 +173,59 @@ func (c *Config) Validate() error {
 		window := time.Minute
 		c.RateLimitWindow = &window
 	}
+}
+
+func (c *Config) Validate() error {
+	// Validate required fields
+	if c.WebhookURL == "" {
+		return fmt.Errorf("webhook_url is required")
+	}
+
+	// Validate URL format
+	if _, err := url.Parse(c.WebhookURL); err != nil {
+		return fmt.Errorf("invalid webhook_url: %w", err)
+	}
+
+	// Validate HTTP method
+	validMethods := []string{"GET", "POST", "PUT", "PATCH", "DELETE"}
+	if err := validateStringInList(strings.ToUpper(c.Method), validMethods, "method"); err != nil {
+		return err
+	}
+
+	// Validate auth type
+	validAuthTypes := []string{"none", "basic", "bearer", "api_key", "signature"}
+	if err := validateStringInList(c.AuthType, validAuthTypes, "auth_type"); err != nil {
+		return err
+	}
+
+	// Validate auth configuration
+	if err := c.validateAuthConfig(); err != nil {
+		return err
+	}
+
+	// Validate payload format
+	if c.PayloadFormat != "" {
+		validFormats := []string{"json", "form", "xml"}
+		if err := validateStringInList(c.PayloadFormat, validFormats, "payload_format"); err != nil {
+			return err
+		}
+	}
+
+	// Validate signature algorithm
+	if c.SignatureAlgo != "" {
+		validAlgos := []string{"sha1", "sha256", "md5"}
+		if err := validateStringInList(c.SignatureAlgo, validAlgos, "signature_algo"); err != nil {
+			return err
+		}
+	}
+
+	// Validate expected status codes
+	if err := c.validateStatusCodes(); err != nil {
+		return err
+	}
+
+	// Apply defaults for optional fields
+	c.applyDefaults()
 
 	return nil
 }
